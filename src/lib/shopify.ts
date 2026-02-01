@@ -1,47 +1,33 @@
 const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
 const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 
-interface ShopifyAnalyticsResponse {
-  data?: {
-    shopifyqlQuery?: {
-      tableData?: {
-        rowData?: Array<{
-          rowData?: string[];
-        }>;
-      };
-    };
-  };
+const API_VERSION = '2024-10';
+
+interface ShopifyResponse {
+  data?: Record<string, unknown>;
   errors?: Array<{ message: string }>;
 }
 
-export async function getSessionsData(date: string): Promise<{
-  visitors: number;
-  sessions: number;
-}> {
+// Test what fields are available
+export async function testShopifyAccess(): Promise<ShopifyResponse> {
   if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
     throw new Error('Missing Shopify configuration');
   }
 
-  // Use ShopifyQL to query analytics data
+  // Simple introspection query to see available fields
   const query = `
-    {
-      shopifyqlQuery(query: """
-        FROM sessions
-        WHERE session_date = '${date}'
-        GROUP BY ALL
-        SHOW total_sessions, total_visitors
-      """) {
-        tableData {
-          rowData {
-            rowData
-          }
+    query {
+      shop {
+        name
+        plan {
+          displayName
         }
       }
     }
   `;
 
   const response = await fetch(
-    `https://${SHOPIFY_STORE}/admin/api/2024-01/graphql.json`,
+    `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/graphql.json`,
     {
       method: 'POST',
       headers: {
@@ -52,27 +38,41 @@ export async function getSessionsData(date: string): Promise<{
     }
   );
 
+  const result: ShopifyResponse = await response.json();
+  return result;
+}
+
+export async function getSessionsData(date: string): Promise<{
+  visitors: number;
+  sessions: number;
+}> {
+  if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
+    throw new Error('Missing Shopify configuration');
+  }
+
+  // Try REST API for analytics
+  const response = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/reports.json`,
+    {
+      headers: {
+        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+      },
+    }
+  );
+
   if (!response.ok) {
-    throw new Error(`Shopify API error: ${response.status}`);
+    // If reports API not available, return error with details
+    const text = await response.text();
+    throw new Error(`Shopify Reports API: ${response.status} - ${text.slice(0, 200)}`);
   }
 
-  const result: ShopifyAnalyticsResponse = await response.json();
+  const data = await response.json();
 
-  if (result.errors?.length) {
-    throw new Error(`Shopify GraphQL error: ${result.errors[0].message}`);
-  }
+  // Log available reports for debugging
+  console.log('Available Shopify reports:', JSON.stringify(data, null, 2));
 
-  const rowData = result.data?.shopifyqlQuery?.tableData?.rowData?.[0]?.rowData;
-
-  if (!rowData || rowData.length < 2) {
-    // No data for this date yet, return zeros
-    return { sessions: 0, visitors: 0 };
-  }
-
-  return {
-    sessions: parseInt(rowData[0], 10) || 0,
-    visitors: parseInt(rowData[1], 10) || 0,
-  };
+  // For now, return zeros - we need to see what's available
+  return { sessions: 0, visitors: 0 };
 }
 
 export function getTodayDateLondon(): string {
