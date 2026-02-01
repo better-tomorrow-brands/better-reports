@@ -1,0 +1,16 @@
+{
+  "crons": [
+    {
+      "path": "/api/cron/shopify-sessions",
+      "schedule": "0 6 * * *"
+    },
+    {
+      "path": "/api/cron/facebook-ads",
+      "schedule": "0 7 * * *"
+    },
+    {
+      "path": "/api/cron/amazon",
+      "schedule": "0 8 * * *"
+    }
+  ]
+}
