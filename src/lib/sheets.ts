@@ -1,5 +1,6 @@
 import { google } from 'googleapis';
 import { DailyAnalytics } from './posthog';
+import { FacebookAdRow } from './facebook';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
 
@@ -209,4 +210,184 @@ export async function appendDailyAnalytics(
     });
     return { action: 'appended' };
   }
+}
+
+// ============ Facebook Tab ============
+
+const FACEBOOK_SHEET = 'Facebook';
+
+export async function ensureFacebookSheet(): Promise<void> {
+  // Sheet already exists with user's headers - nothing to do
+}
+
+// Find all rows for a given date and delete them
+async function deleteRowsForDate(sheetName: string, date: string): Promise<number> {
+  if (!SHEET_ID) throw new Error('GOOGLE_SHEET_ID not set');
+
+  const sheets = getSheets();
+
+  // Get column B (Day) to find rows with this date
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${sheetName}'!B:B`,
+  });
+
+  const rows = response.data.values;
+  if (!rows) return 0;
+
+  // Find row indices to delete (in reverse order to avoid index shifting)
+  const rowsToDelete: number[] = [];
+  for (let i = rows.length - 1; i >= 1; i--) { // Skip header row
+    if (rows[i][0] === date) {
+      rowsToDelete.push(i);
+    }
+  }
+
+  if (rowsToDelete.length === 0) return 0;
+
+  // Get sheet ID for batch update
+  const spreadsheet = await sheets.spreadsheets.get({
+    spreadsheetId: SHEET_ID,
+  });
+
+  const sheet = spreadsheet.data.sheets?.find(
+    (s) => s.properties?.title === sheetName
+  );
+
+  if (!sheet?.properties?.sheetId) return 0;
+
+  // Delete rows in reverse order
+  const requests = rowsToDelete.map((rowIndex) => ({
+    deleteDimension: {
+      range: {
+        sheetId: sheet.properties!.sheetId,
+        dimension: 'ROWS',
+        startIndex: rowIndex,
+        endIndex: rowIndex + 1,
+      },
+    },
+  }));
+
+  await sheets.spreadsheets.batchUpdate({
+    spreadsheetId: SHEET_ID,
+    requestBody: { requests },
+  });
+
+  return rowsToDelete.length;
+}
+
+export async function syncFacebookAds(
+  date: string,
+  rows: FacebookAdRow[]
+): Promise<{ action: string; rowsDeleted: number; rowsAdded: number }> {
+  if (!SHEET_ID) throw new Error('GOOGLE_SHEET_ID not set');
+
+  await ensureFacebookSheet();
+
+  const sheets = getSheets();
+
+  // Delete existing rows for this date
+  const rowsDeleted = await deleteRowsForDate(FACEBOOK_SHEET, date);
+
+  if (rows.length === 0) {
+    return { action: 'cleared', rowsDeleted, rowsAdded: 0 };
+  }
+
+  // Prepare all rows matching user's column order:
+  // Campaign name, Day, Ad Group, Ad, Delivery status, Delivery level, Reach, Impressions,
+  // Frequency, Attribution setting, Result Type, Results, Amount spent (GBP), Cost per result,
+  // Starts, Ends, Link clicks, CPC, CPM, CTR, Result value type, Results ROAS, Website purchase ROAS,
+  // Reporting starts, Reporting ends
+  const rowsData = rows.map((row) => [
+    row.campaign,                                                    // Campaign name
+    row.date,                                                        // Day
+    row.adset,                                                       // Ad Group
+    row.ad,                                                          // Ad
+    '',                                                              // Delivery status (not available)
+    'ad',                                                            // Delivery level
+    row.reach,                                                       // Reach
+    row.impressions,                                                 // Impressions
+    row.frequency,                                                   // Frequency
+    '',                                                              // Attribution setting (not available)
+    row.purchases > 0 ? 'Website purchases' : '',                    // Result Type
+    row.purchases || '',                                             // Results
+    row.spend,                                                       // Amount spent (GBP)
+    row.cost_per_purchase || '',                                     // Cost per result
+    '',                                                              // Starts (not available)
+    '',                                                              // Ends (not available)
+    row.clicks,                                                      // Link clicks
+    row.cpc,                                                         // CPC
+    row.cpm,                                                         // CPM
+    row.ctr,                                                         // CTR
+    row.purchase_value > 0 ? 'Website purchases conversion value' : '', // Result value type
+    row.roas || '',                                                  // Results ROAS
+    row.roas || '',                                                  // Website purchase ROAS
+    row.date,                                                        // Reporting starts
+    row.date,                                                        // Reporting ends
+  ]);
+
+  // Append all rows
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `'${FACEBOOK_SHEET}'!A:Y`,
+    valueInputOption: 'USER_ENTERED',
+    requestBody: {
+      values: rowsData,
+    },
+  });
+
+  return { action: 'synced', rowsDeleted, rowsAdded: rows.length };
+}
+
+// Append-only version for backfill (doesn't delete existing rows)
+export async function appendFacebookAds(
+  rows: FacebookAdRow[]
+): Promise<{ action: string; rowsAdded: number }> {
+  if (!SHEET_ID) throw new Error('GOOGLE_SHEET_ID not set');
+
+  if (rows.length === 0) {
+    return { action: 'skipped', rowsAdded: 0 };
+  }
+
+  const sheets = getSheets();
+
+  const rowsData = rows.map((row) => [
+    row.campaign,
+    row.date,
+    row.adset,
+    row.ad,
+    '',
+    'ad',
+    row.reach,
+    row.impressions,
+    row.frequency,
+    '',
+    row.purchases > 0 ? 'Website purchases' : '',
+    row.purchases || '',
+    row.spend,
+    row.cost_per_purchase || '',
+    '',
+    '',
+    row.clicks,
+    row.cpc,
+    row.cpm,
+    row.ctr,
+    row.purchase_value > 0 ? 'Website purchases conversion value' : '',
+    row.roas || '',
+    row.roas || '',
+    row.date,
+    row.date,
+  ]);
+
+  await sheets.spreadsheets.values.append({
+    spreadsheetId: SHEET_ID,
+    range: `'${FACEBOOK_SHEET}'!A:Y`,
+    valueInputOption: 'USER_ENTERED',
+    insertDataOption: 'INSERT_ROWS',
+    requestBody: {
+      values: rowsData,
+    },
+  });
+
+  return { action: 'appended', rowsAdded: rows.length };
 }
