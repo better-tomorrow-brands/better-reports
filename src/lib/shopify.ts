@@ -9,7 +9,7 @@ interface ShopifyResponse {
 }
 
 // Test what fields are available
-export async function testShopifyAccess(): Promise<Record<string, unknown>> {
+export async function testShopifyAccess(): Promise<ShopifyResponse> {
   if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
     throw new Error('Missing Shopify configuration');
   }
