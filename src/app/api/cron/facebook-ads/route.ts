@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon } from '@/lib/facebook';
+import { syncFacebookAds } from '@/lib/sheets';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -12,28 +13,30 @@ export async function GET(request: Request) {
   }
 
   try {
-    const sql = getDb();
+    // Check for date query param: "today" for hourly updates, default to yesterday for daily cron
+    const url = new URL(request.url);
+    const dateParam = url.searchParams.get('date');
+    const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
 
-    // TODO: Implement Facebook Marketing API integration
-    // Will need: FACEBOOK_ACCESS_TOKEN, FACEBOOK_AD_ACCOUNT_ID
+    // Fetch from Facebook Marketing API
+    const ads = await getDailyFacebookAds(date);
 
-    const timestamp = new Date().toISOString();
-
-    await sql`
-      INSERT INTO sync_logs (source, status, synced_at, details)
-      VALUES ('facebook_ads', 'pending', ${timestamp}, 'Cron job triggered - placeholder')
-      ON CONFLICT DO NOTHING
-    `;
+    // Write to Google Sheets
+    const result = await syncFacebookAds(date, ads);
 
     return NextResponse.json({
       success: true,
-      message: 'Facebook ads sync placeholder',
-      timestamp,
+      date,
+      adsCount: ads.length,
+      ...result,
     });
   } catch (error) {
     console.error('Facebook ads sync error:', error);
     return NextResponse.json(
-      { error: 'Failed to sync Facebook ads' },
+      {
+        error: 'Failed to sync Facebook ads',
+        details: error instanceof Error ? error.message : 'Unknown error',
+      },
       { status: 500 }
     );
   }
