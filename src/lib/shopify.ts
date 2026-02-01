@@ -3,60 +3,24 @@ const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
 
 const API_VERSION = '2024-10';
 
-interface ShopifyQLResponse {
-  data?: {
-    shopifyqlQuery?: {
-      __typename?: string;
-      tableData?: {
-        columns?: Array<{ name: string; dataType: string }>;
-        rowData?: string[][];
-      };
-      parseErrors?: Array<{ message: string }>;
-    };
-  };
+interface ShopifyResponse {
+  data?: Record<string, unknown>;
   errors?: Array<{ message: string }>;
 }
 
-export async function getSessionsData(date: string): Promise<{
-  visitors: number;
-  sessions: number;
-}> {
+// Test what fields are available
+export async function testShopifyAccess(): Promise<Record<string, unknown>> {
   if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
     throw new Error('Missing Shopify configuration');
   }
 
-  // ShopifyQL query for sessions data
-  const shopifyqlQuery = `
-    FROM sessions
-    SINCE ${date}
-    UNTIL ${date}
-    SHOW total_sessions, total_visitors
-  `.trim();
-
+  // Simple introspection query to see available fields
   const query = `
     query {
-      shopifyqlQuery(query: "${shopifyqlQuery.replace(/\n/g, ' ').replace(/"/g, '\\"')}") {
-        __typename
-        ... on TableResponse {
-          tableData {
-            columns {
-              name
-              dataType
-            }
-            rowData
-          }
-        }
-        ... on PolarisVizResponse {
-          data {
-            key
-            data {
-              key
-              value
-            }
-          }
-        }
-        parseErrors {
-          message
+      shop {
+        name
+        plan {
+          displayName
         }
       }
     }
@@ -74,43 +38,41 @@ export async function getSessionsData(date: string): Promise<{
     }
   );
 
+  const result: ShopifyResponse = await response.json();
+  return result;
+}
+
+export async function getSessionsData(date: string): Promise<{
+  visitors: number;
+  sessions: number;
+}> {
+  if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
+    throw new Error('Missing Shopify configuration');
+  }
+
+  // Try REST API for analytics
+  const response = await fetch(
+    `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/reports.json`,
+    {
+      headers: {
+        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+      },
+    }
+  );
+
   if (!response.ok) {
+    // If reports API not available, return error with details
     const text = await response.text();
-    throw new Error(`Shopify API error: ${response.status} - ${text}`);
+    throw new Error(`Shopify Reports API: ${response.status} - ${text.slice(0, 200)}`);
   }
 
-  const result: ShopifyQLResponse = await response.json();
+  const data = await response.json();
 
-  if (result.errors?.length) {
-    throw new Error(`Shopify GraphQL error: ${result.errors[0].message}`);
-  }
+  // Log available reports for debugging
+  console.log('Available Shopify reports:', JSON.stringify(data, null, 2));
 
-  if (result.data?.shopifyqlQuery?.parseErrors?.length) {
-    throw new Error(
-      `ShopifyQL parse error: ${result.data.shopifyqlQuery.parseErrors[0].message}`
-    );
-  }
-
-  const tableData = result.data?.shopifyqlQuery?.tableData;
-  const rowData = tableData?.rowData?.[0];
-
-  if (!rowData || rowData.length < 2) {
-    return { sessions: 0, visitors: 0 };
-  }
-
-  // Find column indices
-  const columns = tableData?.columns || [];
-  const sessionsIdx = columns.findIndex((c) =>
-    c.name.toLowerCase().includes('sessions')
-  );
-  const visitorsIdx = columns.findIndex((c) =>
-    c.name.toLowerCase().includes('visitors')
-  );
-
-  return {
-    sessions: parseInt(rowData[sessionsIdx] || '0', 10) || 0,
-    visitors: parseInt(rowData[visitorsIdx] || '0', 10) || 0,
-  };
+  // For now, return zeros - we need to see what's available
+  return { sessions: 0, visitors: 0 };
 }
 
 export function getTodayDateLondon(): string {
