@@ -39,6 +39,7 @@ export interface FacebookAdRow {
   campaign: string;
   adset: string;
   ad: string;
+  utm_campaign: string;
   spend: number;
   impressions: number;
   reach: number;
@@ -133,6 +134,7 @@ export async function getDailyFacebookAds(date: string): Promise<FacebookAdRow[]
         campaign: row.campaign_name || '',
         adset: row.adset_name || '',
         ad: row.ad_name || '',
+        utm_campaign: '', // Will be populated from Campaigns sheet lookup
         spend: Math.round(spend * 100) / 100,
         impressions: Number(row.impressions) || 0,
         reach: Number(row.reach) || 0,

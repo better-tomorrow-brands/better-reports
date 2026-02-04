@@ -3,6 +3,8 @@ import { DailyAnalytics } from './posthog';
 import { FacebookAdRow } from './facebook';
 
 const SHEET_ID = process.env.GOOGLE_SHEET_ID;
+const CAMPAIGNS_SHEET_ID = '1uupcINWhwzT9pVJtBNAQbu9Js7GgYeI2h95G3G3sVnA';
+const CAMPAIGNS_SHEET_NAME = 'Campaigns';
 
 function getAuth() {
   const email = process.env.GOOGLE_SERVICE_ACCOUNT_EMAIL;
@@ -21,6 +23,45 @@ function getAuth() {
 
 function getSheets() {
   return google.sheets({ version: 'v4', auth: getAuth() });
+}
+
+// Lookup utm_campaign from Campaigns sheet by ad_group
+async function lookupUtmCampaigns(adGroups: string[]): Promise<Map<string, string>> {
+  const sheets = getSheets();
+  const result = new Map<string, string>();
+
+  try {
+    const response = await sheets.spreadsheets.values.get({
+      spreadsheetId: CAMPAIGNS_SHEET_ID,
+      range: `'${CAMPAIGNS_SHEET_NAME}'!A:Z`,
+    });
+
+    const rows = response.data.values;
+    if (!rows || rows.length < 2) return result;
+
+    // Find column indices from header row
+    const headers = rows[0].map((h: string) => h?.toString().toLowerCase().trim());
+    const adGroupCol = headers.findIndex((h: string) => h === 'ad group' || h === 'ad_group' || h === 'adgroup');
+    const utmCampaignCol = headers.findIndex((h: string) => h === 'utm_campaign' || h === 'utmcampaign');
+
+    if (adGroupCol === -1 || utmCampaignCol === -1) {
+      console.log('Could not find Ad Group or utm_campaign columns in Campaigns sheet');
+      return result;
+    }
+
+    // Build lookup map
+    for (let i = 1; i < rows.length; i++) {
+      const adGroup = rows[i][adGroupCol]?.toString().trim();
+      const utmCampaign = rows[i][utmCampaignCol]?.toString().trim();
+      if (adGroup && utmCampaign) {
+        result.set(adGroup.toLowerCase(), utmCampaign);
+      }
+    }
+  } catch (error) {
+    console.error('Error looking up utm_campaigns:', error);
+  }
+
+  return result;
 }
 
 // Generic helper to find row by date in column A
@@ -293,8 +334,12 @@ export async function syncFacebookAds(
     return { action: 'cleared', rowsDeleted, rowsAdded: 0 };
   }
 
+  // Lookup utm_campaigns from Campaigns sheet
+  const adGroups = rows.map((r) => r.adset);
+  const utmCampaignMap = await lookupUtmCampaigns(adGroups);
+
   // Prepare all rows matching user's column order:
-  // Campaign name, Day, Ad Group, Ad, Delivery status, Delivery level, Reach, Impressions,
+  // Campaign name, Day, Ad Group, Ad, utm_campaign, Delivery status, Delivery level, Reach, Impressions,
   // Frequency, Attribution setting, Result Type, Results, Amount spent (GBP), Cost per result,
   // Starts, Ends, Link clicks, CPC, CPM, CTR, Result value type, Results ROAS, Website purchase ROAS,
   // Reporting starts, Reporting ends
@@ -303,6 +348,7 @@ export async function syncFacebookAds(
     row.date,                                                        // Day
     row.adset,                                                       // Ad Group
     row.ad,                                                          // Ad
+    utmCampaignMap.get(row.adset.toLowerCase()) || '',               // utm_campaign (lookup)
     '',                                                              // Delivery status (not available)
     'ad',                                                            // Delivery level
     row.reach,                                                       // Reach
@@ -329,7 +375,7 @@ export async function syncFacebookAds(
   // Append all rows
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${FACEBOOK_SHEET}'!A:Y`,
+    range: `'${FACEBOOK_SHEET}'!A:Z`,
     valueInputOption: 'USER_ENTERED',
     requestBody: {
       values: rowsData,
@@ -351,11 +397,16 @@ export async function appendFacebookAds(
 
   const sheets = getSheets();
 
+  // Lookup utm_campaigns from Campaigns sheet
+  const adGroups = rows.map((r) => r.adset);
+  const utmCampaignMap = await lookupUtmCampaigns(adGroups);
+
   const rowsData = rows.map((row) => [
     row.campaign,
     row.date,
     row.adset,
     row.ad,
+    utmCampaignMap.get(row.adset.toLowerCase()) || '',               // utm_campaign (lookup)
     '',
     'ad',
     row.reach,
@@ -381,7 +432,7 @@ export async function appendFacebookAds(
 
   await sheets.spreadsheets.values.append({
     spreadsheetId: SHEET_ID,
-    range: `'${FACEBOOK_SHEET}'!A:Y`,
+    range: `'${FACEBOOK_SHEET}'!A:Z`,
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
     requestBody: {
@@ -390,4 +441,60 @@ export async function appendFacebookAds(
   });
 
   return { action: 'appended', rowsAdded: rows.length };
+}
+
+// Backfill utm_campaign for existing rows in Facebook sheet
+export async function backfillUtmCampaigns(): Promise<{ rowsUpdated: number }> {
+  if (!SHEET_ID) throw new Error('GOOGLE_SHEET_ID not set');
+
+  const sheets = getSheets();
+
+  // Get all data from Facebook sheet
+  const response = await sheets.spreadsheets.values.get({
+    spreadsheetId: SHEET_ID,
+    range: `'${FACEBOOK_SHEET}'!A:Z`,
+  });
+
+  const rows = response.data.values;
+  if (!rows || rows.length < 2) return { rowsUpdated: 0 };
+
+  // Find column indices (Ad Group is column C index 2, utm_campaign is column E index 4)
+  const adGroupCol = 2;
+  const utmCampaignCol = 4;
+
+  // Collect all ad groups for lookup
+  const adGroups = rows.slice(1).map((row) => row[adGroupCol]?.toString() || '');
+  const utmCampaignMap = await lookupUtmCampaigns(adGroups);
+
+  // Prepare updates
+  const updates: Array<{ range: string; values: string[][] }> = [];
+  let rowsUpdated = 0;
+
+  for (let i = 1; i < rows.length; i++) {
+    const adGroup = rows[i][adGroupCol]?.toString() || '';
+    const currentUtmCampaign = rows[i][utmCampaignCol]?.toString() || '';
+    const lookupUtmCampaign = utmCampaignMap.get(adGroup.toLowerCase()) || '';
+
+    // Only update if we have a lookup value and it's different
+    if (lookupUtmCampaign && lookupUtmCampaign !== currentUtmCampaign) {
+      updates.push({
+        range: `'${FACEBOOK_SHEET}'!E${i + 1}`,
+        values: [[lookupUtmCampaign]],
+      });
+      rowsUpdated++;
+    }
+  }
+
+  // Batch update
+  if (updates.length > 0) {
+    await sheets.spreadsheets.values.batchUpdate({
+      spreadsheetId: SHEET_ID,
+      requestBody: {
+        valueInputOption: 'USER_ENTERED',
+        data: updates,
+      },
+    });
+  }
+
+  return { rowsUpdated };
 }
