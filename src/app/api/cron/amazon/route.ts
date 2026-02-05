@@ -1,5 +1,6 @@
 import { NextResponse } from 'next/server';
-import { getDb } from '@/lib/db';
+import { db } from '@/lib/db';
+import { syncLogs } from '@/lib/db/schema';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -12,18 +13,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const sql = getDb();
-
     // TODO: Implement Amazon Selling Partner API integration
     // Will need: AMAZON_REFRESH_TOKEN, AMAZON_CLIENT_ID, AMAZON_CLIENT_SECRET
 
-    const timestamp = new Date().toISOString();
+    const timestamp = new Date();
 
-    await sql`
-      INSERT INTO sync_logs (source, status, synced_at, details)
-      VALUES ('amazon', 'pending', ${timestamp}, 'Cron job triggered - placeholder')
-      ON CONFLICT DO NOTHING
-    `;
+    await db.insert(syncLogs).values({
+      source: "amazon",
+      status: "pending",
+      syncedAt: timestamp,
+      details: "Cron job triggered - placeholder",
+    });
 
     return NextResponse.json({
       success: true,
