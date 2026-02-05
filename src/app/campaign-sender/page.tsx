@@ -20,6 +20,8 @@ interface Template {
   status: string;
   language: string;
   params: { name: string }[];
+  header?: string;
+  body?: string;
 }
 
 function parseCsv(text: string): CsvRow[] {
@@ -118,7 +120,7 @@ export default function CampaignSender() {
       if (abortRef.current) break;
 
       const row = csvData[i];
-      const params = template.params.map((p) => row[p.name] || "");
+      const params = template.params.map((p) => ({ name: p.name, value: row[p.name] || "" }));
 
       setResults((prev) =>
         prev.map((r, idx) => (idx === i ? { ...r, status: "sending" } : r))
@@ -211,10 +213,36 @@ export default function CampaignSender() {
               ))}
             </select>
             {template && (
-              <p className="text-sm text-zinc-500 mt-1">
-                Required CSV columns: phone,{" "}
-                {template.params.map((p) => p.name).join(", ")}
-              </p>
+              <div className="mt-3">
+                <p className="text-sm text-zinc-500 mb-2">
+                  Required CSV columns: phone,{" "}
+                  {template.params.map((p) => p.name).join(", ")}
+                </p>
+                {template.body && (
+                  <div
+                    className="max-w-sm rounded-lg p-4"
+                    style={{
+                      backgroundImage: "url(/whatsapp-bg.png)",
+                      backgroundSize: "300px",
+                      backgroundRepeat: "repeat",
+                    }}
+                  >
+                    <div className="bg-white rounded-lg p-3 shadow-md relative">
+                      {template.header && (
+                        <p className="font-bold text-sm text-zinc-900 mb-1">
+                          {template.header}
+                        </p>
+                      )}
+                      <p className="text-sm text-zinc-800 whitespace-pre-line">
+                        {template.body}
+                      </p>
+                      <span className="block text-right text-[11px] text-zinc-400 mt-1">
+                        {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
             )}
           </>
         )}

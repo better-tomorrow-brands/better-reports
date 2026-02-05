@@ -2,10 +2,15 @@ import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getMetaSettings } from "@/lib/settings";
 
+interface ParamEntry {
+  name: string;
+  value: string;
+}
+
 interface SendRequest {
   phone: string;
   template_name: string;
-  params: string[];
+  params: ParamEntry[];
 }
 
 function formatPhone(phone: string): string {
@@ -66,7 +71,7 @@ export async function POST(request: Request) {
         components: [
           {
             type: "body",
-            parameters: params.map((text) => ({ type: "text", text })),
+            parameters: params.map((p) => ({ type: "text", parameter_name: p.name, text: p.value })),
           },
         ],
       },
