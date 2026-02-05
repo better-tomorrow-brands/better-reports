@@ -6,11 +6,18 @@ export interface TemplateParam {
   name: string;
 }
 
+export interface TemplateComponent {
+  type: string;
+  text?: string;
+}
+
 export interface WhatsAppTemplate {
   name: string;
   status: string;
   language: string;
   params: TemplateParam[];
+  header?: string;
+  body?: string;
 }
 
 export async function GET() {
@@ -47,8 +54,9 @@ export async function GET() {
     // Parse templates - extract body params from each
     const templates: WhatsAppTemplate[] = (data.data || [])
       .filter((t: { status: string }) => t.status === "APPROVED")
-      .map((t: { name: string; status: string; language: string; components?: Array<{ type: string; text?: string }> }) => {
-        const bodyComponent = t.components?.find((c: { type: string }) => c.type === "BODY");
+      .map((t: { name: string; status: string; language: string; components?: TemplateComponent[] }) => {
+        const headerComponent = t.components?.find((c) => c.type === "HEADER");
+        const bodyComponent = t.components?.find((c) => c.type === "BODY");
         const paramMatches = bodyComponent?.text?.match(/\{\{(\w+)\}\}/g) || [];
         const params = paramMatches.map((m: string) => ({
           name: m.replace(/[{}]/g, ""),
@@ -59,6 +67,8 @@ export async function GET() {
           status: t.status,
           language: t.language,
           params,
+          header: headerComponent?.text || undefined,
+          body: bodyComponent?.text || undefined,
         };
       });
 
