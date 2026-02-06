@@ -528,6 +528,12 @@ export default function CampaignsPage() {
         setShowDiscountDropdown(false);
         setShowCreateDiscount(false);
       }
+      if (customerSortModalRef.current && !customerSortModalRef.current.contains(event.target as Node)) {
+        setShowCustomerSortModal(false);
+      }
+      if (customerLapseFilterRef.current && !customerLapseFilterRef.current.contains(event.target as Node)) {
+        setShowCustomerLapseFilter(false);
+      }
       if (tagsFilterRef.current && !tagsFilterRef.current.contains(event.target as Node)) {
         setShowTagsFilter(false);
       }
