@@ -6,6 +6,8 @@ import {
   decimal,
   boolean,
   timestamp,
+  date,
+  real,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -141,6 +143,29 @@ export const orders = pgTable("orders", {
   isRepeatCustomer: boolean("is_repeat_customer").default(false),
   customerId: integer("customer_id").references(() => customers.id),
   receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── PostHog Analytics (Daily) ─────────────────────────
+export const posthogAnalytics = pgTable("posthog_analytics", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull().unique(),
+  uniqueVisitors: integer("unique_visitors").notNull().default(0),
+  totalSessions: integer("total_sessions").notNull().default(0),
+  pageviews: integer("pageviews").notNull().default(0),
+  bounceRate: real("bounce_rate").notNull().default(0),
+  avgSessionDuration: real("avg_session_duration").notNull().default(0),
+  mobileSessions: integer("mobile_sessions").notNull().default(0),
+  desktopSessions: integer("desktop_sessions").notNull().default(0),
+  topCountry: text("top_country"),
+  directSessions: integer("direct_sessions").notNull().default(0),
+  organicSessions: integer("organic_sessions").notNull().default(0),
+  paidSessions: integer("paid_sessions").notNull().default(0),
+  socialSessions: integer("social_sessions").notNull().default(0),
+  productViews: integer("product_views").notNull().default(0),
+  addToCart: integer("add_to_cart").notNull().default(0),
+  checkoutStarted: integer("checkout_started").notNull().default(0),
+  purchases: integer("purchases").notNull().default(0),
+  conversionRate: real("conversion_rate").notNull().default(0),
 });
 
 // ── Relations ─────────────────────────────────────────

@@ -152,6 +152,16 @@ export default function OrdersPage() {
   // Date range filter
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
+  // Search
+  const [search, setSearch] = useState("");
+
+  // Sort
+  type SortField = "createdAt" | "total" | "customerName" | "fulfillmentStatus" | "quantity";
+  const [sortField, setSortField] = useState<SortField>("createdAt");
+  const [sortDirection, setSortDirection] = useState<"asc" | "desc">("desc");
+  const [showSortModal, setShowSortModal] = useState(false);
+  const sortModalRef = useRef<HTMLDivElement>(null);
+
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
 
@@ -181,6 +191,9 @@ export default function OrdersPage() {
       }
       if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
         setShowFilterDropdown(false);
+      }
+      if (sortModalRef.current && !sortModalRef.current.contains(event.target as Node)) {
+        setShowSortModal(false);
       }
       if (filterModalRef.current && !filterModalRef.current.contains(event.target as Node)) {
         setEditingFilter(null);
@@ -247,6 +260,15 @@ export default function OrdersPage() {
   const filteredOrders = useMemo(() => {
     let result = orders;
 
+    // Apply search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((order) =>
+        [order.orderNumber, order.customerName, order.email, order.skus, order.discountCodes, order.utmSource, order.utmCampaign, order.tags]
+          .some((field) => field && String(field).toLowerCase().includes(q))
+      );
+    }
+
     // Apply date range filter
     if (dateRange?.from || dateRange?.to) {
       result = result.filter((order) => {
@@ -276,8 +298,41 @@ export default function OrdersPage() {
       });
     }
 
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      let aVal: number | string | null = null;
+      let bVal: number | string | null = null;
+
+      switch (sortField) {
+        case "createdAt":
+          aVal = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          bVal = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          break;
+        case "total":
+          aVal = a.total ? parseFloat(a.total) : 0;
+          bVal = b.total ? parseFloat(b.total) : 0;
+          break;
+        case "customerName":
+          aVal = (a.customerName || "").toLowerCase();
+          bVal = (b.customerName || "").toLowerCase();
+          break;
+        case "fulfillmentStatus":
+          aVal = (a.fulfillmentStatus || "unfulfilled").toLowerCase();
+          bVal = (b.fulfillmentStatus || "unfulfilled").toLowerCase();
+          break;
+        case "quantity":
+          aVal = a.quantity || 0;
+          bVal = b.quantity || 0;
+          break;
+      }
+
+      if (aVal < bVal) return sortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return sortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
     return result;
-  }, [orders, filters, dateRange]);
+  }, [orders, filters, dateRange, search, sortField, sortDirection]);
 
   function toggleColumn(key: string) {
     const newSet = new Set(visibleColumns);
@@ -409,14 +464,71 @@ export default function OrdersPage() {
             {filteredOrders.length === total ? total : `${filteredOrders.length} of ${total}`} orders
           </span>
 
-          {/* Date Range Picker */}
-          <DateRangePicker
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            placeholder="Select dates"
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
           />
 
-          {/* Filter Button */}
+          {/* Sort */}
+          <div className="relative" ref={sortModalRef}>
+            <button
+              onClick={() => setShowSortModal(!showSortModal)}
+              className="btn btn-secondary btn-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+              </svg>
+              Sort
+            </button>
+            {showSortModal && (
+              <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+                <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
+                  <div className="text-sm font-medium mb-2">Sort by</div>
+                  <div className="flex flex-col gap-1">
+                    {([
+                      { value: "createdAt" as SortField, label: "Date" },
+                      { value: "total" as SortField, label: "Total" },
+                      { value: "customerName" as SortField, label: "Customer" },
+                      { value: "fulfillmentStatus" as SortField, label: "Status" },
+                      { value: "quantity" as SortField, label: "Quantity" },
+                    ]).map((opt) => (
+                      <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                        <input
+                          type="radio"
+                          name="sortField"
+                          checked={sortField === opt.value}
+                          onChange={() => setSortField(opt.value)}
+                        />
+                        <span className="text-sm">{opt.label}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+                <div className="p-2">
+                  <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                    </svg>
+                    <input type="radio" name="sortDir" checked={sortDirection === "asc"} onChange={() => setSortDirection("asc")} className="sr-only" />
+                    <span className="text-sm">Ascending</span>
+                  </label>
+                  <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                    </svg>
+                    <input type="radio" name="sortDir" checked={sortDirection === "desc"} onChange={() => setSortDirection("desc")} className="sr-only" />
+                    <span className="text-sm">Descending</span>
+                  </label>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Add Filter */}
           <div className="relative" ref={filterDropdownRef}>
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
@@ -446,7 +558,7 @@ export default function OrdersPage() {
             )}
           </div>
 
-          {/* Columns Button */}
+          {/* Columns */}
           <div className="relative" ref={columnPickerRef}>
             <button
               onClick={() => setShowColumnPicker(!showColumnPicker)}
@@ -486,6 +598,13 @@ export default function OrdersPage() {
               </div>
             )}
           </div>
+
+          {/* Date Range Picker */}
+          <DateRangePicker
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            placeholder="Select dates"
+          />
         </div>
       </div>
 

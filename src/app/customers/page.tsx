@@ -179,6 +179,9 @@ export default function CustomersPage() {
   const [showSortModal, setShowSortModal] = useState(false);
   const sortModalRef = useRef<HTMLDivElement>(null);
 
+  // Search
+  const [search, setSearch] = useState("");
+
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
 
@@ -285,6 +288,15 @@ export default function CustomersPage() {
   const filteredCustomers = useMemo(() => {
     let result = customers;
 
+    // Apply search
+    if (search.trim()) {
+      const q = search.toLowerCase();
+      result = result.filter((customer) =>
+        [customer.firstName, customer.lastName, customer.email, customer.phone, customer.tags]
+          .some((field) => field && String(field).toLowerCase().includes(q))
+      );
+    }
+
     // Apply date range filter (on createdAt)
     if (dateRange?.from || dateRange?.to) {
       result = result.filter((customer) => {
@@ -371,7 +383,7 @@ export default function CustomersPage() {
     });
 
     return result;
-  }, [customers, filters, dateRange, lapseFilter, lifecycleSettings, sortField, sortDirection]);
+  }, [customers, filters, dateRange, lapseFilter, lifecycleSettings, sortField, sortDirection, search]);
 
   function toggleColumn(key: string) {
     const newSet = new Set(visibleColumns);
@@ -516,14 +528,16 @@ export default function CustomersPage() {
             {filteredCustomers.length === total ? total : `${filteredCustomers.length} of ${total}`} customers
           </span>
 
-          {/* Date Range Picker */}
-          <DateRangePicker
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            placeholder="Select dates"
+          {/* Search */}
+          <input
+            type="text"
+            placeholder="Search..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
           />
 
-          {/* Sort Button */}
+          {/* Sort */}
           <div className="relative" ref={sortModalRef}>
             <button
               onClick={() => setShowSortModal(!showSortModal)}
@@ -618,7 +632,7 @@ export default function CustomersPage() {
             )}
           </div>
 
-          {/* Filter Button */}
+          {/* Add Filter */}
           <div className="relative" ref={filterDropdownRef}>
             <button
               onClick={() => setShowFilterDropdown(!showFilterDropdown)}
@@ -658,7 +672,7 @@ export default function CustomersPage() {
             )}
           </div>
 
-          {/* Columns Button */}
+          {/* Columns */}
           <div className="relative" ref={columnPickerRef}>
             <button
               onClick={() => setShowColumnPicker(!showColumnPicker)}
@@ -698,6 +712,13 @@ export default function CustomersPage() {
               </div>
             )}
           </div>
+
+          {/* Date Range Picker */}
+          <DateRangePicker
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            placeholder="Select dates"
+          />
         </div>
       </div>
 

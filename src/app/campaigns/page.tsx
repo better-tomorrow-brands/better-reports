@@ -239,6 +239,35 @@ export default function CampaignsPage() {
   const [fbForm, setFbForm] = useState<FbFormData>(emptyFbForm);
   const [fbIsEditing, setFbIsEditing] = useState(false);
 
+  // Facebook sort & filter
+  type FbSortField = "campaign" | "adGroup" | "status" | "utmCampaign" | "discountCode";
+  type FbSortDirection = "asc" | "desc";
+  const [fbSortField, setFbSortField] = useState<FbSortField>("campaign");
+  const [fbSortDirection, setFbSortDirection] = useState<FbSortDirection>("asc");
+  const [showFbSortModal, setShowFbSortModal] = useState(false);
+  const fbSortModalRef = useRef<HTMLDivElement>(null);
+  const [fbSearch, setFbSearch] = useState("");
+
+  // Facebook multi-field filters (like Customers page)
+  interface FbActiveFilter {
+    key: keyof FbCampaign;
+    label: string;
+    values: Set<string>;
+  }
+  const fbFilterableFields: { key: keyof FbCampaign; label: string }[] = [
+    { key: "campaign", label: "Campaign" },
+    { key: "adGroup", label: "Ad Group" },
+    { key: "productName", label: "Product" },
+    { key: "discountCode", label: "Discount" },
+    { key: "status", label: "Status" },
+  ];
+  const [fbFilters, setFbFilters] = useState<FbActiveFilter[]>([]);
+  const [showFbFilterDropdown, setShowFbFilterDropdown] = useState(false);
+  const fbFilterDropdownRef = useRef<HTMLDivElement>(null);
+  const [fbEditingFilter, setFbEditingFilter] = useState<keyof FbCampaign | null>(null);
+  const [fbFilterSearch, setFbFilterSearch] = useState("");
+  const fbFilterModalRef = useRef<HTMLDivElement>(null);
+
   // Product search
   const [productSearch, setProductSearch] = useState("");
   const [products, setProducts] = useState<ShopifyProduct[]>([]);
@@ -348,7 +377,7 @@ export default function CampaignsPage() {
     { key: "campaign", label: "Campaign", sticky: true, primary: true },
     { key: "adGroup", label: "Ad Group" },
     { key: "productName", label: "Product" },
-    { key: "skus", label: "SKUs", className: "font-mono text-xs" },
+    { key: "skus", label: "SKUs", className: "font-mono" },
     { key: "discountCode", label: "Discount" },
     { key: "utmSource", label: "UTM Source" },
     {
@@ -510,6 +539,95 @@ export default function CampaignsPage() {
     },
   ];
 
+  // ── Facebook Filter Helpers ────────────────────────
+  function getFbDisplayValue(value: unknown): string {
+    if (value === null || value === undefined || value === "") return "(empty)";
+    return String(value);
+  }
+
+  function getFbUniqueValues(key: keyof FbCampaign): string[] {
+    const values = new Set<string>();
+    fbCampaigns.forEach((c) => values.add(getFbDisplayValue(c[key])));
+    return Array.from(values).sort((a, b) => {
+      if (a === "(empty)") return 1;
+      if (b === "(empty)") return -1;
+      return a.localeCompare(b);
+    });
+  }
+
+  function getFbFilterValues(key: keyof FbCampaign): Set<string> {
+    const filter = fbFilters.find((f) => f.key === key);
+    return filter?.values || new Set();
+  }
+
+  function toggleFbFilterValue(key: keyof FbCampaign, value: string) {
+    setFbFilters((prev) => {
+      const existing = prev.find((f) => f.key === key);
+      if (existing) {
+        const newValues = new Set(existing.values);
+        if (newValues.has(value)) newValues.delete(value);
+        else newValues.add(value);
+        if (newValues.size === 0) return prev.filter((f) => f.key !== key);
+        return prev.map((f) => (f.key === key ? { ...f, values: newValues } : f));
+      }
+      const field = fbFilterableFields.find((f) => f.key === key);
+      return [...prev, { key, label: field?.label || String(key), values: new Set([value]) }];
+    });
+  }
+
+  function removeFbFilter(key: keyof FbCampaign) {
+    setFbFilters((prev) => prev.filter((f) => f.key !== key));
+  }
+
+  const fbEditingFilterValues = useMemo(() => {
+    if (!fbEditingFilter) return [];
+    const values = getFbUniqueValues(fbEditingFilter);
+    if (!fbFilterSearch) return values;
+    return values.filter((v) => v.toLowerCase().includes(fbFilterSearch.toLowerCase()));
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [fbEditingFilter, fbCampaigns, fbFilterSearch]);
+
+  // ── Facebook Filtered & Sorted Data ────────────────
+  const filteredFbCampaigns = useMemo(() => {
+    let result = [...fbCampaigns];
+
+    // Multi-field filters
+    if (fbFilters.length > 0) {
+      result = result.filter((c) =>
+        fbFilters.every((filter) => {
+          const value = getFbDisplayValue(c[filter.key]);
+          return filter.values.has(value);
+        })
+      );
+    }
+
+    // Search
+    if (fbSearch.trim()) {
+      const q = fbSearch.toLowerCase();
+      result = result.filter(
+        (c) =>
+          c.campaign?.toLowerCase().includes(q) ||
+          c.adGroup?.toLowerCase().includes(q) ||
+          c.ad?.toLowerCase().includes(q) ||
+          c.productName?.toLowerCase().includes(q) ||
+          c.utmCampaign?.toLowerCase().includes(q) ||
+          c.discountCode?.toLowerCase().includes(q) ||
+          c.skus?.toLowerCase().includes(q)
+      );
+    }
+
+    // Sort
+    result.sort((a, b) => {
+      const aVal = (a[fbSortField] || "").toLowerCase();
+      const bVal = (b[fbSortField] || "").toLowerCase();
+      if (aVal < bVal) return fbSortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return fbSortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [fbCampaigns, fbFilters, fbSearch, fbSortField, fbSortDirection]);
+
   // ── Load Data ──────────────────────────────────────
 
   useEffect(() => {
@@ -539,6 +657,12 @@ export default function CampaignsPage() {
       }
       if (ordersFilterRef.current && !ordersFilterRef.current.contains(event.target as Node)) {
         setShowOrdersFilter(false);
+      }
+      if (fbSortModalRef.current && !fbSortModalRef.current.contains(event.target as Node)) {
+        setShowFbSortModal(false);
+      }
+      if (fbFilterDropdownRef.current && !fbFilterDropdownRef.current.contains(event.target as Node)) {
+        setShowFbFilterDropdown(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -1541,11 +1665,180 @@ export default function CampaignsPage() {
       <div className="page-content">
         {/* ── Facebook Tab ────────────────────────────── */}
         {activeTab === "facebook" && (
-          <div className="pt-4">
+          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
             {fbError && (
               <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-800 dark:text-red-200">
                 {fbError}
                 <button onClick={() => setFbError("")} className="ml-2 underline">Dismiss</button>
+              </div>
+            )}
+
+            {/* Toolbar */}
+            <div className="flex items-center gap-3 mb-3">
+              <span className="text-sm text-muted">
+                {filteredFbCampaigns.length === fbCampaigns.length
+                  ? fbCampaigns.length
+                  : `${filteredFbCampaigns.length} of ${fbCampaigns.length}`} campaigns
+              </span>
+
+              {/* Search */}
+              <input
+                type="text"
+                placeholder="Search..."
+                value={fbSearch}
+                onChange={(e) => setFbSearch(e.target.value)}
+                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
+              />
+
+              {/* Sort */}
+              <div className="relative" ref={fbSortModalRef}>
+                <button
+                  onClick={() => setShowFbSortModal(!showFbSortModal)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  Sort
+                </button>
+                {showFbSortModal && (
+                  <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
+                      <div className="text-sm font-medium mb-2">Sort by</div>
+                      <div className="flex flex-col gap-1">
+                        {([
+                          { value: "campaign", label: "Campaign" },
+                          { value: "adGroup", label: "Ad Group" },
+                          { value: "utmCampaign", label: "UTM Campaign" },
+                          { value: "discountCode", label: "Discount Code" },
+                          { value: "status", label: "Status" },
+                        ] as const).map((opt) => (
+                          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                            <input
+                              type="radio"
+                              name="fbSortField"
+                              checked={fbSortField === opt.value}
+                              onChange={() => setFbSortField(opt.value)}
+                            />
+                            <span className="text-sm">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-2">
+                      <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${fbSortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                        <input type="radio" name="fbSortDir" checked={fbSortDirection === "asc"} onChange={() => setFbSortDirection("asc")} className="sr-only" />
+                        <span className="text-sm">Ascending</span>
+                      </label>
+                      <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${fbSortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        <input type="radio" name="fbSortDir" checked={fbSortDirection === "desc"} onChange={() => setFbSortDirection("desc")} className="sr-only" />
+                        <span className="text-sm">Descending</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Add Filter */}
+              <div className="relative" ref={fbFilterDropdownRef}>
+                <button
+                  onClick={() => setShowFbFilterDropdown(!showFbFilterDropdown)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  Add filter
+                </button>
+                {showFbFilterDropdown && (
+                  <div className="dropdown right-0 mt-2 w-48 max-h-64 overflow-y-auto">
+                    {fbFilterableFields.map((field) => (
+                      <button
+                        key={String(field.key)}
+                        className="dropdown-item"
+                        onClick={() => {
+                          setFbEditingFilter(field.key);
+                          setShowFbFilterDropdown(false);
+                          setFbFilterSearch("");
+                        }}
+                      >
+                        {field.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Filter Pills */}
+            {fbFilters.length > 0 && (
+              <div className="filter-pills-container">
+                {fbFilters.map((filter) => (
+                  <div key={String(filter.key)} className="filter-pill">
+                    <button
+                      className="filter-pill-label"
+                      onClick={() => { setFbEditingFilter(filter.key); setFbFilterSearch(""); }}
+                    >
+                      <span className="filter-pill-key">{filter.label}:</span>
+                      <span className="filter-pill-values">
+                        {filter.values.size <= 2
+                          ? Array.from(filter.values).join(", ")
+                          : `${filter.values.size} selected`}
+                      </span>
+                    </button>
+                    <button className="filter-pill-remove" onClick={() => removeFbFilter(filter.key)}>×</button>
+                  </div>
+                ))}
+                <button className="filter-clear-all" onClick={() => setFbFilters([])}>Clear all</button>
+              </div>
+            )}
+
+            {/* Filter Value Modal */}
+            {fbEditingFilter && (
+              <div className="modal-overlay" onClick={() => { setFbEditingFilter(null); setFbFilterSearch(""); }}>
+                <div className="filter-modal" ref={fbFilterModalRef} onClick={(e) => e.stopPropagation()}>
+                  <div className="filter-modal-header">
+                    <h3 className="filter-modal-title">
+                      Filter by {fbFilterableFields.find((f) => f.key === fbEditingFilter)?.label}
+                    </h3>
+                    <button className="modal-close" onClick={() => { setFbEditingFilter(null); setFbFilterSearch(""); }}>×</button>
+                  </div>
+                  <div className="filter-modal-search">
+                    <input
+                      type="text"
+                      className="input"
+                      placeholder="Search values..."
+                      value={fbFilterSearch}
+                      onChange={(e) => setFbFilterSearch(e.target.value)}
+                      autoFocus
+                    />
+                  </div>
+                  <div className="filter-modal-options">
+                    {fbEditingFilterValues.length === 0 ? (
+                      <div className="filter-modal-empty">No matching values</div>
+                    ) : (
+                      fbEditingFilterValues.map((value) => (
+                        <label key={value} className="filter-modal-option">
+                          <input
+                            type="checkbox"
+                            checked={getFbFilterValues(fbEditingFilter).has(value)}
+                            onChange={() => toggleFbFilterValue(fbEditingFilter, value)}
+                          />
+                          <span>{value}</span>
+                        </label>
+                      ))
+                    )}
+                  </div>
+                  <div className="filter-modal-footer">
+                    <button className="btn btn-secondary" onClick={() => { setFbEditingFilter(null); setFbFilterSearch(""); }}>Done</button>
+                  </div>
+                </div>
               </div>
             )}
 
@@ -1554,7 +1847,7 @@ export default function CampaignsPage() {
             ) : (
               <Table
                 columns={fbColumns}
-                data={fbCampaigns}
+                data={filteredFbCampaigns}
                 rowKey="id"
                 emptyMessage="No campaigns yet. Add your first campaign to enable order attribution."
               />

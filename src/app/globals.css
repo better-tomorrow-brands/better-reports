@@ -107,7 +107,8 @@ body {
 }
 
 .table {
-  width: 100%;
+  min-width: 100%;
+  width: max-content;
   font-size: 0.875rem;
   border-collapse: collapse;
 }
@@ -162,9 +163,6 @@ body {
 .table-cell {
   padding: 0.625rem 0.75rem;
   white-space: nowrap;
-  max-width: 200px;
-  overflow: hidden;
-  text-overflow: ellipsis;
   vertical-align: middle;
 }
 

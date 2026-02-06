@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon } from '@/lib/posthog';
+import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon, upsertPosthogAnalytics } from '@/lib/posthog';
 import { appendDailyAnalytics } from '@/lib/sheets';
 
 export async function GET(request: Request) {
@@ -23,6 +23,9 @@ export async function GET(request: Request) {
 
     // Write to Google Sheets
     const result = await appendDailyAnalytics(analytics);
+
+    // Write to Neon
+    await upsertPosthogAnalytics(analytics);
 
     return NextResponse.json({
       success: true,
