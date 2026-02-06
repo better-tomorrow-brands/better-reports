@@ -1,7 +1,7 @@
 import { createHmac } from "crypto";
 import { eq, and, lt, sql } from "drizzle-orm";
 import { db } from "./db";
-import { orders, campaigns, customers } from "./db/schema";
+import { orders, campaignsFcb, customers } from "./db/schema";
 import { getShopifySettings } from "./settings";
 
 // ── Types ──────────────────────────────────────────────
@@ -135,8 +135,8 @@ export async function getAttributionFromCampaigns(
   if (discountCode) {
     const byDiscount = await db
       .select()
-      .from(campaigns)
-      .where(sql`LOWER(${campaigns.discountCode}) = LOWER(${discountCode})`)
+      .from(campaignsFcb)
+      .where(sql`LOWER(${campaignsFcb.discountCode}) = LOWER(${discountCode})`)
       .limit(1);
 
     if (byDiscount.length > 0) {
@@ -157,8 +157,8 @@ export async function getAttributionFromCampaigns(
 
     const allCampaigns = await db
       .select()
-      .from(campaigns)
-      .where(sql`${campaigns.skus} IS NOT NULL AND ${campaigns.skus} != ''`);
+      .from(campaignsFcb)
+      .where(sql`${campaignsFcb.skus} IS NOT NULL AND ${campaignsFcb.skus} != ''`);
 
     for (const camp of allCampaigns) {
       const campaignSkuArray = (camp.skus || "")

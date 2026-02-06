@@ -7,6 +7,7 @@ import {
   boolean,
   timestamp,
 } from "drizzle-orm/pg-core";
+import { relations } from "drizzle-orm";
 
 // ── Users ──────────────────────────────────────────────
 export const users = pgTable("users", {
@@ -24,8 +25,8 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
-// ── Campaigns (Ad Attribution) ────────────────────────
-export const campaigns = pgTable("campaigns", {
+// ── Facebook Campaigns (Ad Attribution) ───────────────
+export const campaignsFcb = pgTable("campaigns_fcb", {
   id: serial("id").primaryKey(),
   campaign: text("campaign"),
   adGroup: text("ad_group"),
@@ -45,9 +46,36 @@ export const campaigns = pgTable("campaigns", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── WhatsApp Campaigns ────────────────────────────────
+export const campaignsWa = pgTable("campaigns_wa", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  templateName: text("template_name").notNull(),
+  customerCount: integer("customer_count").default(0),
+  successCount: integer("success_count").default(0),
+  errorCount: integer("error_count").default(0),
+  status: text("status").default("draft"), // draft | sending | completed
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+});
+
+// ── WhatsApp Campaign Customers (Junction) ────────────
+export const campaignsWaCustomers = pgTable("campaigns_wa_customers", {
+  id: serial("id").primaryKey(),
+  campaignId: integer("campaign_id").notNull().references(() => campaignsWa.id, { onDelete: "cascade" }),
+  customerId: integer("customer_id").notNull().references(() => customers.id, { onDelete: "cascade" }),
+  phone: text("phone"),
+  firstName: text("first_name"),
+  status: text("status").default("pending"), // pending | sent | failed
+  errorMessage: text("error_message"),
+  sentAt: timestamp("sent_at", { withTimezone: true }),
+});
+
 // ── WhatsApp Messages (Audit Log) ─────────────────────
 export const campaignMessages = pgTable("campaign_messages", {
   id: serial("id").primaryKey(),
+  campaignWaId: integer("campaign_wa_id").references(() => campaignsWa.id),
+  customerId: integer("customer_id").references(() => customers.id),
   templateName: text("template_name"),
   phone: text("phone").notNull(),
   firstName: text("first_name"),
@@ -114,4 +142,45 @@ export const orders = pgTable("orders", {
   customerId: integer("customer_id").references(() => customers.id),
   receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow(),
 });
+
+// ── Relations ─────────────────────────────────────────
+
+export const customersRelations = relations(customers, ({ many }) => ({
+  orders: many(orders),
+  campaignMessages: many(campaignMessages),
+  campaignsWaCustomers: many(campaignsWaCustomers), // Access campaigns via junction
+}));
+
+export const ordersRelations = relations(orders, ({ one }) => ({
+  customer: one(customers, {
+    fields: [orders.customerId],
+    references: [customers.id],
+  }),
+}));
+
+export const campaignsWaRelations = relations(campaignsWa, ({ many }) => ({
+  campaignsWaCustomers: many(campaignsWaCustomers), // Access customers via junction
+}));
+
+export const campaignsWaCustomersRelations = relations(campaignsWaCustomers, ({ one }) => ({
+  campaign: one(campaignsWa, {
+    fields: [campaignsWaCustomers.campaignId],
+    references: [campaignsWa.id],
+  }),
+  customer: one(customers, {
+    fields: [campaignsWaCustomers.customerId],
+    references: [customers.id],
+  }),
+}));
+
+export const campaignMessagesRelations = relations(campaignMessages, ({ one }) => ({
+  campaignWa: one(campaignsWa, {
+    fields: [campaignMessages.campaignWaId],
+    references: [campaignsWa.id],
+  }),
+  customer: one(customers, {
+    fields: [campaignMessages.customerId],
+    references: [customers.id],
+  }),
+}));
 

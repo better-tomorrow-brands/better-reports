@@ -59,14 +59,11 @@ export default function RootLayout({
                   <Link href="/orders" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
                     Orders
                   </Link>
-                  <Link href="/campaigns" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
-                    Campaigns
-                  </Link>
                   <Link href="/customers" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
                     Customers
                   </Link>
-                  <Link href="/campaign-sender" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
-                    WhatsApp
+                  <Link href="/campaigns" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
+                    Campaigns
                   </Link>
                   <Link href="/settings" className="px-3 py-2 rounded-md text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800">
                     Settings

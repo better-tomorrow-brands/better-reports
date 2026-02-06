@@ -36,6 +36,13 @@
       "when": 1770407000000,
       "tag": "0004_campaigns_restructure",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770480000000,
+      "tag": "0005_whatsapp_campaigns",
+      "breakpoints": true
     }
   ]
 }

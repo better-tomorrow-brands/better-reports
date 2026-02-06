@@ -708,7 +708,7 @@ export default function CustomersPage() {
         <Scorecard
           title="Prospects"
           value={stats.prospects.toLocaleString()}
-          subtitle="0 orders"
+          subtitle={`${stats.totalCustomers > 0 ? Math.round((stats.prospects / stats.totalCustomers) * 100) : 0}% of total`}
         />
         <Scorecard
           title="Subscribers"
