@@ -950,3 +950,89 @@ body {
 .rdp-range-middle .rdp-day-button:hover {
   background: var(--surface-hover);
 }
+
+/* ============================================
+   Scorecards
+   ============================================ */
+
+.scorecard-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+@media (max-width: 1200px) {
+  .scorecard-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+}
+
+@media (max-width: 768px) {
+  .scorecard-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 480px) {
+  .scorecard-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.scorecard {
+  padding: 1rem !important;
+  border: 1px solid var(--border-color) !important;
+  border-radius: 0.5rem !important;
+  background: var(--background) !important;
+  box-shadow: none !important;
+}
+
+.scorecard-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.scorecard-title {
+  font-size: 0.8125rem;
+  font-weight: 500;
+  color: #71717a;
+}
+
+.scorecard-icon {
+  color: #71717a;
+}
+
+.scorecard-value {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--foreground);
+  line-height: 1.2;
+}
+
+.scorecard-footer {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin-top: 0.5rem;
+}
+
+.scorecard-trend {
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.scorecard-trend-positive {
+  color: var(--status-success-text);
+}
+
+.scorecard-trend-negative {
+  color: var(--status-error-text);
+}
+
+.scorecard-subtitle {
+  font-size: 0.75rem;
+  color: #71717a;
+}

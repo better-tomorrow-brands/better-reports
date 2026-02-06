@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
+import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
 
 interface Order {
@@ -316,6 +317,27 @@ export default function OrdersPage() {
     return values.filter((v) => v.toLowerCase().includes(filterSearch.toLowerCase()));
   }, [editingFilter, orders, filterSearch]);
 
+  // Scorecard stats
+  const stats = useMemo(() => {
+    const totalOrders = filteredOrders.length;
+    const totalRevenue = filteredOrders.reduce((sum, order) => {
+      return sum + (order.total ? parseFloat(order.total) : 0);
+    }, 0);
+    const unfulfilled = filteredOrders.filter(
+      (order) => !order.fulfillmentStatus || order.fulfillmentStatus === "unfulfilled"
+    ).length;
+    const newCustomers = filteredOrders.filter((order) => !order.isRepeatCustomer).length;
+    const repeatCustomers = filteredOrders.filter((order) => order.isRepeatCustomer).length;
+
+    return {
+      totalOrders,
+      totalRevenue,
+      unfulfilled,
+      newCustomers,
+      repeatCustomers,
+    };
+  }, [filteredOrders]);
+
   if (loading) {
     return (
       <div className="p-6">
@@ -422,6 +444,30 @@ export default function OrdersPage() {
           </div>
         </div>
       </div>
+
+      {/* Scorecards */}
+      <ScorecardGrid>
+        <Scorecard
+          title="Total Orders"
+          value={stats.totalOrders.toLocaleString()}
+        />
+        <Scorecard
+          title="Total Revenue"
+          value={`£${stats.totalRevenue.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+        />
+        <Scorecard
+          title="Unfulfilled"
+          value={stats.unfulfilled.toLocaleString()}
+        />
+        <Scorecard
+          title="New Customers"
+          value={stats.newCustomers.toLocaleString()}
+        />
+        <Scorecard
+          title="Repeat Customers"
+          value={stats.repeatCustomers.toLocaleString()}
+        />
+      </ScorecardGrid>
 
       {/* Filter Pills */}
       {filters.length > 0 && (
