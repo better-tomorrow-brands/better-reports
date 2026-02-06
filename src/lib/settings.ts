@@ -15,6 +15,13 @@ export interface ShopifySettings {
   webhook_secret: string;
 }
 
+export interface LifecycleSettings {
+  newMaxDays: number;      // New: ≤ this many days (default 30)
+  reorderMaxDays: number;  // Due Reorder: newMaxDays+1 to this (default 60)
+  lapsedMaxDays: number;   // Lapsed: reorderMaxDays+1 to this (default 90)
+  // Lost: > lapsedMaxDays
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   const rows = await db
     .select({ value: settings.value })
@@ -53,4 +60,20 @@ export async function getShopifySettings(): Promise<ShopifySettings | null> {
 
 export async function saveShopifySettings(shopify: ShopifySettings): Promise<void> {
   await setSetting("shopify", JSON.stringify(shopify));
+}
+
+export const DEFAULT_LIFECYCLE_SETTINGS: LifecycleSettings = {
+  newMaxDays: 30,
+  reorderMaxDays: 60,
+  lapsedMaxDays: 90,
+};
+
+export async function getLifecycleSettings(): Promise<LifecycleSettings> {
+  const raw = await getSetting("lifecycle");
+  if (!raw) return DEFAULT_LIFECYCLE_SETTINGS;
+  return { ...DEFAULT_LIFECYCLE_SETTINGS, ...JSON.parse(raw) };
+}
+
+export async function saveLifecycleSettings(lifecycle: LifecycleSettings): Promise<void> {
+  await setSetting("lifecycle", JSON.stringify(lifecycle));
 }

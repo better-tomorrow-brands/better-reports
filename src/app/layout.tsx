@@ -76,7 +76,7 @@ export default function RootLayout({
                   <UserButton showName />
                 </div>
               </aside>
-              <main className="flex-1 overflow-y-auto">{children}</main>
+              <main className="flex-1 overflow-hidden">{children}</main>
             </div>
           </SignedIn>
         </body>

@@ -109,9 +109,10 @@ export async function GET(request: Request) {
   }
 
   const limit = parseInt(url.searchParams.get("limit") || "50");
+  const cursor = url.searchParams.get("cursor") || null;
 
   const query = `{
-    orders(first: ${limit}, sortKey: CREATED_AT, reverse: true) {
+    orders(first: ${limit}, sortKey: CREATED_AT, reverse: true${cursor ? `, after: "${cursor}"` : ""}) {
       edges {
         node {
           id
@@ -207,12 +208,15 @@ export async function GET(request: Request) {
       }
     }
 
+    const pageInfo = data.data?.orders.pageInfo;
     return NextResponse.json({
       success: true,
       fetched: orders.length,
       upserted: success,
       failed,
       errors: errors.length > 0 ? errors : undefined,
+      hasNextPage: pageInfo?.hasNextPage,
+      endCursor: pageInfo?.endCursor,
     });
   } catch (error) {
     console.error("Backfill error:", error);

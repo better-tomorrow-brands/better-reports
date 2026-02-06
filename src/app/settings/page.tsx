@@ -14,6 +14,12 @@ interface ShopifyForm {
   webhook_secret: string;
 }
 
+interface LifecycleForm {
+  newMaxDays: number;
+  reorderMaxDays: number;
+  lapsedMaxDays: number;
+}
+
 export default function SettingsPage() {
   const [meta, setMeta] = useState<MetaForm>({
     phone_number_id: "",
@@ -25,17 +31,29 @@ export default function SettingsPage() {
     access_token: "",
     webhook_secret: "",
   });
+  const [lifecycle, setLifecycle] = useState<LifecycleForm>({
+    newMaxDays: 30,
+    reorderMaxDays: 60,
+    lapsedMaxDays: 90,
+  });
+  const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
+  const [savingLifecycle, setSavingLifecycle] = useState(false);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   useEffect(() => {
-    fetch("/api/settings")
-      .then((res) => res.json())
-      .then((data) => {
-        if (data.meta) setMeta(data.meta);
-        if (data.shopify) setShopify(data.shopify);
+    Promise.all([
+      fetch("/api/settings").then((res) => res.json()),
+      fetch("/api/settings/lifecycle").then((res) => res.json()),
+      fetch("/api/users/me").then((res) => res.json()).catch(() => ({ role: null })),
+    ])
+      .then(([settingsData, lifecycleData, userData]) => {
+        if (settingsData.meta) setMeta(settingsData.meta);
+        if (settingsData.shopify) setShopify(settingsData.shopify);
+        if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
+        if (userData.role) setUserRole(userData.role);
       })
       .catch(() => setMessage({ type: "error", text: "Failed to load settings" }))
       .finally(() => setLoading(false));
@@ -92,6 +110,30 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: "Failed to save settings" });
     } finally {
       setSavingShopify(false);
+    }
+  }
+
+  async function handleSaveLifecycle() {
+    setSavingLifecycle(true);
+    setMessage(null);
+
+    try {
+      const res = await fetch("/api/settings/lifecycle", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(lifecycle),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "Lifecycle settings saved" });
+      } else {
+        setMessage({ type: "error", text: data.error || "Failed to save" });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingLifecycle(false);
     }
   }
 
@@ -254,6 +296,68 @@ export default function SettingsPage() {
           {savingMeta ? "Saving..." : "Save"}
         </button>
       </section>
+
+      {/* Lifecycle Settings - Super Admin Only */}
+      {userRole === "super_admin" && (
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 mb-6">
+          <h2 className="text-lg font-semibold mb-1">Customer Lifecycle</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Configure the thresholds (in days since last order) for customer lifecycle stages.
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <div>
+              <label className="block text-sm font-medium mb-1">New Customer (up to X days)</label>
+              <input
+                type="number"
+                value={lifecycle.newMaxDays}
+                onChange={(e) => setLifecycle({ ...lifecycle, newMaxDays: parseInt(e.target.value) || 0 })}
+                min={1}
+                className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+              />
+              <p className="text-xs text-zinc-400 mt-1">
+                Customers with ≤{lifecycle.newMaxDays} days since last order (or only 1 order) are &quot;New&quot;.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Due Reorder (up to X days)</label>
+              <input
+                type="number"
+                value={lifecycle.reorderMaxDays}
+                onChange={(e) => setLifecycle({ ...lifecycle, reorderMaxDays: parseInt(e.target.value) || 0 })}
+                min={lifecycle.newMaxDays + 1}
+                className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+              />
+              <p className="text-xs text-zinc-400 mt-1">
+                Customers with {lifecycle.newMaxDays + 1}-{lifecycle.reorderMaxDays} days since last order are &quot;Due Reorder&quot;.
+              </p>
+            </div>
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Lapsed (up to X days)</label>
+              <input
+                type="number"
+                value={lifecycle.lapsedMaxDays}
+                onChange={(e) => setLifecycle({ ...lifecycle, lapsedMaxDays: parseInt(e.target.value) || 0 })}
+                min={lifecycle.reorderMaxDays + 1}
+                className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+              />
+              <p className="text-xs text-zinc-400 mt-1">
+                Customers with {lifecycle.reorderMaxDays + 1}-{lifecycle.lapsedMaxDays} days are &quot;Lapsed&quot;. Beyond {lifecycle.lapsedMaxDays} days = &quot;Lost&quot;.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSaveLifecycle}
+            disabled={savingLifecycle}
+            className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+          >
+            {savingLifecycle ? "Saving..." : "Save"}
+          </button>
+        </section>
+      )}
     </div>
   );
 }

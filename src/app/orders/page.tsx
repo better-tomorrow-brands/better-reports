@@ -152,8 +152,11 @@ export default function OrdersPage() {
   // Date range filter
   const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
 
+  // Row selection
+  const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
+
   useEffect(() => {
-    fetch("/api/orders?limit=100")
+    fetch("/api/orders?limit=1000")
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {
@@ -317,6 +320,30 @@ export default function OrdersPage() {
     return values.filter((v) => v.toLowerCase().includes(filterSearch.toLowerCase()));
   }, [editingFilter, orders, filterSearch]);
 
+  // Calculate previous period orders for comparison
+  const previousPeriodOrders = useMemo(() => {
+    if (!dateRange?.from || !dateRange?.to) return [];
+
+    const fromDate = new Date(dateRange.from);
+    const toDate = new Date(dateRange.to);
+    const periodDays = Math.ceil((toDate.getTime() - fromDate.getTime()) / (1000 * 60 * 60 * 24)) + 1;
+
+    const prevEnd = new Date(fromDate);
+    prevEnd.setDate(prevEnd.getDate() - 1);
+    const prevStart = new Date(prevEnd);
+    prevStart.setDate(prevStart.getDate() - periodDays + 1);
+
+    return orders.filter((order) => {
+      if (!order.createdAt) return false;
+      const orderDate = new Date(order.createdAt);
+      const start = new Date(prevStart);
+      start.setHours(0, 0, 0, 0);
+      const end = new Date(prevEnd);
+      end.setHours(23, 59, 59, 999);
+      return orderDate >= start && orderDate <= end;
+    });
+  }, [orders, dateRange]);
+
   // Scorecard stats
   const stats = useMemo(() => {
     const totalOrders = filteredOrders.length;
@@ -329,14 +356,30 @@ export default function OrdersPage() {
     const newCustomers = filteredOrders.filter((order) => !order.isRepeatCustomer).length;
     const repeatCustomers = filteredOrders.filter((order) => order.isRepeatCustomer).length;
 
+    // Previous period stats
+    const prevTotalOrders = previousPeriodOrders.length;
+    const prevTotalRevenue = previousPeriodOrders.reduce((sum, order) => {
+      return sum + (order.total ? parseFloat(order.total) : 0);
+    }, 0);
+
+    // Calculate percentage changes
+    const ordersChange = prevTotalOrders > 0
+      ? Math.round(((totalOrders - prevTotalOrders) / prevTotalOrders) * 100)
+      : null;
+    const revenueChange = prevTotalRevenue > 0
+      ? Math.round(((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100)
+      : null;
+
     return {
       totalOrders,
       totalRevenue,
       unfulfilled,
       newCustomers,
       repeatCustomers,
+      ordersChange,
+      revenueChange,
     };
-  }, [filteredOrders]);
+  }, [filteredOrders, previousPeriodOrders]);
 
   if (loading) {
     return (
@@ -357,8 +400,9 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="p-6">
-      <div className="flex justify-between items-center mb-4">
+    <div className="page-container">
+      <div className="page-header">
+        <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Orders</h1>
         <div className="flex items-center gap-3">
           <span className="text-sm text-muted">
@@ -446,14 +490,22 @@ export default function OrdersPage() {
       </div>
 
       {/* Scorecards */}
-      <ScorecardGrid>
+      <ScorecardGrid scrollable>
         <Scorecard
           title="Total Orders"
           value={stats.totalOrders.toLocaleString()}
+          trend={dateRange?.from && dateRange?.to && stats.ordersChange !== null ? {
+            value: stats.ordersChange,
+            isPositive: stats.ordersChange >= 0,
+          } : undefined}
         />
         <Scorecard
           title="Total Revenue"
-          value={`£${stats.totalRevenue.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
+          value={`£${Math.round(stats.totalRevenue).toLocaleString("en-GB")}`}
+          trend={dateRange?.from && dateRange?.to && stats.revenueChange !== null ? {
+            value: stats.revenueChange,
+            isPositive: stats.revenueChange >= 0,
+          } : undefined}
         />
         <Scorecard
           title="Unfulfilled"
@@ -462,10 +514,14 @@ export default function OrdersPage() {
         <Scorecard
           title="New Customers"
           value={stats.newCustomers.toLocaleString()}
+          subtitle={`${stats.totalOrders > 0 ? Math.round((stats.newCustomers / stats.totalOrders) * 100) : 0}% of total`}
+          subtitleColor="success"
         />
         <Scorecard
           title="Repeat Customers"
           value={stats.repeatCustomers.toLocaleString()}
+          subtitle={`${stats.totalOrders > 0 ? Math.round((stats.repeatCustomers / stats.totalOrders) * 100) : 0}% of total`}
+          subtitleColor="success"
         />
       </ScorecardGrid>
 
@@ -558,13 +614,19 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
+      </div>
 
-      <Table
-        columns={activeColumns}
-        data={filteredOrders}
-        rowKey="id"
-        emptyMessage={filters.length > 0 ? "No orders match the current filters." : "No orders yet. Orders will appear here once you configure Shopify webhooks in Settings."}
-      />
+      <div className="page-content">
+        <Table
+          columns={activeColumns}
+          data={filteredOrders}
+          rowKey="id"
+          emptyMessage={filters.length > 0 ? "No orders match the current filters." : "No orders yet. Orders will appear here once you configure Shopify webhooks in Settings."}
+          selectable
+          selectedRows={selectedRows}
+          onSelectionChange={setSelectedRows}
+        />
+      </div>
     </div>
   );
 }

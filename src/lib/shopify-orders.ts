@@ -1,5 +1,5 @@
 import { createHmac } from "crypto";
-import { eq, or, sql } from "drizzle-orm";
+import { eq, and, lt, sql } from "drizzle-orm";
 import { db } from "./db";
 import { orders, campaigns, customers } from "./db/schema";
 import { getShopifySettings } from "./settings";
@@ -259,13 +259,33 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
     }
   }
 
+  // Check if this is a repeat customer (has previous orders before this order date)
+  const customerEmail = data.customer?.email || data.email || null;
+  const orderDate = formatDate(data.created_at);
+  let isRepeatCustomer = false;
+
+  if (customerEmail && orderDate) {
+    const previousOrders = await db
+      .select({ id: orders.id })
+      .from(orders)
+      .where(
+        and(
+          eq(orders.email, customerEmail),
+          lt(orders.createdAt, orderDate)
+        )
+      )
+      .limit(1);
+
+    isRepeatCustomer = previousOrders.length > 0;
+  }
+
   const orderData = {
     shopifyId,
     orderNumber: data.order_number?.toString() || null,
-    email: data.customer?.email || data.email || null,
+    email: customerEmail,
     customerName: getCustomerName(data) || null,
     phone: getPhone(data) || null,
-    createdAt: formatDate(data.created_at),
+    createdAt: orderDate,
     fulfillmentStatus: data.fulfillment_status || "unfulfilled",
     fulfilledAt: formatDate(data.fulfilled_at),
     subtotal: data.subtotal_price || null,
@@ -283,6 +303,7 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
     trackingNumber: getTrackingNumber(data) || null,
     tags: data.tags || null,
     hasConversionData,
+    isRepeatCustomer,
   };
 
   await db
