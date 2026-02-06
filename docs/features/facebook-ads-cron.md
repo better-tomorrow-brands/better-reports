@@ -1,13 +1,17 @@
 # Facebook Ads Cron
 
-Automated hourly sync of Facebook ad-level performance data to Google Sheets.
+Automated hourly sync of Facebook ad-level performance data to Google Sheets and Neon (dual-write).
 
 ## How It Works
 
 1. Vercel cron triggers the `/api/cron/facebook-ads` endpoint on a schedule
-2. The endpoint fetches ad-level insights from the Facebook Marketing API
-3. Data is written to the "Facebook" tab in Google Sheets
-4. A `utm_campaign` value is looked up from the Campaigns sheet by matching the Ad Group name
+2. The endpoint fetches ad-level insights from the Facebook Marketing API (paginated, 500 per page)
+3. Data is written to the "Facebook" tab in Google Sheets (delete existing rows for that date, then append)
+4. A `utm_campaign` value is looked up from the Campaigns Google Sheet by matching Ad Group name (Sheets path)
+5. Separately, `utm_campaign` is looked up from the `campaigns_fcb` DB table (Neon path)
+6. Data is upserted into the `facebook_ads` Neon table with the DB-sourced `utm_campaign`
+
+The Sheets and Neon writes are independent — each has its own utm_campaign lookup source.
 
 ## Cron Schedules
 
@@ -16,7 +20,95 @@ Automated hourly sync of Facebook ad-level performance data to Google Sheets.
 | `5 0 * * *` (daily 00:05 UTC) | `/api/cron/facebook-ads` | Yesterday's final data |
 | `0 * * * *` (hourly) | `/api/cron/facebook-ads?date=today` | Today's running data |
 
-The daily cron fetches yesterday's complete data (no further changes expected). The hourly cron fetches today's data and replaces the existing rows for today each time (delete + re-add).
+The daily cron fetches yesterday's complete data (no further changes expected). The hourly cron fetches today's data and replaces the existing rows for today each time.
+
+## Data Flow
+
+```
+Facebook Marketing API (v21.0)
+        │
+        ▼
+getDailyFacebookAds(date) → FacebookAdRow[] (utm_campaign: "")
+        │
+        ├──▶ syncFacebookAds(date, ads)        [Google Sheets path]
+        │       │
+        │       ├── lookupUtmCampaigns()        ← Campaigns Google Sheet
+        │       ├── Delete existing rows for date
+        │       └── Append rows with utm_campaign from Sheet
+        │
+        └──▶ lookupUtmCampaignsFromDb()         [Neon path]
+                │
+                ├── Query campaigns_fcb.ad_group + utm_campaign
+                ├── Map ads with utm_campaign from DB
+                └── upsertFacebookAds(adsWithUtm) → INSERT ... ON CONFLICT UPDATE
+```
+
+## utm_campaign Lookup
+
+Two independent lookup sources exist:
+
+### Google Sheets (for the Sheets write)
+
+- **Campaigns Sheet ID:** `1uupcINWhwzT9pVJtBNAQbu9Js7GgYeI2h95G3G3sVnA`
+- **Tab:** Campaigns
+- **Match:** `adset_name` (lowercased) = `Ad Group` column (lowercased)
+- **Returns:** `utm_campaign` column value
+
+### Neon DB (for the DB write)
+
+- **Table:** `campaigns_fcb`
+- **Match:** `ad_group` column (lowercased) against `adset_name` (lowercased)
+- **Returns:** `utm_campaign` column value
+- **Filter:** Only rows where both `ad_group` and `utm_campaign` are non-null
+
+Both are case-insensitive. If no match is found, utm_campaign is left as an empty string.
+
+## Database Schema
+
+### `facebook_ads` table
+
+| Column | Type | Details |
+|---|---|---|
+| `id` | serial | Primary key |
+| `date` | date | Ad date |
+| `campaign` | text | Campaign name |
+| `adset` | text | Ad set (ad group) name |
+| `ad` | text | Ad name |
+| `utm_campaign` | text | Looked up from `campaigns_fcb` |
+| `spend` | real | Amount spent (GBP) |
+| `impressions` | integer | Total impressions |
+| `reach` | integer | Unique reach |
+| `frequency` | real | Avg frequency |
+| `clicks` | integer | Link clicks |
+| `cpc` | real | Cost per click |
+| `cpm` | real | Cost per 1000 impressions |
+| `ctr` | real | Click-through rate |
+| `purchases` | integer | Purchase conversions |
+| `cost_per_purchase` | real | Cost per purchase |
+| `purchase_value` | real | Total purchase value |
+| `roas` | real | Return on ad spend |
+
+**Unique index:** `(date, campaign, adset, ad)` — used for upsert conflict resolution.
+
+### `campaigns_fcb` table (attribution lookup)
+
+| Column | Type | Details |
+|---|---|---|
+| `id` | serial | Primary key |
+| `campaign` | text | Facebook campaign name |
+| `ad_group` | text | Facebook ad set name (used for utm lookup) |
+| `ad` | text | Facebook ad name |
+| `product_name` | text | Associated product |
+| `product_url` | text | Product URL |
+| `sku_suffix` | text | SKU suffix |
+| `skus` | text | SKU list |
+| `discount_code` | text | Discount code |
+| `utm_source` | text | UTM source |
+| `utm_medium` | text | UTM medium |
+| `utm_campaign` | text | UTM campaign value |
+| `utm_term` | text | UTM term |
+| `product_template` | text | Template reference |
+| `status` | text | active/inactive |
 
 ## Google Sheets Columns
 
@@ -51,23 +143,36 @@ The Facebook tab has 26 columns (A-Z):
 | Y | Reporting starts | Same as date |
 | Z | Reporting ends | Same as date |
 
-## utm_campaign Lookup
+## Cron Response
 
-For each ad row, the system looks up `utm_campaign` from a separate Campaigns spreadsheet:
+```json
+{
+  "success": true,
+  "date": "2026-02-05",
+  "adsCount": 42,
+  "dbInserted": 42,
+  "action": "synced",
+  "rowsDeleted": 42,
+  "rowsAdded": 42
+}
+```
 
-- **Campaigns Sheet ID:** `1uupcINWhwzT9pVJtBNAQbu9Js7GgYeI2h95G3G3sVnA`
-- **Tab:** Campaigns
-- **Match:** Facebook `adset_name` (Ad Group) = Campaigns sheet `Ad Group` column
-- **Returns:** Campaigns sheet `utm_campaign` column value
-- **No match:** Cell is left blank (no error)
-
-The Ad Group names in Facebook Ads Manager must exactly match the Ad Group names in the Campaigns sheet (case-insensitive).
+| Field | Source |
+|---|---|
+| `adsCount` | Rows fetched from Facebook API |
+| `dbInserted` | Rows upserted into Neon `facebook_ads` table |
+| `rowsDeleted` | Rows removed from Google Sheets for that date |
+| `rowsAdded` | Rows appended to Google Sheets |
 
 ## Environment Variables
 
 ```
 FACEBOOK_ACCESS_TOKEN=<long-lived user access token>
 FACEBOOK_AD_ACCOUNT_ID=act_1208726206863653
+GOOGLE_SHEET_ID=<main spreadsheet ID>
+GOOGLE_SERVICE_ACCOUNT_EMAIL=<service account email>
+GOOGLE_PRIVATE_KEY=<service account private key>
+DATABASE_URL=<Neon connection string>
 ```
 
 ### Token Renewal
@@ -84,34 +189,16 @@ To renew:
 
 ## Local Development
 
-### Start dev server
-
-```bash
-pnpm dev
-```
-
-Server runs at `http://localhost:3000`.
-
 ### Manually trigger cron jobs
 
-**Facebook Ads - today's data:**
+**Today's data:**
 ```
 http://localhost:3000/api/cron/facebook-ads?date=today
 ```
 
-**Facebook Ads - yesterday's data:**
+**Yesterday's data:**
 ```
 http://localhost:3000/api/cron/facebook-ads
-```
-
-**PostHog Analytics - today's data:**
-```
-http://localhost:3000/api/cron/posthog-analytics?date=today
-```
-
-**PostHog Analytics - yesterday's data:**
-```
-http://localhost:3000/api/cron/posthog-analytics
 ```
 
 ### Backfill endpoints
@@ -126,13 +213,20 @@ http://localhost:3000/api/backfill/facebook?start=2025-02-06&end=2026-02-01
 http://localhost:3000/api/backfill/facebook-utm
 ```
 
+**Facebook campaigns_fcb - CSV upload:**
+```
+POST http://localhost:3000/api/backfill/facebook-upload
+```
+
 ## Key Files
 
 | File | Purpose |
 |---|---|
-| `src/lib/facebook.ts` | Facebook Marketing API client, fetches ad-level insights |
-| `src/lib/sheets.ts` | Google Sheets integration, sync/append/backfill functions |
-| `src/app/api/cron/facebook-ads/route.ts` | Cron endpoint |
+| `src/lib/facebook.ts` | Facebook Marketing API client, `getDailyFacebookAds()`, `upsertFacebookAds()`, `lookupUtmCampaignsFromDb()` |
+| `src/lib/sheets.ts` | Google Sheets integration — `syncFacebookAds()`, `lookupUtmCampaigns()` (Sheets-based) |
+| `src/lib/db/schema.ts` | Drizzle schema — `facebookAds`, `campaignsFcb` tables |
+| `src/app/api/cron/facebook-ads/route.ts` | Cron endpoint (dual-write) |
 | `src/app/api/backfill/facebook/route.ts` | Historical data backfill |
-| `src/app/api/backfill/facebook-utm/route.ts` | utm_campaign backfill |
+| `src/app/api/backfill/facebook-utm/route.ts` | utm_campaign backfill (Sheets) |
+| `src/app/api/backfill/facebook-upload/route.ts` | CSV upload to `campaigns_fcb` table |
 | `vercel.json` | Cron schedule configuration |

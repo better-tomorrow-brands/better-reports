@@ -8,6 +8,7 @@ import {
   timestamp,
   date,
   real,
+  uniqueIndex,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -167,6 +168,31 @@ export const posthogAnalytics = pgTable("posthog_analytics", {
   purchases: integer("purchases").notNull().default(0),
   conversionRate: real("conversion_rate").notNull().default(0),
 });
+
+// ── Facebook Ads (Daily Ad-Level) ────────────────────
+export const facebookAds = pgTable("facebook_ads", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  campaign: text("campaign").notNull().default(""),
+  adset: text("adset").notNull().default(""),
+  ad: text("ad").notNull().default(""),
+  utmCampaign: text("utm_campaign").default(""),
+  spend: real("spend").notNull().default(0),
+  impressions: integer("impressions").notNull().default(0),
+  reach: integer("reach").notNull().default(0),
+  frequency: real("frequency").notNull().default(0),
+  clicks: integer("clicks").notNull().default(0),
+  cpc: real("cpc").notNull().default(0),
+  cpm: real("cpm").notNull().default(0),
+  ctr: real("ctr").notNull().default(0),
+  purchases: integer("purchases").notNull().default(0),
+  costPerPurchase: real("cost_per_purchase").notNull().default(0),
+  purchaseValue: real("purchase_value").notNull().default(0),
+  roas: real("roas").notNull().default(0),
+}, (table) => [
+  uniqueIndex("facebook_ads_date_campaign_adset_ad_idx")
+    .on(table.date, table.campaign, table.adset, table.ad),
+]);
 
 // ── Relations ─────────────────────────────────────────
 

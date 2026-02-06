@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon } from '@/lib/facebook';
+import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon, lookupUtmCampaignsFromDb, upsertFacebookAds } from '@/lib/facebook';
 import { syncFacebookAds } from '@/lib/sheets';
 
 export async function GET(request: Request) {
@@ -24,10 +24,19 @@ export async function GET(request: Request) {
     // Write to Google Sheets
     const result = await syncFacebookAds(date, ads);
 
+    // Dual-write to Neon
+    const utmMap = await lookupUtmCampaignsFromDb();
+    const adsWithUtm = ads.map((ad) => ({
+      ...ad,
+      utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
+    }));
+    const dbInserted = await upsertFacebookAds(adsWithUtm);
+
     return NextResponse.json({
       success: true,
       date,
       adsCount: ads.length,
+      dbInserted,
       ...result,
     });
   } catch (error) {
