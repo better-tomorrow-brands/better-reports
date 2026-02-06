@@ -1,3 +1,6 @@
+import { db } from "@/lib/db";
+import { posthogAnalytics } from "@/lib/db/schema";
+
 const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY;
 const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
 const POSTHOG_HOST = process.env.POSTHOG_HOST || 'eu.posthog.com';
@@ -225,6 +228,37 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     purchases,
     conversion_rate,
   };
+}
+
+export async function upsertPosthogAnalytics(data: DailyAnalytics) {
+  const row = {
+    date: data.date,
+    uniqueVisitors: data.unique_visitors,
+    totalSessions: data.total_sessions,
+    pageviews: data.pageviews,
+    bounceRate: data.bounce_rate,
+    avgSessionDuration: data.avg_session_duration,
+    mobileSessions: data.mobile_sessions,
+    desktopSessions: data.desktop_sessions,
+    topCountry: data.top_country,
+    directSessions: data.direct_sessions,
+    organicSessions: data.organic_sessions,
+    paidSessions: data.paid_sessions,
+    socialSessions: data.social_sessions,
+    productViews: data.product_views,
+    addToCart: data.add_to_cart,
+    checkoutStarted: data.checkout_started,
+    purchases: data.purchases,
+    conversionRate: data.conversion_rate,
+  };
+
+  await db
+    .insert(posthogAnalytics)
+    .values(row)
+    .onConflictDoUpdate({
+      target: posthogAnalytics.date,
+      set: row,
+    });
 }
 
 export function getYesterdayDateLondon(): string {

@@ -1,3 +1,7 @@
+import { sql, and, isNotNull } from "drizzle-orm";
+import { db } from "@/lib/db";
+import { facebookAds, campaignsFcb } from "@/lib/db/schema";
+
 const FACEBOOK_ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
 const FACEBOOK_AD_ACCOUNT_ID = process.env.FACEBOOK_AD_ACCOUNT_ID;
 
@@ -171,4 +175,79 @@ export function getYesterdayDateLondon(): string {
   const london = new Date(now.toLocaleString('en-US', { timeZone: 'Europe/London' }));
   london.setDate(london.getDate() - 1);
   return london.toISOString().split('T')[0];
+}
+
+export async function upsertFacebookAds(rows: FacebookAdRow[]): Promise<number> {
+  if (rows.length === 0) return 0;
+
+  const BATCH_SIZE = 100;
+  let inserted = 0;
+
+  for (let i = 0; i < rows.length; i += BATCH_SIZE) {
+    const batch = rows.slice(i, i + BATCH_SIZE).map((row) => ({
+      date: row.date,
+      campaign: row.campaign,
+      adset: row.adset,
+      ad: row.ad,
+      utmCampaign: row.utm_campaign,
+      spend: row.spend,
+      impressions: row.impressions,
+      reach: row.reach,
+      frequency: row.frequency,
+      clicks: row.clicks,
+      cpc: row.cpc,
+      cpm: row.cpm,
+      ctr: row.ctr,
+      purchases: row.purchases,
+      costPerPurchase: row.cost_per_purchase,
+      purchaseValue: row.purchase_value,
+      roas: row.roas,
+    }));
+
+    await db
+      .insert(facebookAds)
+      .values(batch)
+      .onConflictDoUpdate({
+        target: [facebookAds.date, facebookAds.campaign, facebookAds.adset, facebookAds.ad],
+        set: {
+          utmCampaign: sql`excluded.utm_campaign`,
+          spend: sql`excluded.spend`,
+          impressions: sql`excluded.impressions`,
+          reach: sql`excluded.reach`,
+          frequency: sql`excluded.frequency`,
+          clicks: sql`excluded.clicks`,
+          cpc: sql`excluded.cpc`,
+          cpm: sql`excluded.cpm`,
+          ctr: sql`excluded.ctr`,
+          purchases: sql`excluded.purchases`,
+          costPerPurchase: sql`excluded.cost_per_purchase`,
+          purchaseValue: sql`excluded.purchase_value`,
+          roas: sql`excluded.roas`,
+        },
+      });
+
+    inserted += batch.length;
+  }
+
+  return inserted;
+}
+
+export async function lookupUtmCampaignsFromDb(): Promise<Map<string, string>> {
+  const rows = await db
+    .select({
+      adGroup: campaignsFcb.adGroup,
+      utmCampaign: campaignsFcb.utmCampaign,
+    })
+    .from(campaignsFcb)
+    .where(
+      and(isNotNull(campaignsFcb.adGroup), isNotNull(campaignsFcb.utmCampaign))
+    );
+
+  const map = new Map<string, string>();
+  for (const row of rows) {
+    if (row.adGroup && row.utmCampaign) {
+      map.set(row.adGroup.toLowerCase(), row.utmCampaign);
+    }
+  }
+  return map;
 }

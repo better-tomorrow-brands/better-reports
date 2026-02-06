@@ -1,5 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDailyAnalytics, getYesterdayDateLondon } from '@/lib/posthog';
+import { getDailyAnalytics, getYesterdayDateLondon, upsertPosthogAnalytics } from '@/lib/posthog';
 import { appendDailyAnalytics } from '@/lib/sheets';
 
 export const maxDuration = 300; // 5 minutes max for Vercel
@@ -38,6 +38,7 @@ export async function GET(request: Request) {
       try {
         const analytics = await getDailyAnalytics(date);
         await appendDailyAnalytics(analytics);
+        await upsertPosthogAnalytics(analytics);
         results.push({ date, status: 'success' });
         console.log(`Backfilled ${date}: ${analytics.unique_visitors} visitors`);
 

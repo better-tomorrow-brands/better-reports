@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getMetaSettings, saveMetaSettings } from "@/lib/settings";
+import { getMetaSettings, saveMetaSettings, getShopifySettings, saveShopifySettings } from "@/lib/settings";
 
 export async function GET() {
   const { userId } = await auth();
@@ -10,8 +10,10 @@ export async function GET() {
 
   try {
     const meta = await getMetaSettings();
-    // Mask the access token for display
-    const masked = meta
+    const shopify = await getShopifySettings();
+
+    // Mask tokens for display
+    const maskedMeta = meta
       ? {
           ...meta,
           access_token: meta.access_token
@@ -19,7 +21,20 @@ export async function GET() {
             : "",
         }
       : null;
-    return NextResponse.json({ meta: masked });
+
+    const maskedShopify = shopify
+      ? {
+          ...shopify,
+          access_token: shopify.access_token
+            ? `${shopify.access_token.slice(0, 10)}...${shopify.access_token.slice(-4)}`
+            : "",
+          webhook_secret: shopify.webhook_secret
+            ? `${shopify.webhook_secret.slice(0, 6)}...`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify });
   } catch (error) {
     console.error("Settings GET error:", error);
     return NextResponse.json(
@@ -47,6 +62,23 @@ export async function POST(request: Request) {
         }
       }
       await saveMetaSettings(body.meta);
+    }
+
+    if (body.shopify) {
+      // If tokens look masked, keep the existing ones
+      if (body.shopify.access_token?.includes("...")) {
+        const existing = await getShopifySettings();
+        if (existing) {
+          body.shopify.access_token = existing.access_token;
+        }
+      }
+      if (body.shopify.webhook_secret?.includes("...")) {
+        const existing = await getShopifySettings();
+        if (existing) {
+          body.shopify.webhook_secret = existing.webhook_secret;
+        }
+      }
+      await saveShopifySettings(body.shopify);
     }
 
     return NextResponse.json({ success: true });

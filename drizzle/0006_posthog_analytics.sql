@@ -1,0 +1,22 @@
+CREATE TABLE "posthog_analytics" (
+	"id" serial PRIMARY KEY NOT NULL,
+	"date" date NOT NULL,
+	"unique_visitors" integer DEFAULT 0 NOT NULL,
+	"total_sessions" integer DEFAULT 0 NOT NULL,
+	"pageviews" integer DEFAULT 0 NOT NULL,
+	"bounce_rate" real DEFAULT 0 NOT NULL,
+	"avg_session_duration" real DEFAULT 0 NOT NULL,
+	"mobile_sessions" integer DEFAULT 0 NOT NULL,
+	"desktop_sessions" integer DEFAULT 0 NOT NULL,
+	"top_country" text,
+	"direct_sessions" integer DEFAULT 0 NOT NULL,
+	"organic_sessions" integer DEFAULT 0 NOT NULL,
+	"paid_sessions" integer DEFAULT 0 NOT NULL,
+	"social_sessions" integer DEFAULT 0 NOT NULL,
+	"product_views" integer DEFAULT 0 NOT NULL,
+	"add_to_cart" integer DEFAULT 0 NOT NULL,
+	"checkout_started" integer DEFAULT 0 NOT NULL,
+	"purchases" integer DEFAULT 0 NOT NULL,
+	"conversion_rate" real DEFAULT 0 NOT NULL,
+	CONSTRAINT "posthog_analytics_date_unique" UNIQUE("date")
+);
