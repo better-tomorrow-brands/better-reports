@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Table, Column } from "@/components/Table";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { DateRange } from "react-day-picker";
 
 interface Order {
   id: number;
@@ -38,36 +40,45 @@ interface ColumnDef {
   defaultVisible: boolean;
   sticky?: boolean;
   primary?: boolean;
+  filterable?: boolean;
   render?: (value: unknown, order: Order) => React.ReactNode;
+}
+
+interface ActiveFilter {
+  key: keyof Order;
+  label: string;
+  values: Set<string>;
 }
 
 const allColumns: ColumnDef[] = [
   { key: "orderNumber", label: "Order", defaultVisible: true, sticky: true, primary: true, render: (v) => v ? `#${v}` : "-" },
   { key: "createdAt", label: "Date", defaultVisible: true, render: (v) => formatDate(v as string) },
-  { key: "customerName", label: "Customer", defaultVisible: true },
-  { key: "email", label: "Email", defaultVisible: false },
+  { key: "customerName", label: "Customer", defaultVisible: true, filterable: true },
+  { key: "email", label: "Email", defaultVisible: false, filterable: true },
   { key: "phone", label: "Phone", defaultVisible: false },
   { key: "total", label: "Total", defaultVisible: true, render: (v) => formatCurrency(v as string) },
   { key: "subtotal", label: "Subtotal", defaultVisible: false, render: (v) => formatCurrency(v as string) },
   { key: "shipping", label: "Shipping", defaultVisible: false, render: (v) => formatCurrency(v as string) },
   { key: "tax", label: "Tax", defaultVisible: false, render: (v) => formatCurrency(v as string) },
-  { key: "fulfillmentStatus", label: "Status", defaultVisible: true, render: (v) => formatStatus(v as string) },
+  { key: "fulfillmentStatus", label: "Status", defaultVisible: true, filterable: true, render: (v) => formatStatus(v as string) },
   { key: "quantity", label: "Qty", defaultVisible: true },
-  { key: "skus", label: "SKUs", defaultVisible: false },
-  { key: "discountCodes", label: "Discount", defaultVisible: true },
-  { key: "utmSource", label: "Source", defaultVisible: true },
-  { key: "utmMedium", label: "Medium", defaultVisible: false },
-  { key: "utmCampaign", label: "Campaign", defaultVisible: true },
-  { key: "utmContent", label: "Content", defaultVisible: false },
-  { key: "utmTerm", label: "Term", defaultVisible: false },
+  { key: "skus", label: "SKUs", defaultVisible: false, filterable: true },
+  { key: "discountCodes", label: "Discount", defaultVisible: true, filterable: true },
+  { key: "utmSource", label: "Source", defaultVisible: true, filterable: true },
+  { key: "utmMedium", label: "Medium", defaultVisible: false, filterable: true },
+  { key: "utmCampaign", label: "Campaign", defaultVisible: true, filterable: true },
+  { key: "utmContent", label: "Content", defaultVisible: false, filterable: true },
+  { key: "utmTerm", label: "Term", defaultVisible: false, filterable: true },
   { key: "trackingNumber", label: "Tracking", defaultVisible: false },
-  { key: "tags", label: "Tags", defaultVisible: false },
-  { key: "hasConversionData", label: "Conv?", defaultVisible: true, render: (v) => formatBoolean(v as boolean) },
-  { key: "isRepeatCustomer", label: "Repeat?", defaultVisible: true, render: (v) => formatBoolean(v as boolean) },
+  { key: "tags", label: "Tags", defaultVisible: false, filterable: true },
+  { key: "hasConversionData", label: "Conv?", defaultVisible: true, filterable: true, render: (v) => formatBoolean(v as boolean) },
+  { key: "isRepeatCustomer", label: "Repeat?", defaultVisible: true, filterable: true, render: (v) => formatBoolean(v as boolean) },
   { key: "fulfilledAt", label: "Fulfilled At", defaultVisible: false, render: (v) => formatDate(v as string) },
   { key: "receivedAt", label: "Received", defaultVisible: false, render: (v) => formatDate(v as string) },
   { key: "shopifyId", label: "Shopify ID", defaultVisible: false },
 ];
+
+const filterableColumns = allColumns.filter((c) => c.filterable);
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return "-";
@@ -97,6 +108,12 @@ function formatBoolean(value: boolean): React.ReactNode {
   );
 }
 
+function getDisplayValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "(empty)";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  return String(value);
+}
+
 const STORAGE_KEY = "orders-visible-columns";
 
 function getInitialColumns(): Set<string> {
@@ -123,6 +140,17 @@ export default function OrdersPage() {
   const [showColumnPicker, setShowColumnPicker] = useState(false);
   const columnPickerRef = useRef<HTMLDivElement>(null);
 
+  // Filter state
+  const [filters, setFilters] = useState<ActiveFilter[]>([]);
+  const [showFilterDropdown, setShowFilterDropdown] = useState(false);
+  const [editingFilter, setEditingFilter] = useState<keyof Order | null>(null);
+  const [filterSearch, setFilterSearch] = useState("");
+  const filterDropdownRef = useRef<HTMLDivElement>(null);
+  const filterModalRef = useRef<HTMLDivElement>(null);
+
+  // Date range filter
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(undefined);
+
   useEffect(() => {
     fetch("/api/orders?limit=100")
       .then((res) => res.json())
@@ -138,21 +166,114 @@ export default function OrdersPage() {
       .finally(() => setLoading(false));
   }, []);
 
-  // Load saved columns on mount
   useEffect(() => {
     setVisibleColumns(getInitialColumns());
   }, []);
 
-  // Close column picker when clicking outside
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
       if (columnPickerRef.current && !columnPickerRef.current.contains(event.target as Node)) {
         setShowColumnPicker(false);
       }
+      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+        setShowFilterDropdown(false);
+      }
+      if (filterModalRef.current && !filterModalRef.current.contains(event.target as Node)) {
+        setEditingFilter(null);
+        setFilterSearch("");
+      }
     }
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Get unique values for a field
+  const getUniqueValues = (key: keyof Order): string[] => {
+    const values = new Set<string>();
+    orders.forEach((order) => {
+      const val = order[key];
+      values.add(getDisplayValue(val));
+    });
+    return Array.from(values).sort((a, b) => {
+      if (a === "(empty)") return 1;
+      if (b === "(empty)") return -1;
+      return a.localeCompare(b);
+    });
+  };
+
+  // Get currently selected values for a filter
+  const getFilterValues = (key: keyof Order): Set<string> => {
+    const filter = filters.find((f) => f.key === key);
+    return filter?.values || new Set();
+  };
+
+  // Toggle a value in a filter
+  const toggleFilterValue = (key: keyof Order, value: string) => {
+    setFilters((prev) => {
+      const existing = prev.find((f) => f.key === key);
+      if (existing) {
+        const newValues = new Set(existing.values);
+        if (newValues.has(value)) {
+          newValues.delete(value);
+        } else {
+          newValues.add(value);
+        }
+        if (newValues.size === 0) {
+          return prev.filter((f) => f.key !== key);
+        }
+        return prev.map((f) => (f.key === key ? { ...f, values: newValues } : f));
+      } else {
+        const col = allColumns.find((c) => c.key === key);
+        return [...prev, { key, label: col?.label || key, values: new Set([value]) }];
+      }
+    });
+  };
+
+  // Remove a filter entirely
+  const removeFilter = (key: keyof Order) => {
+    setFilters((prev) => prev.filter((f) => f.key !== key));
+  };
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setFilters([]);
+  };
+
+  // Apply filters to orders
+  const filteredOrders = useMemo(() => {
+    let result = orders;
+
+    // Apply date range filter
+    if (dateRange?.from || dateRange?.to) {
+      result = result.filter((order) => {
+        if (!order.createdAt) return false;
+        const orderDate = new Date(order.createdAt);
+        if (dateRange.from) {
+          const start = new Date(dateRange.from);
+          start.setHours(0, 0, 0, 0);
+          if (orderDate < start) return false;
+        }
+        if (dateRange.to) {
+          const end = new Date(dateRange.to);
+          end.setHours(23, 59, 59, 999);
+          if (orderDate > end) return false;
+        }
+        return true;
+      });
+    }
+
+    // Apply column filters
+    if (filters.length > 0) {
+      result = result.filter((order) => {
+        return filters.every((filter) => {
+          const value = getDisplayValue(order[filter.key]);
+          return filter.values.has(value);
+        });
+      });
+    }
+
+    return result;
+  }, [orders, filters, dateRange]);
 
   function toggleColumn(key: string) {
     const newSet = new Set(visibleColumns);
@@ -187,11 +308,19 @@ export default function OrdersPage() {
       render: c.render,
     }));
 
+  // Filter modal unique values (with search)
+  const editingFilterValues = useMemo(() => {
+    if (!editingFilter) return [];
+    const values = getUniqueValues(editingFilter);
+    if (!filterSearch) return values;
+    return values.filter((v) => v.toLowerCase().includes(filterSearch.toLowerCase()));
+  }, [editingFilter, orders, filterSearch]);
+
   if (loading) {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Orders</h1>
-        <p className="text-zinc-500">Loading...</p>
+        <p className="text-muted">Loading...</p>
       </div>
     );
   }
@@ -200,23 +329,62 @@ export default function OrdersPage() {
     return (
       <div className="p-6">
         <h1 className="text-2xl font-bold mb-6">Orders</h1>
-        <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-800 dark:text-red-200">
-          {error}
-        </div>
+        <div className="alert alert-error">{error}</div>
       </div>
     );
   }
 
   return (
     <div className="p-6">
-      <div className="flex justify-between items-center mb-6">
+      <div className="flex justify-between items-center mb-4">
         <h1 className="text-2xl font-bold">Orders</h1>
-        <div className="flex items-center gap-4">
-          <span className="text-sm text-zinc-500">{total} orders</span>
+        <div className="flex items-center gap-3">
+          <span className="text-sm text-muted">
+            {filteredOrders.length === total ? total : `${filteredOrders.length} of ${total}`} orders
+          </span>
+
+          {/* Date Range Picker */}
+          <DateRangePicker
+            dateRange={dateRange}
+            onDateRangeChange={setDateRange}
+            placeholder="Select dates"
+          />
+
+          {/* Filter Button */}
+          <div className="relative" ref={filterDropdownRef}>
+            <button
+              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+              className="btn btn-secondary btn-sm"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+              </svg>
+              Add filter
+            </button>
+            {showFilterDropdown && (
+              <div className="dropdown right-0 mt-2 w-48 max-h-64 overflow-y-auto">
+                {filterableColumns.map((col) => (
+                  <button
+                    key={col.key}
+                    className="dropdown-item"
+                    onClick={() => {
+                      setEditingFilter(col.key);
+                      setShowFilterDropdown(false);
+                      setFilterSearch("");
+                    }}
+                  >
+                    {col.label}
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Columns Button */}
           <div className="relative" ref={columnPickerRef}>
             <button
               onClick={() => setShowColumnPicker(!showColumnPicker)}
-              className="px-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 flex items-center gap-2"
+              className="btn btn-secondary btn-sm"
             >
               <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
@@ -224,18 +392,12 @@ export default function OrdersPage() {
               Columns ({activeColumns.length})
             </button>
             {showColumnPicker && (
-              <div className="absolute right-0 mt-2 w-64 bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg z-20 max-h-96 overflow-y-auto">
+              <div className="dropdown right-0 mt-2 w-64 max-h-96 overflow-y-auto">
                 <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
-                  <button
-                    onClick={showAllColumns}
-                    className="flex-1 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-700 rounded hover:bg-zinc-200 dark:hover:bg-zinc-600"
-                  >
+                  <button onClick={showAllColumns} className="btn btn-secondary btn-sm flex-1">
                     Show All
                   </button>
-                  <button
-                    onClick={resetColumns}
-                    className="flex-1 px-2 py-1 text-xs bg-zinc-100 dark:bg-zinc-700 rounded hover:bg-zinc-200 dark:hover:bg-zinc-600"
-                  >
+                  <button onClick={resetColumns} className="btn btn-secondary btn-sm flex-1">
                     Reset
                   </button>
                 </div>
@@ -249,7 +411,7 @@ export default function OrdersPage() {
                         type="checkbox"
                         checked={visibleColumns.has(col.key)}
                         onChange={() => toggleColumn(col.key)}
-                        className="rounded border-zinc-300 dark:border-zinc-600"
+                        className="rounded"
                       />
                       <span className="text-sm">{col.label}</span>
                     </label>
@@ -261,11 +423,101 @@ export default function OrdersPage() {
         </div>
       </div>
 
+      {/* Filter Pills */}
+      {filters.length > 0 && (
+        <div className="filter-pills-container">
+          {filters.map((filter) => (
+            <div key={filter.key} className="filter-pill">
+              <button
+                className="filter-pill-label"
+                onClick={() => {
+                  setEditingFilter(filter.key);
+                  setFilterSearch("");
+                }}
+              >
+                <span className="filter-pill-key">{filter.label}:</span>
+                <span className="filter-pill-values">
+                  {filter.values.size <= 2
+                    ? Array.from(filter.values).join(", ")
+                    : `${filter.values.size} selected`}
+                </span>
+              </button>
+              <button
+                className="filter-pill-remove"
+                onClick={() => removeFilter(filter.key)}
+              >
+                ×
+              </button>
+            </div>
+          ))}
+          <button className="filter-clear-all" onClick={clearAllFilters}>
+            Clear all
+          </button>
+        </div>
+      )}
+
+      {/* Filter Value Modal */}
+      {editingFilter && (
+        <div className="modal-overlay" onClick={() => { setEditingFilter(null); setFilterSearch(""); }}>
+          <div
+            className="filter-modal"
+            ref={filterModalRef}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="filter-modal-header">
+              <h3 className="filter-modal-title">
+                Filter by {allColumns.find((c) => c.key === editingFilter)?.label}
+              </h3>
+              <button
+                className="modal-close"
+                onClick={() => { setEditingFilter(null); setFilterSearch(""); }}
+              >
+                ×
+              </button>
+            </div>
+            <div className="filter-modal-search">
+              <input
+                type="text"
+                className="input"
+                placeholder="Search values..."
+                value={filterSearch}
+                onChange={(e) => setFilterSearch(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div className="filter-modal-options">
+              {editingFilterValues.length === 0 ? (
+                <div className="filter-modal-empty">No matching values</div>
+              ) : (
+                editingFilterValues.map((value) => (
+                  <label key={value} className="filter-modal-option">
+                    <input
+                      type="checkbox"
+                      checked={getFilterValues(editingFilter).has(value)}
+                      onChange={() => toggleFilterValue(editingFilter, value)}
+                    />
+                    <span>{value}</span>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="filter-modal-footer">
+              <button
+                className="btn btn-secondary"
+                onClick={() => { setEditingFilter(null); setFilterSearch(""); }}
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <Table
         columns={activeColumns}
-        data={orders}
+        data={filteredOrders}
         rowKey="id"
-        emptyMessage="No orders yet. Orders will appear here once you configure Shopify webhooks in Settings."
+        emptyMessage={filters.length > 0 ? "No orders match the current filters." : "No orders yet. Orders will appear here once you configure Shopify webhooks in Settings."}
       />
     </div>
   );
