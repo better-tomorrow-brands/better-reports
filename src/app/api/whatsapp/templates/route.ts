@@ -39,6 +39,7 @@ export async function GET() {
 
     const response = await fetch(url, {
       headers: { Authorization: `Bearer ${metaSettings.access_token}` },
+      cache: "no-store",
     });
 
     const data = await response.json();

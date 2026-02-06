@@ -20,6 +20,7 @@ interface Customer {
   createdAt: string | null;
   lastOrderAt: string | null;
   lapse: number | null;
+  lastWhatsappAt: string | null;
 }
 
 interface LifecycleSettings {
@@ -82,6 +83,12 @@ const allColumns: ColumnDef[] = [
     label: "Days Since Order",
     defaultVisible: true,
     render: (v) => v !== null ? `${v} days` : "-"
+  },
+  {
+    key: "lastWhatsappAt",
+    label: "Last WhatsApp",
+    defaultVisible: true,
+    render: (v) => formatDate(v as string)
   },
   { key: "shopifyCustomerId", label: "Shopify ID", defaultVisible: false },
 ];

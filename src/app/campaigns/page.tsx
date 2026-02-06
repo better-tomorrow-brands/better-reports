@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useMemo } from "react";
 import { Table, Column } from "@/components/Table";
+import { DateRangePicker } from "@/components/DateRangePicker";
+import { DateRange } from "react-day-picker";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -91,6 +93,60 @@ interface SendResult {
   first_name: string;
   status: "pending" | "sending" | "success" | "error";
   message?: string;
+}
+
+interface CampaignCustomer {
+  id: number;
+  customerId: number;
+  phone: string | null;
+  firstName: string | null;
+  status: string;
+}
+
+interface CampaignWithCustomers {
+  id: number;
+  name: string;
+  templateName: string;
+  status: string;
+  campaignsWaCustomers: CampaignCustomer[];
+}
+
+interface CampaignSendResult {
+  id: number;
+  phone: string;
+  firstName: string;
+  status: "pending" | "sending" | "success" | "error";
+  error?: string;
+}
+
+interface Customer {
+  id: number;
+  shopifyCustomerId: string | null;
+  firstName: string | null;
+  lastName: string | null;
+  email: string | null;
+  emailMarketingConsent: boolean;
+  phone: string | null;
+  totalSpent: string | null;
+  ordersCount: number | null;
+  tags: string | null;
+  createdAt: string | null;
+  lastOrderAt: string | null;
+  lapse: number | null;
+  lastWhatsappAt: string | null;
+}
+
+interface LifecycleSettings {
+  newMaxDays: number;
+  reorderMaxDays: number;
+  lapsedMaxDays: number;
+}
+
+type LapseFilterType = "new" | "due_reorder" | "lapsed" | "lost" | "custom" | null;
+
+interface LapseFilter {
+  type: LapseFilterType;
+  customMax?: number;
 }
 
 const emptyFbForm: FbFormData = {
@@ -213,6 +269,66 @@ export default function CampaignsPage() {
   // ── WhatsApp Campaigns State ───────────────────────
   const [waCampaigns, setWaCampaigns] = useState<WaCampaign[]>([]);
   const [waLoading, setWaLoading] = useState(true);
+  const [showWaModal, setShowWaModal] = useState(false);
+  const [waForm, setWaForm] = useState<{ id?: number; name: string; templateName: string }>({ name: "", templateName: "" });
+  const [waSaving, setWaSaving] = useState(false);
+  const [waError, setWaError] = useState("");
+  const [waIsEditing, setWaIsEditing] = useState(false);
+  const [waDeleteId, setWaDeleteId] = useState<number | null>(null);
+  const [waDeleting, setWaDeleting] = useState(false);
+
+  // ── Customer Modal State ──────────────────────────
+  const [showCustomerModal, setShowCustomerModal] = useState(false);
+  const [customerModalCampaignId, setCustomerModalCampaignId] = useState<number | null>(null);
+  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [customersLoading, setCustomersLoading] = useState(false);
+  const [customersTotal, setCustomersTotal] = useState(0);
+  const [selectedCustomers, setSelectedCustomers] = useState<Set<string | number>>(new Set());
+  const [addingCustomers, setAddingCustomers] = useState(false);
+  const [isEditingCustomers, setIsEditingCustomers] = useState(false);
+  // ── Send Modal State ─────────────────────────────
+  const [showSendModal, setShowSendModal] = useState(false);
+  const [sendModalStep, setSendModalStep] = useState<"preview" | "confirm" | "sending">("preview");
+  const [sendModalCampaign, setSendModalCampaign] = useState<CampaignWithCustomers | null>(null);
+  const [sendModalTemplate, setSendModalTemplate] = useState<Template | null>(null);
+  const [campaignSendResults, setCampaignSendResults] = useState<CampaignSendResult[]>([]);
+  const [campaignSending, setCampaignSending] = useState(false);
+  const campaignAbortRef = useRef(false);
+
+  const [lifecycleSettings, setLifecycleSettings] = useState<LifecycleSettings>({
+    newMaxDays: 30,
+    reorderMaxDays: 60,
+    lapsedMaxDays: 90,
+  });
+
+  // Customer modal filters
+  const [customerDateRange, setCustomerDateRange] = useState<DateRange | undefined>(undefined);
+  const [customerLapseFilter, setCustomerLapseFilter] = useState<LapseFilter>({ type: null });
+  const [showCustomerLapseFilter, setShowCustomerLapseFilter] = useState(false);
+  const [customLapseInput, setCustomLapseInput] = useState("");
+  const customerLapseFilterRef = useRef<HTMLDivElement>(null);
+
+  // Customer modal sort
+  type SortField = "totalSpent" | "ordersCount" | "lastOrderAt" | "lapse" | "createdAt";
+  type SortDirection = "asc" | "desc";
+  const [customerSortField, setCustomerSortField] = useState<SortField>("lastOrderAt");
+  const [customerSortDirection, setCustomerSortDirection] = useState<SortDirection>("desc");
+  const [showCustomerSortModal, setShowCustomerSortModal] = useState(false);
+  const customerSortModalRef = useRef<HTMLDivElement>(null);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [showSelectedOnly, setShowSelectedOnly] = useState(false);
+
+  // Customer modal - tags filter
+  const [selectedTags, setSelectedTags] = useState<Set<string>>(new Set());
+  const [showTagsFilter, setShowTagsFilter] = useState(false);
+  const [tagsFilterSearch, setTagsFilterSearch] = useState("");
+  const tagsFilterRef = useRef<HTMLDivElement>(null);
+
+  // Customer modal - orders filter
+  const [ordersFilterMin, setOrdersFilterMin] = useState<string>("");
+  const [ordersFilterMax, setOrdersFilterMax] = useState<string>("");
+  const [showOrdersFilter, setShowOrdersFilter] = useState(false);
+  const ordersFilterRef = useRef<HTMLDivElement>(null);
 
   // ── Manual Send State ──────────────────────────────
   const [templates, setTemplates] = useState<Template[]>([]);
@@ -244,24 +360,30 @@ export default function CampaignsPage() {
       key: "actions",
       label: "",
       render: (_, row) => (
-        <div className="flex gap-2">
+        <div className="flex items-center gap-3">
           <button
             onClick={(e) => {
               e.stopPropagation();
               openFbModal(row);
             }}
-            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 text-xs"
+            className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+            title="Edit"
           >
-            Edit
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+            </svg>
           </button>
           <button
             onClick={(e) => {
               e.stopPropagation();
               setFbDeleteId(row.id);
             }}
-            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-300 text-xs"
+            className="text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+            title="Delete"
           >
-            Delete
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+            </svg>
           </button>
         </div>
       ),
@@ -271,7 +393,26 @@ export default function CampaignsPage() {
   const waColumns: Column<WaCampaign>[] = [
     { key: "name", label: "Name", sticky: true, primary: true },
     { key: "templateName", label: "Template" },
-    { key: "customerCount", label: "Customers" },
+    {
+      key: "customerCount",
+      label: "Customers",
+      render: (value, row) => {
+        const isDraft = row.status === "draft";
+        return isDraft ? (
+          <button
+            onClick={(e) => {
+              e.stopPropagation();
+              openCustomerModalWithExisting(row.id);
+            }}
+            className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-300 hover:underline"
+          >
+            {value as number}
+          </button>
+        ) : (
+          <span>{value as number}</span>
+        );
+      },
+    },
     {
       key: "successCount",
       label: "Sent",
@@ -300,11 +441,72 @@ export default function CampaignsPage() {
     {
       key: "actions",
       label: "",
-      render: () => (
-        <button className="text-zinc-500 hover:text-zinc-900 dark:hover:text-white">
-          •••
-        </button>
-      ),
+      render: (_, row) => {
+        const isDraft = row.status === "draft";
+        return (
+          <div className="flex items-center gap-3">
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openCustomerModalWithExisting(row.id);
+              }}
+              disabled={!isDraft}
+              className={`px-2 py-1 text-xs font-medium border rounded ${
+                isDraft
+                  ? "border-zinc-300 dark:border-zinc-600 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  : "border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-600 cursor-not-allowed"
+              }`}
+            >
+              Add customers
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                openWaModal(row);
+              }}
+              disabled={!isDraft}
+              className={`${
+                isDraft
+                  ? "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                  : "text-zinc-300 dark:text-zinc-700 cursor-not-allowed"
+              }`}
+              title="Edit"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+              </svg>
+            </button>
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                setWaDeleteId(row.id);
+              }}
+              disabled={!isDraft}
+              className={`${
+                isDraft
+                  ? "text-zinc-400 hover:text-red-600 dark:hover:text-red-400"
+                  : "text-zinc-300 dark:text-zinc-700 cursor-not-allowed"
+              }`}
+              title="Delete"
+            >
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+              </svg>
+            </button>
+            {isDraft && row.customerCount > 0 && (
+              <button
+                onClick={(e) => {
+                  e.stopPropagation();
+                  openSendModal(row.id);
+                }}
+                className="px-2 py-1 text-xs font-medium bg-green-600 text-white rounded hover:bg-green-700"
+              >
+                Send
+              </button>
+            )}
+          </div>
+        );
+      },
     },
   ];
 
@@ -325,6 +527,12 @@ export default function CampaignsPage() {
       if (discountDropdownRef.current && !discountDropdownRef.current.contains(event.target as Node)) {
         setShowDiscountDropdown(false);
         setShowCreateDiscount(false);
+      }
+      if (tagsFilterRef.current && !tagsFilterRef.current.contains(event.target as Node)) {
+        setShowTagsFilter(false);
+      }
+      if (ordersFilterRef.current && !ordersFilterRef.current.contains(event.target as Node)) {
+        setShowOrdersFilter(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -613,6 +821,544 @@ export default function CampaignsPage() {
     setShowCreateDiscount(false);
   }
 
+  // ── WhatsApp Campaign Functions ────────────────────
+
+  function openWaModal(campaign?: WaCampaign) {
+    if (campaign) {
+      setWaIsEditing(true);
+      setWaForm({
+        id: campaign.id,
+        name: campaign.name,
+        templateName: campaign.templateName,
+      });
+    } else {
+      setWaIsEditing(false);
+      setWaForm({ name: "", templateName: "" });
+    }
+    setWaError("");
+    setShowWaModal(true);
+  }
+
+  function closeWaModal() {
+    setShowWaModal(false);
+    setWaIsEditing(false);
+    setWaForm({ name: "", templateName: "" });
+    setWaError("");
+  }
+
+  async function handleWaSubmit(e: React.FormEvent) {
+    e.preventDefault();
+    if (!waForm.name || !waForm.templateName) {
+      setWaError("Please fill in all fields");
+      return;
+    }
+
+    setWaSaving(true);
+    setWaError("");
+
+    try {
+      const method = waIsEditing ? "PUT" : "POST";
+      const res = await fetch("/api/campaigns-wa", {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: waForm.id,
+          name: waForm.name,
+          templateName: waForm.templateName,
+        }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        closeWaModal();
+        loadWaCampaigns();
+      } else {
+        setWaError(data.error || `Failed to ${waIsEditing ? "update" : "create"} campaign`);
+      }
+    } catch {
+      setWaError(`Failed to ${waIsEditing ? "update" : "create"} campaign`);
+    } finally {
+      setWaSaving(false);
+    }
+  }
+
+  async function handleWaDelete() {
+    if (!waDeleteId) return;
+
+    setWaDeleting(true);
+    try {
+      const res = await fetch(`/api/campaigns-wa?id=${waDeleteId}`, {
+        method: "DELETE",
+      });
+
+      if (res.ok) {
+        setWaDeleteId(null);
+        loadWaCampaigns();
+      } else {
+        const data = await res.json();
+        setWaError(data.error || "Failed to delete campaign");
+      }
+    } catch {
+      setWaError("Failed to delete campaign");
+    } finally {
+      setWaDeleting(false);
+    }
+  }
+
+  // ── Customer Modal Functions ──────────────────────
+
+  async function loadCustomers() {
+    setCustomersLoading(true);
+    try {
+      const [customersRes, lifecycleRes] = await Promise.all([
+        fetch("/api/customers?limit=1000"),
+        fetch("/api/settings/lifecycle"),
+      ]);
+      const customersData = await customersRes.json();
+      const lifecycleData = await lifecycleRes.json();
+
+      if (!customersData.error) {
+        setCustomers(customersData.customers || []);
+        setCustomersTotal(customersData.total || 0);
+      }
+      if (lifecycleData && !lifecycleData.error) {
+        setLifecycleSettings(lifecycleData);
+      }
+    } catch (err) {
+      console.error("Failed to load customers:", err);
+    } finally {
+      setCustomersLoading(false);
+    }
+  }
+
+  function openCustomerModal(campaignId: number) {
+    setCustomerModalCampaignId(campaignId);
+    setSelectedCustomers(new Set());
+    setCustomerDateRange(undefined);
+    setCustomerLapseFilter({ type: null });
+    setCustomLapseInput("");
+    setCustomerSearch("");
+    setIsEditingCustomers(false);
+    setShowSelectedOnly(false);
+    setSelectedTags(new Set(uniqueTags));
+    setTagsFilterSearch("");
+    setOrdersFilterMin("");
+    setOrdersFilterMax("");
+    setShowCustomerModal(true);
+    if (customers.length === 0) {
+      loadCustomers();
+    }
+  }
+
+  async function openCustomerModalWithExisting(campaignId: number) {
+    setCustomerModalCampaignId(campaignId);
+    setCustomerDateRange(undefined);
+    setCustomerLapseFilter({ type: null });
+    setCustomLapseInput("");
+    setCustomerSearch("");
+    setIsEditingCustomers(true);
+    setShowSelectedOnly(true);
+    setSelectedTags(new Set(uniqueTags));
+    setTagsFilterSearch("");
+    setOrdersFilterMin("");
+    setOrdersFilterMax("");
+    setShowCustomerModal(true);
+
+    // Load customers if not already loaded
+    if (customers.length === 0) {
+      await loadCustomers();
+    }
+
+    // Fetch existing campaign customers
+    try {
+      const res = await fetch(`/api/campaigns-wa/${campaignId}`);
+      const data = await res.json();
+      if (data.campaign?.campaignsWaCustomers) {
+        const existingIds = new Set<string | number>(
+          data.campaign.campaignsWaCustomers.map((c: { customerId: number }) => c.customerId)
+        );
+        setSelectedCustomers(existingIds);
+      } else {
+        setSelectedCustomers(new Set());
+      }
+    } catch (err) {
+      console.error("Failed to fetch campaign customers:", err);
+      setSelectedCustomers(new Set());
+    }
+  }
+
+  function closeCustomerModal() {
+    setShowCustomerModal(false);
+    setCustomerModalCampaignId(null);
+    setSelectedCustomers(new Set());
+  }
+
+  async function addCustomersToCampaign() {
+    if (!customerModalCampaignId) return;
+
+    // When editing, allow saving even with 0 customers (to clear the list)
+    if (!isEditingCustomers && selectedCustomers.size === 0) return;
+
+    setAddingCustomers(true);
+    try {
+      const customerIds = Array.from(selectedCustomers);
+      const customersToSave = customers
+        .filter((c) => customerIds.includes(c.id))
+        .map((c) => ({
+          id: c.id,
+          phone: c.phone || "",
+          firstName: c.firstName || "",
+        }));
+
+      const res = await fetch(`/api/campaigns-wa/${customerModalCampaignId}/customers`, {
+        method: isEditingCustomers ? "PUT" : "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customers: customersToSave }),
+      });
+
+      if (res.ok) {
+        closeCustomerModal();
+        loadWaCampaigns();
+      } else {
+        const data = await res.json();
+        console.error("Failed to save customers:", data.error);
+      }
+    } catch (err) {
+      console.error("Failed to save customers:", err);
+    } finally {
+      setAddingCustomers(false);
+    }
+  }
+
+  // Get unique tags from all customers
+  const uniqueTags = useMemo(() => {
+    const tagsSet = new Set<string>();
+    customers.forEach((c) => {
+      if (c.tags) {
+        c.tags.split(",").forEach((tag) => {
+          const trimmed = tag.trim();
+          if (trimmed) tagsSet.add(trimmed);
+        });
+      }
+    });
+    return Array.from(tagsSet).sort((a, b) => a.localeCompare(b));
+  }, [customers]);
+
+  // Update selectedTags when customers load and modal is open (to select all by default)
+  useEffect(() => {
+    if (showCustomerModal && uniqueTags.length > 0 && selectedTags.size === 0) {
+      setSelectedTags(new Set(uniqueTags));
+    }
+  }, [showCustomerModal, uniqueTags]);
+
+  // Filtered tags for search
+  const filteredTags = useMemo(() => {
+    if (!tagsFilterSearch.trim()) return uniqueTags;
+    const search = tagsFilterSearch.toLowerCase().trim();
+    return uniqueTags.filter((tag) => tag.toLowerCase().includes(search));
+  }, [uniqueTags, tagsFilterSearch]);
+
+  // Filtered customers for modal
+  const filteredCustomers = useMemo(() => {
+    let result = customers;
+
+    // Apply date range filter (on createdAt)
+    if (customerDateRange?.from || customerDateRange?.to) {
+      result = result.filter((customer) => {
+        if (!customer.createdAt) return false;
+        const customerDate = new Date(customer.createdAt);
+        if (customerDateRange.from) {
+          const start = new Date(customerDateRange.from);
+          start.setHours(0, 0, 0, 0);
+          if (customerDate < start) return false;
+        }
+        if (customerDateRange.to) {
+          const end = new Date(customerDateRange.to);
+          end.setHours(23, 59, 59, 999);
+          if (customerDate > end) return false;
+        }
+        return true;
+      });
+    }
+
+    // Apply lapse filter (days since last order)
+    if (customerLapseFilter.type) {
+      const { newMaxDays, reorderMaxDays, lapsedMaxDays } = lifecycleSettings;
+      result = result.filter((customer) => {
+        if (customer.lapse === null || (customer.ordersCount || 0) === 0) return false;
+        const lapse = customer.lapse;
+        switch (customerLapseFilter.type) {
+          case "new":
+            return lapse <= newMaxDays;
+          case "due_reorder":
+            return lapse > newMaxDays && lapse <= reorderMaxDays;
+          case "lapsed":
+            return lapse > reorderMaxDays && lapse <= lapsedMaxDays;
+          case "lost":
+            return lapse > lapsedMaxDays;
+          case "custom":
+            return customerLapseFilter.customMax !== undefined && lapse <= customerLapseFilter.customMax;
+          default:
+            return true;
+        }
+      });
+    }
+
+    // Apply tags filter (only if some tags are deselected)
+    if (selectedTags.size > 0 && selectedTags.size < uniqueTags.length) {
+      result = result.filter((customer) => {
+        if (!customer.tags) return false;
+        const customerTags = customer.tags.split(",").map((t) => t.trim());
+        return Array.from(selectedTags).some((tag) => customerTags.includes(tag));
+      });
+    }
+
+    // Apply orders filter
+    const minOrders = ordersFilterMin ? parseInt(ordersFilterMin) : null;
+    const maxOrders = ordersFilterMax ? parseInt(ordersFilterMax) : null;
+    if (minOrders !== null || maxOrders !== null) {
+      result = result.filter((customer) => {
+        const orders = customer.ordersCount || 0;
+        if (minOrders !== null && orders < minOrders) return false;
+        if (maxOrders !== null && orders > maxOrders) return false;
+        return true;
+      });
+    }
+
+    // Only include customers with phone numbers
+    result = result.filter((c) => c.phone);
+
+    // Apply search filter
+    if (customerSearch.trim()) {
+      const search = customerSearch.toLowerCase().trim();
+      result = result.filter((c) => {
+        const name = [c.firstName, c.lastName].filter(Boolean).join(" ").toLowerCase();
+        return (
+          name.includes(search) ||
+          c.email?.toLowerCase().includes(search) ||
+          c.phone?.includes(search) ||
+          c.tags?.toLowerCase().includes(search)
+        );
+      });
+    }
+
+    // Filter to show only selected customers
+    if (showSelectedOnly) {
+      result = result.filter((c) => selectedCustomers.has(c.id));
+    }
+
+    // Apply sorting
+    result = [...result].sort((a, b) => {
+      let aVal: number | string | null = null;
+      let bVal: number | string | null = null;
+
+      switch (customerSortField) {
+        case "totalSpent":
+          aVal = a.totalSpent ? parseFloat(a.totalSpent) : 0;
+          bVal = b.totalSpent ? parseFloat(b.totalSpent) : 0;
+          break;
+        case "ordersCount":
+          aVal = a.ordersCount || 0;
+          bVal = b.ordersCount || 0;
+          break;
+        case "lastOrderAt":
+          aVal = a.lastOrderAt ? new Date(a.lastOrderAt).getTime() : 0;
+          bVal = b.lastOrderAt ? new Date(b.lastOrderAt).getTime() : 0;
+          break;
+        case "lapse":
+          aVal = a.lapse ?? 999999;
+          bVal = b.lapse ?? 999999;
+          break;
+        case "createdAt":
+          aVal = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+          bVal = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+          break;
+      }
+
+      if (aVal < bVal) return customerSortDirection === "asc" ? -1 : 1;
+      if (aVal > bVal) return customerSortDirection === "asc" ? 1 : -1;
+      return 0;
+    });
+
+    return result;
+  }, [customers, customerDateRange, customerLapseFilter, lifecycleSettings, customerSortField, customerSortDirection, customerSearch, showSelectedOnly, selectedCustomers, selectedTags, ordersFilterMin, ordersFilterMax, uniqueTags]);
+
+  // ── Send Campaign Modal Functions ─────────────────
+
+  async function openSendModal(campaignId: number) {
+    try {
+      // Fetch campaign with customers
+      const res = await fetch(`/api/campaigns-wa/${campaignId}`);
+      const data = await res.json();
+
+      if (!res.ok) {
+        alert(data.error || "Failed to load campaign");
+        return;
+      }
+
+      const campaign = data.campaign as CampaignWithCustomers;
+
+      // Find template details
+      const template = templates.find((t) => t.name === campaign.templateName);
+
+      setSendModalCampaign(campaign);
+      setSendModalTemplate(template || null);
+      setSendModalStep("preview");
+      setCampaignSendResults([]);
+      campaignAbortRef.current = false;
+      setShowSendModal(true);
+    } catch (err) {
+      console.error("Error opening send modal:", err);
+      alert("Failed to load campaign");
+    }
+  }
+
+  function closeSendModal() {
+    // Allow closing even during send (runs in background)
+    setShowSendModal(false);
+    // Don't reset state if still sending - let it continue in background
+    if (!campaignSending) {
+      setSendModalCampaign(null);
+      setSendModalTemplate(null);
+      setSendModalStep("preview");
+      setCampaignSendResults([]);
+    }
+  }
+
+  function cancelCampaignSend() {
+    campaignAbortRef.current = true;
+  }
+
+  async function executeCampaignSend() {
+    if (!sendModalCampaign) return;
+
+    setSendModalStep("sending");
+    setCampaignSending(true);
+    campaignAbortRef.current = false;
+
+    const customers = sendModalCampaign.campaignsWaCustomers;
+
+    // Initialize results
+    const initialResults: CampaignSendResult[] = customers.map((c) => ({
+      id: c.id,
+      phone: c.phone || "",
+      firstName: c.firstName || "",
+      status: "pending",
+    }));
+    setCampaignSendResults(initialResults);
+
+    // Update campaign status to sending
+    try {
+      await fetch(`/api/campaigns-wa/${sendModalCampaign.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "sending" }),
+      });
+    } catch (err) {
+      console.error("Failed to update campaign status:", err);
+    }
+
+    // Send to each customer
+    for (let i = 0; i < customers.length; i++) {
+      if (campaignAbortRef.current) break;
+
+      const customer = customers[i];
+
+      // Mark as sending
+      setCampaignSendResults((prev) =>
+        prev.map((r, idx) => (idx === i ? { ...r, status: "sending" } : r))
+      );
+
+      try {
+        const res = await fetch(`/api/campaigns-wa/${sendModalCampaign.id}/send-one`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ campaignCustomerId: customer.id }),
+        });
+
+        const data = await res.json();
+
+        setCampaignSendResults((prev) =>
+          prev.map((r, idx) =>
+            idx === i
+              ? {
+                  ...r,
+                  status: data.success ? "success" : "error",
+                  error: data.error,
+                }
+              : r
+          )
+        );
+      } catch (err) {
+        setCampaignSendResults((prev) =>
+          prev.map((r, idx) =>
+            idx === i
+              ? {
+                  ...r,
+                  status: "error",
+                  error: err instanceof Error ? err.message : "Network error",
+                }
+              : r
+          )
+        );
+      }
+    }
+
+    // Update campaign status to completed
+    try {
+      await fetch(`/api/campaigns-wa/${sendModalCampaign.id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: "completed" }),
+      });
+    } catch (err) {
+      console.error("Failed to update campaign status:", err);
+    }
+
+    setCampaignSending(false);
+    loadWaCampaigns();
+  }
+
+  const campaignSuccessCount = campaignSendResults.filter((r) => r.status === "success").length;
+  const campaignErrorCount = campaignSendResults.filter((r) => r.status === "error").length;
+
+  // Customer table columns for modal
+  const customerColumns: Column<Customer>[] = [
+    {
+      key: "name",
+      label: "Customer",
+      sticky: true,
+      primary: true,
+      render: (_, customer) => {
+        const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ");
+        return name || "-";
+      },
+    },
+    { key: "phone", label: "Phone" },
+    { key: "email", label: "Email" },
+    { key: "ordersCount", label: "Orders" },
+    {
+      key: "totalSpent",
+      label: "Total Spent",
+      render: (v) => (v ? `£${parseFloat(v as string).toFixed(2)}` : "-"),
+    },
+    {
+      key: "lastOrderAt",
+      label: "Last Order",
+      render: (v) => formatDate(v as string | null),
+    },
+    {
+      key: "lapse",
+      label: "Days Since",
+      render: (v) => (v !== null ? `${v} days` : "-"),
+    },
+    {
+      key: "lastWhatsappAt",
+      label: "Last WhatsApp",
+      render: (v) => formatDate(v as string | null),
+    },
+  ];
+
   // ── Manual Send Functions ──────────────────────────
 
   const template = templates.find((t) => t.name === selectedTemplate);
@@ -742,7 +1488,10 @@ export default function CampaignsPage() {
             </button>
           )}
           {activeTab === "whatsapp" && (
-            <button className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80">
+            <button
+              onClick={() => openWaModal()}
+              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80"
+            >
               Create Campaign
             </button>
           )}
@@ -809,13 +1558,16 @@ export default function CampaignsPage() {
 
         {/* ── WhatsApp Tab ────────────────────────────── */}
         {activeTab === "whatsapp" && (
-          <div>
+          <div className="pt-4">
             {waLoading ? (
               <p className="text-sm text-zinc-500 p-4">Loading campaigns...</p>
             ) : waCampaigns.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg m-4">
                 <p className="text-zinc-500 mb-4">No campaigns yet</p>
-                <button className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80">
+                <button
+                  onClick={() => openWaModal()}
+                  className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80"
+                >
                   Create your first campaign
                 </button>
               </div>
@@ -832,7 +1584,7 @@ export default function CampaignsPage() {
 
         {/* ── Manual WhatsApp Tab ─────────────────────── */}
         {activeTab === "manual" && (
-          <div className="max-w-4xl p-4">
+          <div className="max-w-4xl p-4 h-full overflow-y-auto">
             {/* Template Selection */}
             <div className="mb-4">
               <label className="block text-sm font-medium mb-1">Template</label>
@@ -1406,6 +2158,817 @@ export default function CampaignsPage() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── WhatsApp Delete Confirmation Modal ─────────── */}
+      {waDeleteId && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
+            <h3 className="text-lg font-semibold mb-4">Delete Campaign?</h3>
+            <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
+              This will permanently delete the campaign and all associated customer data. This action cannot be undone.
+            </p>
+            <div className="flex justify-end gap-3">
+              <button
+                onClick={() => setWaDeleteId(null)}
+                className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleWaDelete}
+                disabled={waDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700 disabled:opacity-50"
+              >
+                {waDeleting ? "Deleting..." : "Delete"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── WhatsApp Create/Edit Campaign Modal ──────────── */}
+      {showWaModal && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl max-w-md w-full mx-4">
+            <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
+              <h2 className="text-lg font-semibold">{waIsEditing ? "Edit" : "Create"} WhatsApp Campaign</h2>
+              <button
+                onClick={closeWaModal}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            <form onSubmit={handleWaSubmit} className="p-6">
+              {waError && (
+                <div className="mb-4 p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-800 dark:text-red-200">
+                  {waError}
+                </div>
+              )}
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium mb-1">Campaign Name</label>
+                  <input
+                    type="text"
+                    value={waForm.name}
+                    onChange={(e) => setWaForm({ ...waForm, name: e.target.value })}
+                    placeholder="e.g. January Sale, Re-engagement"
+                    className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-medium mb-1">Template</label>
+                  {templatesLoading ? (
+                    <p className="text-sm text-zinc-500">Loading templates...</p>
+                  ) : templatesError ? (
+                    <div className="p-3 bg-red-50 dark:bg-red-950 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-800 dark:text-red-200">
+                      {templatesError}
+                    </div>
+                  ) : (
+                    <select
+                      value={waForm.templateName}
+                      onChange={(e) => setWaForm({ ...waForm, templateName: e.target.value })}
+                      className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                    >
+                      <option value="">Select a template...</option>
+                      {templates.map((t) => (
+                        <option key={t.name} value={t.name}>
+                          {t.name}
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-zinc-200 dark:border-zinc-700">
+                <button
+                  type="button"
+                  onClick={closeWaModal}
+                  className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={waSaving || !waForm.name || !waForm.templateName}
+                  className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                >
+                  {waSaving ? "Saving..." : waIsEditing ? "Update Campaign" : "Create Campaign"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* ── Customer Selection Modal ─────────────────────── */}
+      {showCustomerModal && (
+        <div
+          className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"
+          onClick={closeCustomerModal}
+        >
+          <div
+            className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-[90vw] max-w-6xl h-[85vh] flex flex-col mx-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+              <div>
+                <h2 className="text-lg font-semibold">{isEditingCustomers ? "Edit" : "Add"} Customers</h2>
+                <p className="text-sm text-zinc-500 mt-1">
+                  {selectedCustomers.size > 0
+                    ? `${selectedCustomers.size} customer${selectedCustomers.size !== 1 ? "s" : ""} selected`
+                    : "Select customers to add to this campaign"}
+                </p>
+              </div>
+              <button
+                onClick={closeCustomerModal}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Controls */}
+            <div className="flex items-center gap-3 px-6 py-3 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+              {/* Search */}
+              <div className="relative flex-1 max-w-xs">
+                <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                </svg>
+                <input
+                  type="text"
+                  placeholder="Search customers..."
+                  value={customerSearch}
+                  onChange={(e) => setCustomerSearch(e.target.value)}
+                  className="w-full pl-9 pr-3 py-1.5 text-sm border border-zinc-300 dark:border-zinc-600 rounded-md bg-white dark:bg-zinc-800"
+                />
+              </div>
+
+              <span className="text-sm text-zinc-500">
+                {filteredCustomers.length === customersTotal
+                  ? `${customersTotal} customers`
+                  : `${filteredCustomers.length} of ${customersTotal} customers`}
+              </span>
+
+              {/* Date Range Picker */}
+              <DateRangePicker
+                dateRange={customerDateRange}
+                onDateRangeChange={setCustomerDateRange}
+                placeholder="Customer since"
+              />
+
+              {/* Sort Button */}
+              <div className="relative" ref={customerSortModalRef}>
+                <button
+                  onClick={() => setShowCustomerSortModal(!showCustomerSortModal)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                  </svg>
+                  Sort
+                </button>
+                {showCustomerSortModal && (
+                  <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
+                      <div className="text-sm font-medium mb-2">Sort by</div>
+                      <div className="flex flex-col gap-1">
+                        {[
+                          { value: "lastOrderAt", label: "Last order" },
+                          { value: "createdAt", label: "Customer since" },
+                          { value: "totalSpent", label: "Total spent" },
+                          { value: "ordersCount", label: "Number of orders" },
+                          { value: "lapse", label: "Days since order" },
+                        ].map((opt) => (
+                          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                            <input
+                              type="radio"
+                              name="customerSortField"
+                              checked={customerSortField === opt.value}
+                              onChange={() => setCustomerSortField(opt.value as SortField)}
+                            />
+                            <span className="text-sm">{opt.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="p-2">
+                      <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${customerSortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                        </svg>
+                        <input
+                          type="radio"
+                          name="customerSortDir"
+                          checked={customerSortDirection === "asc"}
+                          onChange={() => setCustomerSortDirection("asc")}
+                          className="sr-only"
+                        />
+                        <span className="text-sm">Ascending</span>
+                      </label>
+                      <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${customerSortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                        </svg>
+                        <input
+                          type="radio"
+                          name="customerSortDir"
+                          checked={customerSortDirection === "desc"}
+                          onChange={() => setCustomerSortDirection("desc")}
+                          className="sr-only"
+                        />
+                        <span className="text-sm">Descending</span>
+                      </label>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Lapse Filter Button */}
+              <div className="relative" ref={customerLapseFilterRef}>
+                <button
+                  onClick={() => setShowCustomerLapseFilter(!showCustomerLapseFilter)}
+                  className={`btn btn-sm ${customerLapseFilter.type ? "btn-primary" : "btn-secondary"}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                  </svg>
+                  {customerLapseFilter.type ? "Filtered" : "Days Since Order"}
+                </button>
+                {showCustomerLapseFilter && (
+                  <div className="dropdown right-0 mt-2 w-72" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3">
+                      <div className="text-sm font-medium mb-3">Days Since Last Order</div>
+                      <div className="flex flex-col gap-2">
+                        {[
+                          { value: "new", label: `New (≤${lifecycleSettings.newMaxDays} days)` },
+                          { value: "due_reorder", label: `Due Reorder (${lifecycleSettings.newMaxDays + 1}-${lifecycleSettings.reorderMaxDays} days)` },
+                          { value: "lapsed", label: `Lapsed (${lifecycleSettings.reorderMaxDays + 1}-${lifecycleSettings.lapsedMaxDays} days)` },
+                          { value: "lost", label: `Lost (>${lifecycleSettings.lapsedMaxDays} days)` },
+                        ].map((opt) => (
+                          <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                            <input
+                              type="radio"
+                              name="customerLapseFilter"
+                              checked={customerLapseFilter.type === opt.value}
+                              onChange={() => setCustomerLapseFilter({ type: opt.value as LapseFilterType })}
+                            />
+                            <span className="text-sm">{opt.label}</span>
+                          </label>
+                        ))}
+                        <div className="border-t border-zinc-200 dark:border-zinc-700 my-1" />
+                        <label className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                          <input
+                            type="radio"
+                            name="customerLapseFilter"
+                            checked={customerLapseFilter.type === "custom"}
+                            onChange={() => {
+                              const val = parseInt(customLapseInput) || 0;
+                              setCustomerLapseFilter({ type: "custom", customMax: val });
+                            }}
+                          />
+                          <span className="text-sm">Custom: ≤</span>
+                          <input
+                            type="number"
+                            className="input w-16 text-sm"
+                            placeholder="days"
+                            value={customLapseInput}
+                            onChange={(e) => {
+                              setCustomLapseInput(e.target.value);
+                              const val = parseInt(e.target.value) || 0;
+                              if (customerLapseFilter.type === "custom" || e.target.value) {
+                                setCustomerLapseFilter({ type: "custom", customMax: val });
+                              }
+                            }}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span className="text-sm">days</span>
+                        </label>
+                      </div>
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                        <button
+                          className="btn btn-secondary btn-sm flex-1"
+                          onClick={() => {
+                            setCustomerLapseFilter({ type: null });
+                            setCustomLapseInput("");
+                          }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm flex-1"
+                          onClick={() => setShowCustomerLapseFilter(false)}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Tags Filter Button */}
+              <div className="relative" ref={tagsFilterRef}>
+                <button
+                  onClick={() => setShowTagsFilter(!showTagsFilter)}
+                  className={`btn btn-sm ${selectedTags.size > 0 ? "btn-primary" : "btn-secondary"}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
+                  </svg>
+                  {selectedTags.size > 0 ? `Tags (${selectedTags.size})` : "Tags"}
+                </button>
+                {showTagsFilter && (
+                  <div className="dropdown right-0 mt-2 w-72" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3">
+                      <div className="text-sm font-medium mb-3">Filter by Tags</div>
+                      <input
+                        type="text"
+                        className="input w-full text-sm mb-2"
+                        placeholder="Search tags..."
+                        value={tagsFilterSearch}
+                        onChange={(e) => setTagsFilterSearch(e.target.value)}
+                        onClick={(e) => e.stopPropagation()}
+                      />
+                      <div className="max-h-48 overflow-y-auto flex flex-col gap-1">
+                        {filteredTags.length === 0 ? (
+                          <div className="text-sm text-zinc-500 px-2 py-1">No tags found</div>
+                        ) : (
+                          filteredTags.map((tag) => (
+                            <label key={tag} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                              <input
+                                type="checkbox"
+                                checked={selectedTags.has(tag)}
+                                onChange={() => {
+                                  const newTags = new Set(selectedTags);
+                                  if (newTags.has(tag)) {
+                                    newTags.delete(tag);
+                                  } else {
+                                    newTags.add(tag);
+                                  }
+                                  setSelectedTags(newTags);
+                                }}
+                              />
+                              <span className="text-sm truncate">{tag}</span>
+                            </label>
+                          ))
+                        )}
+                      </div>
+                      <div className="flex gap-2 mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                        <button
+                          className="btn btn-secondary btn-sm flex-1"
+                          onClick={() => {
+                            setSelectedTags(new Set());
+                            setTagsFilterSearch("");
+                          }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm flex-1"
+                          onClick={() => setShowTagsFilter(false)}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Orders Filter Button */}
+              <div className="relative" ref={ordersFilterRef}>
+                <button
+                  onClick={() => setShowOrdersFilter(!showOrdersFilter)}
+                  className={`btn btn-sm ${ordersFilterMin || ordersFilterMax ? "btn-primary" : "btn-secondary"}`}
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M16 11V7a4 4 0 00-8 0v4M5 9h14l1 12H4L5 9z" />
+                  </svg>
+                  {ordersFilterMin || ordersFilterMax
+                    ? `Orders ${ordersFilterMin || "0"}-${ordersFilterMax || "∞"}`
+                    : "Orders"}
+                </button>
+                {showOrdersFilter && (
+                  <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+                    <div className="p-3">
+                      <div className="text-sm font-medium mb-3">Number of Orders</div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <input
+                          type="number"
+                          className="input w-20 text-sm"
+                          placeholder="Min"
+                          min="0"
+                          value={ordersFilterMin}
+                          onChange={(e) => setOrdersFilterMin(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                        <span className="text-sm text-zinc-500">to</span>
+                        <input
+                          type="number"
+                          className="input w-20 text-sm"
+                          placeholder="Max"
+                          min="0"
+                          value={ordersFilterMax}
+                          onChange={(e) => setOrdersFilterMax(e.target.value)}
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+                      <div className="flex gap-2 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                        <button
+                          className="btn btn-secondary btn-sm flex-1"
+                          onClick={() => {
+                            setOrdersFilterMin("");
+                            setOrdersFilterMax("");
+                          }}
+                        >
+                          Clear
+                        </button>
+                        <button
+                          className="btn btn-primary btn-sm flex-1"
+                          onClick={() => setShowOrdersFilter(false)}
+                        >
+                          Apply
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Show Selected Only Toggle */}
+              <button
+                onClick={() => setShowSelectedOnly(!showSelectedOnly)}
+                className={`btn btn-sm ${showSelectedOnly ? "btn-primary" : "btn-secondary"}`}
+              >
+                {showSelectedOnly ? "Show All" : "Selected Only"}
+              </button>
+            </div>
+
+            {/* Filter Pills */}
+            {(customerLapseFilter.type || customerDateRange?.from || selectedTags.size > 0 || ordersFilterMin || ordersFilterMax) && (
+              <div className="flex items-center gap-2 px-6 py-2 border-b border-zinc-200 dark:border-zinc-700 shrink-0 flex-wrap">
+                {customerLapseFilter.type && (
+                  <div className="filter-pill">
+                    <span className="filter-pill-label">
+                      <span className="filter-pill-key">Days:</span>
+                      <span className="filter-pill-values">
+                        {customerLapseFilter.type === "new" && `≤${lifecycleSettings.newMaxDays}`}
+                        {customerLapseFilter.type === "due_reorder" && `${lifecycleSettings.newMaxDays + 1}-${lifecycleSettings.reorderMaxDays}`}
+                        {customerLapseFilter.type === "lapsed" && `${lifecycleSettings.reorderMaxDays + 1}-${lifecycleSettings.lapsedMaxDays}`}
+                        {customerLapseFilter.type === "lost" && `>${lifecycleSettings.lapsedMaxDays}`}
+                        {customerLapseFilter.type === "custom" && `≤${customerLapseFilter.customMax}`}
+                      </span>
+                    </span>
+                    <button
+                      className="filter-pill-remove"
+                      onClick={() => setCustomerLapseFilter({ type: null })}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {customerDateRange?.from && (
+                  <div className="filter-pill">
+                    <span className="filter-pill-label">
+                      <span className="filter-pill-key">Since:</span>
+                      <span className="filter-pill-values">
+                        {customerDateRange.from.toLocaleDateString()}
+                        {customerDateRange.to && ` - ${customerDateRange.to.toLocaleDateString()}`}
+                      </span>
+                    </span>
+                    <button
+                      className="filter-pill-remove"
+                      onClick={() => setCustomerDateRange(undefined)}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {selectedTags.size > 0 && (
+                  <div className="filter-pill">
+                    <span className="filter-pill-label">
+                      <span className="filter-pill-key">Tags:</span>
+                      <span className="filter-pill-values">
+                        {selectedTags.size <= 2
+                          ? Array.from(selectedTags).join(", ")
+                          : `${selectedTags.size} selected`}
+                      </span>
+                    </span>
+                    <button
+                      className="filter-pill-remove"
+                      onClick={() => setSelectedTags(new Set())}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                {(ordersFilterMin || ordersFilterMax) && (
+                  <div className="filter-pill">
+                    <span className="filter-pill-label">
+                      <span className="filter-pill-key">Orders:</span>
+                      <span className="filter-pill-values">
+                        {ordersFilterMin || "0"} - {ordersFilterMax || "∞"}
+                      </span>
+                    </span>
+                    <button
+                      className="filter-pill-remove"
+                      onClick={() => {
+                        setOrdersFilterMin("");
+                        setOrdersFilterMax("");
+                      }}
+                    >
+                      ×
+                    </button>
+                  </div>
+                )}
+                <button
+                  className="text-xs text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+                  onClick={() => {
+                    setCustomerLapseFilter({ type: null });
+                    setCustomerDateRange(undefined);
+                    setSelectedTags(new Set());
+                    setOrdersFilterMin("");
+                    setOrdersFilterMax("");
+                  }}
+                >
+                  Clear all
+                </button>
+              </div>
+            )}
+
+            {/* Table */}
+            <div className="flex-1 overflow-auto">
+              {customersLoading ? (
+                <div className="flex items-center justify-center h-full">
+                  <p className="text-zinc-500">Loading customers...</p>
+                </div>
+              ) : (
+                <Table
+                  columns={customerColumns}
+                  data={filteredCustomers}
+                  rowKey="id"
+                  emptyMessage="No customers with phone numbers found."
+                  selectable
+                  selectedRows={selectedCustomers}
+                  onSelectionChange={setSelectedCustomers}
+                />
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="flex justify-between items-center px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 shrink-0">
+              <div className="text-sm text-zinc-500">
+                {selectedCustomers.size > 0 && (
+                  <span>{selectedCustomers.size} customer{selectedCustomers.size !== 1 ? "s" : ""} selected</span>
+                )}
+              </div>
+              <div className="flex gap-3">
+                <button
+                  onClick={closeCustomerModal}
+                  className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  onClick={addCustomersToCampaign}
+                  disabled={addingCustomers || (!isEditingCustomers && selectedCustomers.size === 0)}
+                  className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                >
+                  {addingCustomers ? "Saving..." : isEditingCustomers ? `Save ${selectedCustomers.size} Customer${selectedCustomers.size !== 1 ? "s" : ""}` : `Add ${selectedCustomers.size} Customer${selectedCustomers.size !== 1 ? "s" : ""}`}
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Send Campaign Modal ──────────────────────────── */}
+      {showSendModal && sendModalCampaign && (
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl w-full max-w-lg mx-4 max-h-[90vh] flex flex-col">
+            {/* Modal Header */}
+            <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-700 shrink-0">
+              <h2 className="text-lg font-semibold">
+                {sendModalStep === "preview" && "Send Campaign"}
+                {sendModalStep === "confirm" && "Confirm Send"}
+                {sendModalStep === "sending" && (campaignSending ? "Sending..." : "Send Complete")}
+              </h2>
+              <button
+                onClick={closeSendModal}
+                className="text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-200 text-2xl leading-none"
+              >
+                &times;
+              </button>
+            </div>
+
+            {/* Modal Content */}
+            <div className="p-6 overflow-y-auto flex-1">
+              {/* Preview Step */}
+              {sendModalStep === "preview" && (
+                <>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-4">
+                    You are about to send campaign <strong>&quot;{sendModalCampaign.name}&quot;</strong> to{" "}
+                    <strong>{sendModalCampaign.campaignsWaCustomers.length}</strong> customer
+                    {sendModalCampaign.campaignsWaCustomers.length !== 1 ? "s" : ""}.
+                  </p>
+
+                  {/* Template Preview */}
+                  {sendModalTemplate?.body && (
+                    <div className="mb-4">
+                      <p className="text-xs font-medium text-zinc-500 mb-2">Template Preview</p>
+                      <div
+                        className="max-w-sm rounded-lg p-4"
+                        style={{
+                          backgroundImage: "url(/whatsapp-bg.png)",
+                          backgroundSize: "300px",
+                          backgroundRepeat: "repeat",
+                        }}
+                      >
+                        <div className="bg-white rounded-lg p-3 shadow-md relative">
+                          {sendModalTemplate.header && (
+                            <p className="font-bold text-sm text-zinc-900 mb-1">
+                              {sendModalTemplate.header}
+                            </p>
+                          )}
+                          <p className="text-sm text-zinc-800 whitespace-pre-line">
+                            {sendModalTemplate.body}
+                          </p>
+                          <span className="block text-right text-[11px] text-zinc-400 mt-1">
+                            {new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {!sendModalTemplate && (
+                    <div className="mb-4 p-3 bg-amber-50 dark:bg-amber-950 border border-amber-200 dark:border-amber-800 rounded-md text-sm text-amber-800 dark:text-amber-200">
+                      Template &quot;{sendModalCampaign.templateName}&quot; not found in approved templates.
+                    </div>
+                  )}
+                </>
+              )}
+
+              {/* Confirm Step */}
+              {sendModalStep === "confirm" && (
+                <div className="text-center py-4">
+                  <div className="w-16 h-16 mx-auto mb-4 rounded-full bg-amber-100 dark:bg-amber-900 flex items-center justify-center">
+                    <svg className="w-8 h-8 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                    </svg>
+                  </div>
+                  <h3 className="text-lg font-semibold mb-2">Are you sure?</h3>
+                  <p className="text-sm text-zinc-600 dark:text-zinc-400">
+                    This will send WhatsApp messages to {sendModalCampaign.campaignsWaCustomers.length} customer
+                    {sendModalCampaign.campaignsWaCustomers.length !== 1 ? "s" : ""}.<br />
+                    <strong>This action cannot be undone.</strong>
+                  </p>
+                </div>
+              )}
+
+              {/* Sending Step - Progress */}
+              {sendModalStep === "sending" && (
+                <>
+                  {/* Progress Summary */}
+                  <div className="mb-4">
+                    <div className="flex items-center justify-between text-sm mb-2">
+                      <span>Progress</span>
+                      <span className="text-zinc-500">
+                        {campaignSuccessCount} sent, {campaignErrorCount} failed,{" "}
+                        {campaignSendResults.length - campaignSuccessCount - campaignErrorCount} remaining
+                      </span>
+                    </div>
+                    <div className="h-2 bg-zinc-200 dark:bg-zinc-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-green-500 transition-all duration-300"
+                        style={{
+                          width: `${((campaignSuccessCount + campaignErrorCount) / campaignSendResults.length) * 100}%`,
+                        }}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Results List */}
+                  <div className="border border-zinc-200 dark:border-zinc-700 rounded-md max-h-64 overflow-y-auto">
+                    {campaignSendResults.map((r, i) => (
+                      <div
+                        key={i}
+                        className={`flex items-center justify-between px-3 py-2 text-sm border-b last:border-b-0 border-zinc-100 dark:border-zinc-800 ${
+                          r.status === "success"
+                            ? "bg-green-50 dark:bg-green-950"
+                            : r.status === "error"
+                              ? "bg-red-50 dark:bg-red-950"
+                              : r.status === "sending"
+                                ? "bg-blue-50 dark:bg-blue-950"
+                                : ""
+                        }`}
+                      >
+                        <span>
+                          {r.firstName || "Unknown"} ({r.phone || "No phone"})
+                        </span>
+                        <span
+                          className={
+                            r.status === "success"
+                              ? "text-green-600"
+                              : r.status === "error"
+                                ? "text-red-600"
+                                : r.status === "sending"
+                                  ? "text-blue-600"
+                                  : "text-zinc-400"
+                          }
+                        >
+                          {r.status === "success" && "Sent"}
+                          {r.status === "error" && (r.error || "Failed")}
+                          {r.status === "sending" && "Sending..."}
+                          {r.status === "pending" && "Pending"}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-4 border-t border-zinc-200 dark:border-zinc-700 flex justify-end gap-3 shrink-0">
+              {sendModalStep === "preview" && (
+                <>
+                  <button
+                    onClick={closeSendModal}
+                    className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    onClick={() => setSendModalStep("confirm")}
+                    disabled={!sendModalTemplate}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700 disabled:opacity-50"
+                  >
+                    Send Campaign
+                  </button>
+                </>
+              )}
+
+              {sendModalStep === "confirm" && (
+                <>
+                  <button
+                    onClick={() => setSendModalStep("preview")}
+                    className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={executeCampaignSend}
+                    className="px-4 py-2 bg-green-600 text-white rounded-md text-sm font-medium hover:bg-green-700"
+                  >
+                    Yes, Send Now
+                  </button>
+                </>
+              )}
+
+              {sendModalStep === "sending" && (
+                <>
+                  {campaignSending ? (
+                    <>
+                      <button
+                        onClick={closeSendModal}
+                        className="px-4 py-2 text-sm rounded-md border border-zinc-300 dark:border-zinc-700 hover:bg-zinc-50 dark:hover:bg-zinc-800"
+                      >
+                        Run in Background
+                      </button>
+                      <button
+                        onClick={cancelCampaignSend}
+                        className="px-4 py-2 bg-red-600 text-white rounded-md text-sm font-medium hover:bg-red-700"
+                      >
+                        Stop Sending
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        closeSendModal();
+                        setSendModalCampaign(null);
+                        setSendModalTemplate(null);
+                        setSendModalStep("preview");
+                        setCampaignSendResults([]);
+                      }}
+                      className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80"
+                    >
+                      Done
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
           </div>
         </div>
       )}

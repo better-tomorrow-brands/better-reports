@@ -1,31 +1,122 @@
 # WhatsApp Campaign Sender
 
-Send WhatsApp template messages in bulk via the Meta Business API, with CSV upload and live status tracking.
+Send WhatsApp template messages to segmented customer lists via the Meta Business API, with full campaign lifecycle management, real-time send progress, and Shopify timeline integration.
 
 ## How It Works
 
 1. Admin enters Meta credentials (Phone Number ID, WABA ID, Access Token) in Settings
 2. Credentials are stored encrypted (AES-256-GCM) in the Neon `settings` table
-3. On the WhatsApp page, approved templates are fetched live from the Facebook Graph API
-4. Admin selects a template, uploads a CSV with contact data, and hits Send
-5. Messages are sent sequentially (one at a time) via `/api/whatsapp/send`
-6. Each row shows real-time status: Pending → Sending → Sent / Failed
+3. On the Campaigns page (WhatsApp tab), admin creates a campaign and selects a template
+4. Admin adds customers using a filterable selector (by lapse, tags, date range, order count)
+5. Admin reviews and confirms the send via a 3-step modal (preview → confirm → send)
+6. Messages are sent sequentially via `/api/campaigns-wa/[id]/send-one`, with real-time per-customer status updates in the UI
+7. A Shopify customer note is appended for each successful send (if Shopify is configured)
+
+A separate **Manual WhatsApp** tab retains the original CSV upload flow for one-off sends.
 
 ## Pages
 
 | Route | Purpose |
 |---|---|
 | `/settings` | Enter and save Meta/WhatsApp credentials |
-| `/campaign-sender` | Template selection, CSV upload, send, and results |
+| `/campaigns` | Campaign builder (WhatsApp tab), manual CSV sender (Manual WhatsApp tab) |
+
+## Database Schema
+
+### `campaigns_wa` — Campaign Records
+
+| Column | Type | Details |
+|---|---|---|
+| `id` | serial | Primary key |
+| `name` | text | Campaign display name |
+| `templateName` | text | WhatsApp template identifier |
+| `customerCount` | integer | Total customers assigned |
+| `successCount` | integer | Messages sent successfully |
+| `errorCount` | integer | Failed sends |
+| `status` | text | `draft`, `sending`, or `completed` |
+| `createdAt` | timestamp | Auto-set on creation |
+| `sentAt` | timestamp | Set when sending completes |
+
+### `campaigns_wa_customers` — Junction Table
+
+Links campaigns to customers with per-recipient send tracking. Phone and firstName are denormalized (snapshotted at assignment time) so historical records remain accurate even if customer data changes.
+
+| Column | Type | Details |
+|---|---|---|
+| `id` | serial | Primary key |
+| `campaignId` | integer | FK → campaigns_wa.id (cascade delete) |
+| `customerId` | integer | FK → customers.id (cascade delete) |
+| `phone` | text | Denormalized from customer |
+| `firstName` | text | Denormalized from customer |
+| `status` | text | `pending`, `sent`, or `failed` |
+| `errorMessage` | text | Error detail (if failed) |
+| `sentAt` | timestamp | Timestamp of send attempt |
+
+### `campaign_messages` — Audit Log
+
+Records every individual message send for audit/history, linking campaign, customer, template, phone, status, and error messages.
+
+## Campaign Lifecycle
+
+```
+Draft → (Add Customers) → Draft → (Send) → Sending → Completed
+  |                                                       |
+  ↓ (Delete)                                        (Read-only)
+Deleted
+```
+
+- **Draft:** Campaign can be edited, customers can be added/replaced, campaign can be deleted
+- **Sending:** Messages are being sent sequentially; UI shows real-time progress
+- **Completed:** Campaign is locked; results are viewable but not editable
+
+Per-customer status within a campaign:
+
+```
+pending → sent    (successful WhatsApp API response)
+        → failed  (error — stored in errorMessage)
+```
 
 ## API Routes
 
+### Campaign CRUD
+
 | Method | Endpoint | Purpose | Auth |
 |---|---|---|---|
+| `GET` | `/api/campaigns-wa` | List all campaigns with computed counts | Clerk |
+| `POST` | `/api/campaigns-wa` | Create campaign (status: draft) | Clerk |
+| `PUT` | `/api/campaigns-wa` | Update campaign name/template | Clerk |
+| `DELETE` | `/api/campaigns-wa?id={id}` | Delete campaign + cascade junction records | Clerk |
+| `GET` | `/api/campaigns-wa/[id]` | Single campaign with all customer details | Clerk |
+
+### Customer Assignment
+
+| Method | Endpoint | Purpose | Auth |
+|---|---|---|---|
+| `POST` | `/api/campaigns-wa/[id]/customers` | Append customers to campaign | Clerk |
+| `PUT` | `/api/campaigns-wa/[id]/customers` | Replace all customers for campaign | Clerk |
+
+### Sending
+
+| Method | Endpoint | Purpose | Auth |
+|---|---|---|---|
+| `POST` | `/api/campaigns-wa/[id]/send` | Server-side batch send (all customers sequentially) | Clerk |
+| `POST` | `/api/campaigns-wa/[id]/send-one` | Send to single customer (used by UI send loop) | Clerk |
+| `PATCH` | `/api/campaigns-wa/[id]/status` | Update campaign status | Clerk |
+
+### Templates & Manual Send
+
+| Method | Endpoint | Purpose | Auth |
+|---|---|---|---|
+| `GET` | `/api/whatsapp/templates` | Fetch approved templates from Facebook Graph API | Clerk |
+| `POST` | `/api/whatsapp/send` | Send single manual message (CSV upload flow) | Clerk |
+
+### Supporting
+
+| Method | Endpoint | Purpose | Auth |
+|---|---|---|---|
+| `GET` | `/api/customers` | Fetch customers with pagination and computed fields | Clerk |
 | `GET` | `/api/settings` | Load saved settings (token masked) | Clerk |
 | `POST` | `/api/settings` | Save settings (encrypted to DB) | Clerk |
-| `GET` | `/api/whatsapp/templates` | Fetch approved templates from Facebook | Clerk |
-| `POST` | `/api/whatsapp/send` | Send a single WhatsApp message | Clerk |
 
 ## Template Fetching
 
@@ -74,9 +165,51 @@ POST https://graph.facebook.com/v22.0/{PHONE_NUMBER_ID}/messages
 
 **Important:** The `parameter_name` field is required by the WhatsApp API — omitting it causes a `(#100) Invalid parameter` error.
 
+### Sending Flows
+
+**Campaign Send (UI modal — primary flow):**
+1. User clicks "Send" on a draft campaign with customers assigned
+2. 3-step modal: Preview → Confirm (shows all recipients) → Sending
+3. UI calls `POST /api/campaigns-wa/[id]/send-one` sequentially for each customer
+4. Each customer row shows real-time status: pending → sending → sent/failed
+5. User can cancel mid-send (sets abort flag)
+6. Campaign status updated to `completed` after all sends finish
+
+**Batch Send (API — alternative):**
+1. Single call to `POST /api/campaigns-wa/[id]/send`
+2. Server processes all customers sequentially
+3. Returns aggregate results: `{ total, sent, failed }`
+4. Campaign status set to `completed` with `sentAt` timestamp
+
+**Manual CSV Send (separate tab):**
+1. User selects template and uploads CSV
+2. CSV must include `phone` column + any template parameter columns
+3. Preview table shows first 10 rows
+4. Sends sequentially via `POST /api/whatsapp/send`
+5. Real-time per-row status with stop button
+
+## Customer Selection
+
+The campaign customer modal provides advanced filtering:
+
+| Filter | Options |
+|---|---|
+| Date range | Customer `createdAt` range |
+| Lapse | Days since last order: New, Due Reorder, Lapsed, Lost |
+| Tags | Multi-select from customer tags |
+| Orders count | Min/max range |
+| Search | By name or email |
+| Show selected only | Toggle to review current selection |
+
+**Sorting options:** Total spent, orders count, last order date, lapse, customer since
+
+**Computed customer fields:**
+- `lapse` — days since `lastOrderAt` (null if no orders)
+- `lastWhatsappAt` — most recent successful WhatsApp send (from junction table)
+
 ## Phone Number Formatting
 
-The API route automatically formats UK phone numbers:
+The API routes automatically format UK phone numbers:
 
 | Input | Output |
 |---|---|
@@ -87,7 +220,21 @@ The API route automatically formats UK phone numbers:
 
 Strips spaces, dashes, and parentheses before formatting.
 
-## CSV Format
+## Shopify Integration
+
+After each successful WhatsApp send, a note is appended to the customer's Shopify timeline:
+
+```
+[15 Jan 2024 10:30] WhatsApp campaign "Spring Sale" sent (template: spring_template)
+---
+```
+
+- Prepended to any existing customer note
+- Uses en-GB date locale
+- Non-blocking — Shopify errors do not fail the WhatsApp send
+- Only runs if Shopify settings are configured and customer has a `shopifyCustomerId`
+
+## CSV Format (Manual Tab)
 
 The CSV must include a `phone` column and any parameter columns required by the selected template.
 
@@ -140,19 +287,26 @@ node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 
 | File | Purpose |
 |---|---|
-| `src/app/campaign-sender/page.tsx` | Campaign sender UI (client component) |
+| `src/app/campaigns/page.tsx` | Campaign builder UI — WhatsApp tab, Manual tab, customer modal, send modal |
 | `src/app/settings/page.tsx` | Settings page UI (client component) |
-| `src/app/api/whatsapp/send/route.ts` | Send single message to WhatsApp API |
+| `src/app/api/campaigns-wa/route.ts` | Campaign CRUD (list, create, update, delete) |
+| `src/app/api/campaigns-wa/[id]/route.ts` | Single campaign detail with customers |
+| `src/app/api/campaigns-wa/[id]/customers/route.ts` | Add/replace customers for a campaign |
+| `src/app/api/campaigns-wa/[id]/send/route.ts` | Batch send (server-side sequential) |
+| `src/app/api/campaigns-wa/[id]/send-one/route.ts` | Single message send (used by UI loop) |
+| `src/app/api/campaigns-wa/[id]/status/route.ts` | Update campaign status |
+| `src/app/api/whatsapp/send/route.ts` | Manual single message send (CSV flow) |
 | `src/app/api/whatsapp/templates/route.ts` | Fetch approved templates from Facebook |
+| `src/app/api/customers/route.ts` | Customer list with pagination + computed fields |
 | `src/app/api/settings/route.ts` | GET/POST settings (encrypted) |
 | `src/lib/settings.ts` | Settings read/write helpers (Drizzle + encryption) |
 | `src/lib/crypto.ts` | AES-256-GCM encrypt/decrypt utilities |
-| `src/lib/db/schema.ts` | Drizzle schema (settings table) |
+| `src/lib/db/schema.ts` | Drizzle schema (campaigns_wa, campaigns_wa_customers, campaign_messages) |
 | `public/whatsapp-bg.png` | WhatsApp chat background for template preview |
 
 ## Future Enhancements
 
-- **Campaign audit logging:** Write to `campaigns` and `campaign_messages` tables (schema exists, not yet wired)
-- **Role-based access:** Restrict WhatsApp page to `super_admin` and `admin` roles
-- **Batch sending:** Server-side queue for larger campaigns
 - **Delivery status webhooks:** Track message delivery/read status from WhatsApp
+- **Role-based access:** Restrict campaign features to `super_admin` and `admin` roles
+- **Server-side queue:** Replace browser-side sequential sending with a background job queue for larger campaigns
+- **Retry failed sends:** UI button to retry all failed recipients in a campaign
