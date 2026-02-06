@@ -3,6 +3,8 @@ import {
   serial,
   text,
   integer,
+  decimal,
+  boolean,
   timestamp,
 } from "drizzle-orm/pg-core";
 
@@ -22,20 +24,31 @@ export const settings = pgTable("settings", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
-// ── Campaigns ──────────────────────────────────────────
+// ── Campaigns (Ad Attribution) ────────────────────────
 export const campaigns = pgTable("campaigns", {
   id: serial("id").primaryKey(),
-  templateName: text("template_name").notNull(),
-  totalCount: integer("total_count").notNull(),
-  successCount: integer("success_count").default(0),
-  failCount: integer("fail_count").default(0),
-  sentBy: text("sent_by").references(() => users.id),
+  campaign: text("campaign"),
+  adGroup: text("ad_group"),
+  ad: text("ad"),
+  productName: text("product_name"),
+  productUrl: text("product_url"),
+  skuSuffix: text("sku_suffix"),
+  skus: text("skus"),
+  discountCode: text("discount_code"),
+  utmSource: text("utm_source"),
+  utmMedium: text("utm_medium"),
+  utmCampaign: text("utm_campaign"),
+  utmTerm: text("utm_term"),
+  productTemplate: text("product_template"),
+  status: text("status").default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── WhatsApp Messages (Audit Log) ─────────────────────
 export const campaignMessages = pgTable("campaign_messages", {
   id: serial("id").primaryKey(),
-  campaignId: integer("campaign_id").references(() => campaigns.id),
+  templateName: text("template_name"),
   phone: text("phone").notNull(),
   firstName: text("first_name"),
   status: text("status").notNull(), // success | error
@@ -52,3 +65,53 @@ export const syncLogs = pgTable("sync_logs", {
   details: text("details"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
+
+// ── Customers ─────────────────────────────────────────
+export const customers = pgTable("customers", {
+  id: serial("id").primaryKey(),
+  shopifyCustomerId: text("shopify_customer_id"),
+  firstName: text("first_name"),
+  lastName: text("last_name"),
+  email: text("email").unique(),
+  emailMarketingConsent: boolean("email_marketing_consent").default(false),
+  phone: text("phone"),
+  totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).default("0"),
+  ordersCount: integer("orders_count").default(0),
+  tags: text("tags"),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  lastOrderAt: timestamp("last_order_at", { withTimezone: true }),
+  // lapse (days since last order) computed on read from lastOrderAt
+  // lifecycle (New/Reorder/At Risk/Lost) computed from lapse using settings thresholds
+});
+
+// ── Orders (Shopify) ───────────────────────────────────
+export const orders = pgTable("orders", {
+  id: serial("id").primaryKey(),
+  shopifyId: text("shopify_id").notNull().unique(),
+  orderNumber: text("order_number"),
+  email: text("email"),
+  customerName: text("customer_name"),
+  phone: text("phone"),
+  createdAt: timestamp("created_at", { withTimezone: true }),
+  fulfillmentStatus: text("fulfillment_status"),
+  fulfilledAt: timestamp("fulfilled_at", { withTimezone: true }),
+  subtotal: decimal("subtotal", { precision: 10, scale: 2 }),
+  shipping: decimal("shipping", { precision: 10, scale: 2 }),
+  tax: decimal("tax", { precision: 10, scale: 2 }),
+  total: decimal("total", { precision: 10, scale: 2 }),
+  discountCodes: text("discount_codes"),
+  skus: text("skus"),
+  quantity: integer("quantity"),
+  utmSource: text("utm_source"),
+  utmCampaign: text("utm_campaign"),
+  utmMedium: text("utm_medium"),
+  utmContent: text("utm_content"),
+  utmTerm: text("utm_term"),
+  trackingNumber: text("tracking_number"),
+  tags: text("tags"),
+  hasConversionData: boolean("has_conversion_data").default(false),
+  isRepeatCustomer: boolean("is_repeat_customer").default(false),
+  customerId: integer("customer_id").references(() => customers.id),
+  receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow(),
+});
+

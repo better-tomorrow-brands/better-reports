@@ -15,6 +15,27 @@
       "when": 1770311461548,
       "tag": "0001_breezy_black_widow",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770319792672,
+      "tag": "0002_new_victor_mancha",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770363762427,
+      "tag": "0003_neat_thunderbolt",
+      "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770407000000,
+      "tag": "0004_campaigns_restructure",
+      "breakpoints": true
     }
   ]
 }

@@ -1,8 +1,59 @@
 @import "tailwindcss";
 
+/* ============================================
+   Theme Variables
+   ============================================ */
+
 :root {
   --background: #ffffff;
   --foreground: #171717;
+
+  /* Borders */
+  --border-color: #e4e4e7;
+  --border-color-light: #f4f4f5;
+
+  /* Surface colors */
+  --surface-bg: #fafafa;
+  --surface-hover: #f4f4f5;
+
+  /* Status colors */
+  --status-success-bg: #dcfce7;
+  --status-success-text: #15803d;
+  --status-warning-bg: #fef9c3;
+  --status-warning-text: #a16207;
+  --status-error-bg: #fee2e2;
+  --status-error-text: #dc2626;
+
+  /* Interactive */
+  --primary-bg: #18181b;
+  --primary-text: #ffffff;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0a0a0a;
+    --foreground: #ededed;
+
+    /* Borders */
+    --border-color: #27272a;
+    --border-color-light: #18181b;
+
+    /* Surface colors */
+    --surface-bg: #18181b;
+    --surface-hover: #27272a;
+
+    /* Status colors */
+    --status-success-bg: #14532d;
+    --status-success-text: #86efac;
+    --status-warning-bg: #422006;
+    --status-warning-text: #fde047;
+    --status-error-bg: #450a0a;
+    --status-error-text: #fecaca;
+
+    /* Interactive */
+    --primary-bg: #f4f4f5;
+    --primary-text: #18181b;
+  }
 }
 
 @theme inline {
@@ -12,15 +63,401 @@
   --font-mono: var(--font-geist-mono);
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
-
 body {
   background: var(--background);
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
+}
+
+/* ============================================
+   Table Styles
+   ============================================ */
+
+.table-container {
+  overflow-x: auto;
+  border-radius: 0.5rem;
+  border: 1px solid var(--border-color);
+}
+
+.table {
+  width: 100%;
+  font-size: 0.875rem;
+  border-collapse: collapse;
+}
+
+.table-header-row {
+  background: var(--surface-bg);
+}
+
+.table-header-cell {
+  text-align: left;
+  padding: 0.625rem 0.75rem;
+  font-weight: 500;
+  color: var(--foreground);
+  border-bottom: 1px solid var(--border-color);
+  white-space: nowrap;
+}
+
+.table-header-cell:first-child {
+  border-top-left-radius: 0.5rem;
+}
+
+.table-header-cell:last-child {
+  border-top-right-radius: 0.5rem;
+}
+
+.table-body-row {
+  border-bottom: 1px solid var(--border-color-light);
+  transition: background-color 0.1s;
+}
+
+.table-body-row:last-child {
+  border-bottom: none;
+}
+
+.table-body-row:hover {
+  background: var(--surface-hover);
+}
+
+.table-body-row:last-child .table-cell:first-child {
+  border-bottom-left-radius: 0.5rem;
+}
+
+.table-body-row:last-child .table-cell:last-child {
+  border-bottom-right-radius: 0.5rem;
+}
+
+.table-cell {
+  padding: 0.625rem 0.75rem;
+  white-space: nowrap;
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-cell-primary {
+  font-weight: 600;
+}
+
+/* Sticky column styles */
+.table-cell-sticky,
+.table-header-cell-sticky {
+  position: sticky;
+  left: 0;
+  z-index: 10;
+}
+
+.table-header-cell-sticky {
+  background: var(--surface-bg);
+}
+
+.table-cell-sticky {
+  background: var(--background);
+}
+
+.table-body-row:hover .table-cell-sticky {
+  background: var(--surface-hover);
+}
+
+.table-cell-sticky::after,
+.table-header-cell-sticky::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-color-light);
+}
+
+.table-header-cell-sticky::after {
+  background: var(--border-color);
+}
+
+.table-empty {
+  padding: 2rem;
+  text-align: center;
+  color: #71717a;
+}
+
+/* ============================================
+   Status Badges
+   ============================================ */
+
+.badge {
+  display: inline-block;
+  padding: 0.125rem 0.5rem;
+  border-radius: 0.25rem;
+  font-size: 0.75rem;
+  font-weight: 500;
+}
+
+.badge-success {
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+}
+
+.badge-warning {
+  background: var(--status-warning-bg);
+  color: var(--status-warning-text);
+}
+
+.badge-error {
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+}
+
+.badge-neutral {
+  background: var(--surface-bg);
+  color: #71717a;
+}
+
+/* ============================================
+   Buttons
+   ============================================ */
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border-radius: 0.375rem;
+  transition: opacity 0.1s;
+  cursor: pointer;
+}
+
+.btn:hover {
+  opacity: 0.8;
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.btn-primary {
+  background: var(--primary-bg);
+  color: var(--primary-text);
+  border: none;
+}
+
+.btn-secondary {
+  background: transparent;
+  color: var(--foreground);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--surface-hover);
+  opacity: 1;
+}
+
+.btn-danger {
+  background: #dc2626;
+  color: #ffffff;
+  border: none;
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+}
+
+/* ============================================
+   Form Inputs
+   ============================================ */
+
+.input {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--background);
+  color: var(--foreground);
+  transition: border-color 0.1s;
+}
+
+.input:focus {
+  outline: none;
+  border-color: #a1a1aa;
+}
+
+.input::placeholder {
+  color: #a1a1aa;
+}
+
+.input-readonly {
+  background: var(--surface-bg);
+  cursor: default;
+}
+
+.label {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  margin-bottom: 0.25rem;
+}
+
+.select {
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  background: var(--background);
+  color: var(--foreground);
+  cursor: pointer;
+}
+
+/* ============================================
+   Dropdowns & Popovers
+   ============================================ */
+
+.dropdown {
+  position: absolute;
+  z-index: 20;
+  background: var(--background);
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -4px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+}
+
+.dropdown-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+  text-align: left;
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.1s;
+}
+
+.dropdown-item:hover {
+  background: var(--surface-hover);
+}
+
+.dropdown-divider {
+  height: 1px;
+  background: var(--border-color);
+  margin: 0;
+}
+
+/* ============================================
+   Modals
+   ============================================ */
+
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 50;
+}
+
+.modal {
+  background: var(--background);
+  border-radius: 0.5rem;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 42rem;
+  width: 100%;
+  margin: 1rem;
+  max-height: 90vh;
+  overflow-y: auto;
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 1rem 1.5rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.modal-title {
+  font-size: 1.125rem;
+  font-weight: 600;
+}
+
+.modal-close {
+  color: #a1a1aa;
+  font-size: 1.5rem;
+  line-height: 1;
+  background: none;
+  border: none;
+  cursor: pointer;
+  transition: color 0.1s;
+}
+
+.modal-close:hover {
+  color: var(--foreground);
+}
+
+.modal-body {
+  padding: 1.5rem;
+}
+
+.modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.75rem;
+  padding: 1rem 1.5rem;
+  border-top: 1px solid var(--border-color);
+}
+
+/* ============================================
+   Alerts & Messages
+   ============================================ */
+
+.alert {
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+.alert-success {
+  background: var(--status-success-bg);
+  color: var(--status-success-text);
+  border: 1px solid var(--status-success-text);
+}
+
+.alert-error {
+  background: var(--status-error-bg);
+  color: var(--status-error-text);
+  border: 1px solid var(--status-error-text);
+}
+
+/* ============================================
+   Utilities
+   ============================================ */
+
+.text-muted {
+  color: #71717a;
+}
+
+.text-success {
+  color: var(--status-success-text);
+}
+
+.text-error {
+  color: var(--status-error-text);
+}
+
+.font-mono {
+  font-family: var(--font-mono), monospace;
+}
+
+.truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }

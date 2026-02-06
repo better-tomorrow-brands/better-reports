@@ -9,6 +9,12 @@ export interface MetaSettings {
   access_token: string;
 }
 
+export interface ShopifySettings {
+  store_domain: string;
+  access_token: string;
+  webhook_secret: string;
+}
+
 export async function getSetting(key: string): Promise<string | null> {
   const rows = await db
     .select({ value: settings.value })
@@ -37,4 +43,14 @@ export async function getMetaSettings(): Promise<MetaSettings | null> {
 
 export async function saveMetaSettings(meta: MetaSettings): Promise<void> {
   await setSetting("meta", JSON.stringify(meta));
+}
+
+export async function getShopifySettings(): Promise<ShopifySettings | null> {
+  const raw = await getSetting("shopify");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function saveShopifySettings(shopify: ShopifySettings): Promise<void> {
+  await setSetting("shopify", JSON.stringify(shopify));
 }
