@@ -23,6 +23,7 @@
     "react": "19.2.3",
     "react-day-picker": "^9.13.0",
     "react-dom": "19.2.3",
+    "recharts": "^3.7.0",
     "svix": "^1.84.1"
   },
   "devDependencies": {
