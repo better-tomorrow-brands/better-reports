@@ -5,6 +5,7 @@ import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } fro
 import { DateRange } from "react-day-picker";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
+import { CampaignFilterPopover } from "@/components/reports/CampaignFilterPopover";
 import {
   ComposedChart,
   Bar,
@@ -103,6 +104,8 @@ export function FacebookAdsChart() {
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+  const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
+  const [availableCampaigns, setAvailableCampaigns] = useState<{ utmCampaign: string; label: string }[]>([]);
 
   // Load persisted config on mount
   useEffect(() => {
@@ -120,17 +123,24 @@ export function FacebookAdsChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/facebook-ads?from=${from}&to=${to}&groupBy=${groupBy}`);
+      let url = `/api/reports/facebook-ads?from=${from}&to=${to}&groupBy=${groupBy}`;
+      if (selectedCampaigns.length > 0) {
+        url += `&campaigns=${selectedCampaigns.join(",")}`;
+      }
+      const res = await fetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
+      if (json.campaigns) {
+        setAvailableCampaigns(json.campaigns);
+      }
     } catch (err) {
       console.error("Failed to fetch facebook ads report:", err);
       setData([]);
     } finally {
       setLoading(false);
     }
-  }, [dateRange, groupBy]);
+  }, [dateRange, groupBy, selectedCampaigns]);
 
   useEffect(() => {
     fetchData();
@@ -213,6 +223,12 @@ export function FacebookAdsChart() {
             </button>
           ))}
         </div>
+
+        <CampaignFilterPopover
+          campaigns={availableCampaigns}
+          selected={selectedCampaigns}
+          onChange={setSelectedCampaigns}
+        />
 
         <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
 

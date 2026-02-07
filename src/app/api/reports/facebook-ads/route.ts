@@ -1,8 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, facebookAds } from "@/lib/db/schema";
-import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
+import { orders, facebookAds, campaignsFcb } from "@/lib/db/schema";
+import { sql, gte, lte, and, eq, sum, count, inArray } from "drizzle-orm";
 
 export async function GET(request: Request) {
   const { userId } = await auth();
@@ -23,6 +23,9 @@ export async function GET(request: Request) {
       );
     }
 
+    const campaignsParam = url.searchParams.get("campaigns");
+    const campaignList = campaignsParam ? campaignsParam.split(",").filter(Boolean) : [];
+
     const truncUnit = groupBy === "week" ? "week" : groupBy === "month" ? "month" : "day";
     const unit = sql.raw(`'${truncUnit}'`);
 
@@ -39,7 +42,10 @@ export async function GET(request: Request) {
         and(
           eq(orders.utmSource, "facebook"),
           gte(orders.createdAt, new Date(from)),
-          lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
+          lte(orders.createdAt, new Date(to + "T23:59:59.999Z")),
+          ...(campaignList.length > 0
+            ? [inArray(orders.utmCampaign, campaignList)]
+            : [])
         )
       )
       .groupBy(dateTruncOrders)
@@ -56,11 +62,43 @@ export async function GET(request: Request) {
       .where(
         and(
           gte(facebookAds.date, from),
-          lte(facebookAds.date, to)
+          lte(facebookAds.date, to),
+          ...(campaignList.length > 0
+            ? [inArray(facebookAds.utmCampaign, campaignList)]
+            : [])
         )
       )
       .groupBy(dateTruncFb)
       .orderBy(dateTruncFb);
+
+    // Available campaigns for the date range + friendly names
+    const [availableCampaigns, campaignNameRows] = await Promise.all([
+      db
+        .select({
+          utmCampaign: facebookAds.utmCampaign,
+          adset: sql<string>`MIN(${facebookAds.adset})`.as("adset"),
+        })
+        .from(facebookAds)
+        .where(and(gte(facebookAds.date, from), lte(facebookAds.date, to)))
+        .groupBy(facebookAds.utmCampaign),
+      db
+        .select({
+          utmCampaign: campaignsFcb.utmCampaign,
+          adGroup: campaignsFcb.adGroup,
+        })
+        .from(campaignsFcb),
+    ]);
+
+    const campaignNameMap = new Map(
+      campaignNameRows.map((r) => [r.utmCampaign || "", r.adGroup || ""])
+    );
+    const campaigns = availableCampaigns.map((c) => {
+      const utm = c.utmCampaign || "";
+      return {
+        utmCampaign: utm,
+        label: campaignNameMap.get(utm) || c.adset || utm,
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
 
     // Merge by date
     const fbByDate = new Map(fbRows.map((r) => [r.date, Number(r.adSpend) || 0]));
@@ -89,7 +127,7 @@ export async function GET(request: Request) {
 
     data.sort((a, b) => a.date.localeCompare(b.date));
 
-    return NextResponse.json({ data });
+    return NextResponse.json({ data, campaigns });
   } catch (error) {
     console.error("Reports facebook-ads GET error:", error);
     return NextResponse.json(
