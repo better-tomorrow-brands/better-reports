@@ -295,6 +295,43 @@ export default function CampaignsPage() {
   const [fbDeleteId, setFbDeleteId] = useState<number | null>(null);
   const [fbDeleting, setFbDeleting] = useState(false);
 
+  // Column visibility
+  const [showFbColumnPicker, setShowFbColumnPicker] = useState(false);
+  const fbColumnPickerRef = useRef<HTMLDivElement>(null);
+  const FB_COLUMN_STORAGE_KEY = "campaigns-fb-visible-columns";
+  const allFbColumnKeys: (keyof FbCampaign)[] = [
+    "campaign", "adGroup", "ad", "productName", "productUrl", "skuSuffix",
+    "skus", "discountCode", "utmSource", "utmMedium", "utmCampaign",
+    "utmTerm", "productTemplate", "status",
+  ];
+  const defaultFbVisibleColumns = new Set<string>([
+    "campaign", "adGroup", "productName", "skus", "discountCode", "utmSource", "status",
+  ]);
+  const [fbVisibleColumns, setFbVisibleColumns] = useState<Set<string>>(() => {
+    if (typeof window === "undefined") return defaultFbVisibleColumns;
+    const saved = localStorage.getItem(FB_COLUMN_STORAGE_KEY);
+    if (saved) {
+      try { return new Set(JSON.parse(saved)); } catch { /* use defaults */ }
+    }
+    return defaultFbVisibleColumns;
+  });
+
+  function toggleFbColumn(key: string) {
+    const newSet = new Set(fbVisibleColumns);
+    if (newSet.has(key)) newSet.delete(key); else newSet.add(key);
+    setFbVisibleColumns(newSet);
+    localStorage.setItem(FB_COLUMN_STORAGE_KEY, JSON.stringify([...newSet]));
+  }
+  function showAllFbColumns() {
+    const all = new Set(allFbColumnKeys as string[]);
+    setFbVisibleColumns(all);
+    localStorage.setItem(FB_COLUMN_STORAGE_KEY, JSON.stringify([...all]));
+  }
+  function resetFbColumns() {
+    setFbVisibleColumns(defaultFbVisibleColumns);
+    localStorage.setItem(FB_COLUMN_STORAGE_KEY, JSON.stringify([...defaultFbVisibleColumns]));
+  }
+
   // ── WhatsApp Campaigns State ───────────────────────
   const [waCampaigns, setWaCampaigns] = useState<WaCampaign[]>([]);
   const [waLoading, setWaLoading] = useState(true);
@@ -376,10 +413,17 @@ export default function CampaignsPage() {
   const fbColumns: Column<FbCampaign>[] = [
     { key: "campaign", label: "Campaign", sticky: true, primary: true },
     { key: "adGroup", label: "Ad Group" },
+    { key: "ad", label: "Ad" },
     { key: "productName", label: "Product" },
+    { key: "productUrl", label: "Product URL" },
+    { key: "skuSuffix", label: "SKU Suffix" },
     { key: "skus", label: "SKUs", className: "font-mono" },
     { key: "discountCode", label: "Discount" },
     { key: "utmSource", label: "UTM Source" },
+    { key: "utmMedium", label: "UTM Medium" },
+    { key: "utmCampaign", label: "UTM Campaign" },
+    { key: "utmTerm", label: "UTM Term" },
+    { key: "productTemplate", label: "Template" },
     {
       key: "status",
       label: "Status",
@@ -663,6 +707,9 @@ export default function CampaignsPage() {
       }
       if (fbFilterDropdownRef.current && !fbFilterDropdownRef.current.contains(event.target as Node)) {
         setShowFbFilterDropdown(false);
+      }
+      if (fbColumnPickerRef.current && !fbColumnPickerRef.current.contains(event.target as Node)) {
+        setShowFbColumnPicker(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -1774,6 +1821,47 @@ export default function CampaignsPage() {
                   </div>
                 )}
               </div>
+
+              {/* Columns */}
+              <div className="relative" ref={fbColumnPickerRef}>
+                <button
+                  onClick={() => setShowFbColumnPicker(!showFbColumnPicker)}
+                  className="btn btn-secondary btn-sm"
+                >
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                  </svg>
+                  Columns ({fbVisibleColumns.size})
+                </button>
+                {showFbColumnPicker && (
+                  <div className="dropdown right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto">
+                    <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
+                      <button onClick={showAllFbColumns} className="btn btn-secondary btn-sm flex-1">
+                        Show All
+                      </button>
+                      <button onClick={resetFbColumns} className="btn btn-secondary btn-sm flex-1">
+                        Reset
+                      </button>
+                    </div>
+                    <div className="p-2">
+                      {fbColumns.filter((c) => c.key !== "actions").map((col) => (
+                        <label
+                          key={String(col.key)}
+                          className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
+                        >
+                          <input
+                            type="checkbox"
+                            checked={fbVisibleColumns.has(String(col.key))}
+                            onChange={() => toggleFbColumn(String(col.key))}
+                            className="rounded"
+                          />
+                          <span className="text-sm">{col.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Filter Pills */}
@@ -1846,7 +1934,7 @@ export default function CampaignsPage() {
               <p className="text-zinc-500 p-4">Loading...</p>
             ) : (
               <Table
-                columns={fbColumns}
+                columns={fbColumns.filter((c) => fbVisibleColumns.has(String(c.key)) || c.key === "actions")}
                 data={filteredFbCampaigns}
                 rowKey="id"
                 emptyMessage="No campaigns yet. Add your first campaign to enable order attribution."
@@ -2103,8 +2191,8 @@ export default function CampaignsPage() {
 
       {/* ── Facebook Delete Modal ───────────────────── */}
       {fbDeleteId && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={() => setFbDeleteId(null)}>
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl p-6 max-w-sm w-full mx-4" onClick={(e) => e.stopPropagation()}>
             <h3 className="text-lg font-semibold mb-4">Delete Campaign?</h3>
             <p className="text-sm text-zinc-600 dark:text-zinc-400 mb-6">
               This action cannot be undone.
@@ -2130,8 +2218,8 @@ export default function CampaignsPage() {
 
       {/* ── Facebook Add/Edit Modal ─────────────────── */}
       {showFbModal && (
-        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto">
+        <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" onClick={closeFbModal}>
+          <div className="bg-white dark:bg-zinc-900 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between items-center px-6 py-4 border-b border-zinc-200 dark:border-zinc-700">
               <h2 className="text-lg font-semibold">{fbIsEditing ? "Edit Campaign" : "Add Campaign"}</h2>
               <button

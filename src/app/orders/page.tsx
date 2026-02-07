@@ -1,10 +1,122 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
+
+const UTM_SOURCE_OPTIONS = ["facebook", "instagram", "google", "tiktok"];
+
+function EditableSelect({
+  value,
+  options,
+  onSave,
+}: {
+  value: string | null;
+  options: string[];
+  onSave: (val: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const selectRef = useRef<HTMLSelectElement>(null);
+
+  useEffect(() => {
+    if (editing && selectRef.current) {
+      selectRef.current.focus();
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        className="inline-flex items-center gap-1 text-left w-full group hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+        onClick={() => setEditing(true)}
+      >
+        <span className="truncate">{value || "-"}</span>
+        <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <select
+      ref={selectRef}
+      value={value || ""}
+      onChange={(e) => {
+        onSave(e.target.value || null);
+        setEditing(false);
+      }}
+      onBlur={() => setEditing(false)}
+      className="border border-zinc-300 dark:border-zinc-600 rounded px-1.5 py-0.5 text-xs bg-white dark:bg-zinc-800 w-full"
+    >
+      <option value="">-- clear --</option>
+      {options.map((opt) => (
+        <option key={opt} value={opt}>{opt}</option>
+      ))}
+    </select>
+  );
+}
+
+function EditableText({
+  value,
+  onSave,
+}: {
+  value: string | null;
+  onSave: (val: string | null) => void;
+}) {
+  const [editing, setEditing] = useState(false);
+  const [draft, setDraft] = useState(value || "");
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  if (!editing) {
+    return (
+      <button
+        className="inline-flex items-center gap-1 text-left w-full group hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+        onClick={() => {
+          setDraft(value || "");
+          setEditing(true);
+        }}
+      >
+        <span className="truncate">{value || "-"}</span>
+        <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        </svg>
+      </button>
+    );
+  }
+
+  return (
+    <input
+      ref={inputRef}
+      type="text"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => {
+        onSave(draft || null);
+        setEditing(false);
+      }}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") {
+          onSave(draft || null);
+          setEditing(false);
+        }
+        if (e.key === "Escape") {
+          setEditing(false);
+        }
+      }}
+      className="border border-zinc-300 dark:border-zinc-600 rounded px-1.5 py-0.5 text-xs bg-white dark:bg-zinc-800 w-full"
+    />
+  );
+}
 
 interface Order {
   id: number;
@@ -42,6 +154,7 @@ interface ColumnDef {
   sticky?: boolean;
   primary?: boolean;
   filterable?: boolean;
+  editable?: "source" | "campaign" | "text";
   render?: (value: unknown, order: Order) => React.ReactNode;
 }
 
@@ -65,11 +178,11 @@ const allColumns: ColumnDef[] = [
   { key: "quantity", label: "Qty", defaultVisible: true },
   { key: "skus", label: "SKUs", defaultVisible: false, filterable: true },
   { key: "discountCodes", label: "Discount", defaultVisible: true, filterable: true },
-  { key: "utmSource", label: "Source", defaultVisible: true, filterable: true },
-  { key: "utmMedium", label: "Medium", defaultVisible: false, filterable: true },
-  { key: "utmCampaign", label: "Campaign", defaultVisible: true, filterable: true },
-  { key: "utmContent", label: "Content", defaultVisible: false, filterable: true },
-  { key: "utmTerm", label: "Term", defaultVisible: false, filterable: true },
+  { key: "utmSource", label: "Source", defaultVisible: true, filterable: true, editable: "source" },
+  { key: "utmMedium", label: "Medium", defaultVisible: false, filterable: true, editable: "text" },
+  { key: "utmCampaign", label: "Campaign", defaultVisible: true, filterable: true, editable: "campaign" },
+  { key: "utmContent", label: "Content", defaultVisible: false, filterable: true, editable: "text" },
+  { key: "utmTerm", label: "Term", defaultVisible: false, filterable: true, editable: "text" },
   { key: "trackingNumber", label: "Tracking", defaultVisible: false },
   { key: "tags", label: "Tags", defaultVisible: false, filterable: true },
   { key: "hasConversionData", label: "Conv?", defaultVisible: true, filterable: true, render: (v) => formatBoolean(v as boolean) },
@@ -164,6 +277,37 @@ export default function OrdersPage() {
 
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
+
+  // UTM campaign options from DB
+  const [utmCampaignOptions, setUtmCampaignOptions] = useState<string[]>([]);
+
+  const updateOrderUtm = useCallback(
+    async (orderId: number, field: string, value: string | null) => {
+      try {
+        const res = await fetch("/api/orders", {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ id: orderId, [field]: value }),
+        });
+        if (!res.ok) throw new Error("Failed to update");
+        setOrders((prev) =>
+          prev.map((o) => (o.id === orderId ? { ...o, [field]: value } : o))
+        );
+      } catch (err) {
+        console.error("UTM update failed:", err);
+      }
+    },
+    []
+  );
+
+  useEffect(() => {
+    fetch("/api/campaigns/utm-options")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.utmCampaigns) setUtmCampaignOptions(data.utmCampaigns);
+      })
+      .catch(() => {});
+  }, []);
 
   useEffect(() => {
     fetch("/api/orders?limit=1000")
@@ -359,13 +503,42 @@ export default function OrdersPage() {
 
   const activeColumns: Column<Order>[] = allColumns
     .filter((c) => visibleColumns.has(c.key))
-    .map((c) => ({
-      key: c.key,
-      label: c.label,
-      sticky: c.sticky,
-      primary: c.primary,
-      render: c.render,
-    }));
+    .map((c) => {
+      let render = c.render;
+
+      if (c.editable === "source") {
+        render = (_value: unknown, order: Order) => (
+          <EditableSelect
+            value={order[c.key] as string | null}
+            options={UTM_SOURCE_OPTIONS}
+            onSave={(val) => updateOrderUtm(order.id, c.key, val)}
+          />
+        );
+      } else if (c.editable === "campaign") {
+        render = (_value: unknown, order: Order) => (
+          <EditableSelect
+            value={order[c.key] as string | null}
+            options={utmCampaignOptions}
+            onSave={(val) => updateOrderUtm(order.id, c.key, val)}
+          />
+        );
+      } else if (c.editable === "text") {
+        render = (_value: unknown, order: Order) => (
+          <EditableText
+            value={order[c.key] as string | null}
+            onSave={(val) => updateOrderUtm(order.id, c.key, val)}
+          />
+        );
+      }
+
+      return {
+        key: c.key,
+        label: c.label,
+        sticky: c.sticky,
+        primary: c.primary,
+        render,
+      };
+    });
 
   // Filter modal unique values (with search)
   const editingFilterValues = useMemo(() => {
@@ -570,7 +743,7 @@ export default function OrdersPage() {
               Columns ({activeColumns.length})
             </button>
             {showColumnPicker && (
-              <div className="dropdown right-0 mt-2 w-64 max-h-96 overflow-y-auto">
+              <div className="dropdown right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto">
                 <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
                   <button onClick={showAllColumns} className="btn btn-secondary btn-sm flex-1">
                     Show All
