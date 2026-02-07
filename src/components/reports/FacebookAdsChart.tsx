@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, subMonths, subDays, startOfDay, endOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
@@ -20,13 +20,13 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "revenue", label: "Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "orders", label: "Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "fbSpend", label: "FB Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
-  { key: "netCashIn", label: "Net Cash In", color: "#f97316", visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "adRevenue", label: "Ad Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "adSpend", label: "Ad Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "fbOrders", label: "FB Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
+  { key: "roas", label: "ROAS", color: "#10b981", visible: true, type: "line", yAxisId: "right", showDots: false },
 ];
 
-const STORAGE_KEY = "shopify-chart-settings";
+const STORAGE_KEY = "facebook-ads-chart-settings";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -45,10 +45,10 @@ function loadSeriesConfig(): SeriesConfig[] {
 
 interface DataPoint {
   date: string;
-  revenue: number;
-  orders: number;
-  fbSpend: number;
-  netCashIn: number;
+  adRevenue: number;
+  adSpend: number;
+  fbOrders: number;
+  roas: number;
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -83,7 +83,11 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {entry.name === "Orders" ? entry.value : formatCurrency(entry.value)}
+            {entry.name === "ROAS"
+              ? `${entry.value.toFixed(2)}x`
+              : entry.name === "FB Orders"
+                ? entry.value
+                : formatCurrency(entry.value)}
           </span>
         </div>
       ))}
@@ -91,12 +95,12 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function ShopifyChart() {
+export function FacebookAdsChart() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(subMonths(new Date(), 12)),
+    from: startOfDay(subDays(new Date(), 90)),
     to: endOfDay(new Date()),
   });
-  const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [groupBy, setGroupBy] = useState<GroupBy>("week");
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
@@ -117,12 +121,12 @@ export function ShopifyChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/shopify?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await fetch(`/api/reports/facebook-ads?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      console.error("Failed to fetch shopify report:", err);
+      console.error("Failed to fetch facebook ads report:", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -161,7 +165,7 @@ export function ShopifyChart() {
       }
 
       if (isCurrentPeriod && daysElapsed > 0) {
-        const actual = d.revenue;
+        const actual = d.adRevenue;
         const projected = (actual / daysElapsed) * totalDays;
         forecast = Math.max(0, Math.round((projected - actual) * 100) / 100);
       }
@@ -177,14 +181,18 @@ export function ShopifyChart() {
   });
 
   const totals = useMemo(() => {
-    return data.reduce(
+    const sums = data.reduce(
       (acc, d) => ({
-        revenue: acc.revenue + d.revenue,
-        orders: acc.orders + d.orders,
-        netCashIn: acc.netCashIn + d.netCashIn,
+        adRevenue: acc.adRevenue + d.adRevenue,
+        adSpend: acc.adSpend + d.adSpend,
+        fbOrders: acc.fbOrders + d.fbOrders,
       }),
-      { revenue: 0, orders: 0, netCashIn: 0 }
+      { adRevenue: 0, adSpend: 0, fbOrders: 0 }
     );
+    return {
+      ...sums,
+      roas: sums.adSpend > 0 ? Math.round((sums.adRevenue / sums.adSpend) * 100) / 100 : 0,
+    };
   }, [data]);
 
   return (
@@ -241,6 +249,15 @@ export function ShopifyChart() {
                   axisLine={false}
                   width={50}
                 />
+                <YAxis
+                  yAxisId="right"
+                  orientation="right"
+                  tickFormatter={(v: number) => `${v.toFixed(1)}x`}
+                  tick={{ fontSize: 12, fill: "var(--color-zinc-500)" }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={45}
+                />
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
                   verticalAlign="top"
@@ -292,21 +309,27 @@ export function ShopifyChart() {
         {/* Scorecards */}
         <div className="flex flex-col gap-3 w-44 shrink-0 pt-11">
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.revenue)}
+              {loading ? "—" : formatCurrency(totals.adRevenue)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : totals.orders.toLocaleString()}
+              {loading ? "—" : formatCurrency(totals.adSpend)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Net Cash In</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">ROAS</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.netCashIn)}
+              {loading ? "—" : totals.roas.toFixed(2)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">FB Orders</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : totals.fbOrders.toLocaleString()}
             </p>
           </div>
         </div>

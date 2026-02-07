@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ShopifyChart } from "@/components/reports/ShopifyChart";
+import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 
 const tabs = [
   { key: "dashboard", label: "Dashboard" },
@@ -48,6 +49,8 @@ export default function ReportsPage() {
       <div className="page-content">
         {activeTab === "shopify" ? (
           <ShopifyChart />
+        ) : activeTab === "facebook-ads" ? (
+          <FacebookAdsChart />
         ) : (
           tabs
             .filter((tab) => tab.key === activeTab)
