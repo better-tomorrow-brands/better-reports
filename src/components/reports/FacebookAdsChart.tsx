@@ -1,9 +1,9 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, subDays, startOfDay, endOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
-import { DateRangePicker } from "@/components/DateRangePicker";
+import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import {
   ComposedChart,
@@ -96,10 +96,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function FacebookAdsChart() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>({
-    from: startOfDay(subDays(new Date(), 90)),
-    to: endOfDay(new Date()),
-  });
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+    () => presets.find((p) => p.label === "Last 90 days")!.getValue()
+  );
   const [groupBy, setGroupBy] = useState<GroupBy>("week");
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);

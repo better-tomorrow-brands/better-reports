@@ -1,11 +1,11 @@
 "use client";
 
 import * as React from "react";
-import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday, isSameDay } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 
 // Preset options
-const presets = [
+export const presets = [
   { label: "Today", getValue: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
   { label: "Yesterday", getValue: () => ({ from: startOfYesterday(), to: endOfYesterday() }) },
   { label: "Last 7 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) }) },
@@ -31,7 +31,16 @@ export function DateRangePicker({
     return new Date(now.getFullYear(), now.getMonth() - 1, 1);
   });
   const [rightMonth, setRightMonth] = React.useState<Date>(() => new Date());
-  const [selectedPreset, setSelectedPreset] = React.useState<string | null>(null);
+  const [selectedPreset, setSelectedPreset] = React.useState<string | null>(() => {
+    if (!dateRange?.from || !dateRange?.to) return null;
+    for (const preset of presets) {
+      const r = preset.getValue();
+      if (isSameDay(dateRange.from, r.from) && isSameDay(dateRange.to, r.to)) {
+        return preset.label;
+      }
+    }
+    return null;
+  });
   const containerRef = React.useRef<HTMLDivElement>(null);
 
   React.useEffect(() => {
@@ -46,6 +55,7 @@ export function DateRangePicker({
 
   const formatDateRange = () => {
     if (!dateRange?.from) return placeholder;
+    if (selectedPreset) return selectedPreset;
     if (!dateRange.to) return format(dateRange.from, "dd MMM yyyy");
     return `${format(dateRange.from, "dd MMM yyyy")} - ${format(dateRange.to, "dd MMM yyyy")}`;
   };
