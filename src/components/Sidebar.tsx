@@ -6,7 +6,6 @@ import { UserButton } from "@clerk/nextjs";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 const navLinks = [
-  { href: "/", label: "Dashboard" },
   { href: "/reports", label: "Reports" },
   { href: "/orders", label: "Orders" },
   { href: "/customers", label: "Customers" },
