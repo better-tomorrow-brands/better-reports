@@ -1,21 +1,15 @@
-const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
 const envPath = path.resolve(__dirname, "..", ".env.local");
+const pkgPath = path.resolve(__dirname, "..", "package.json");
 
-// On Vercel, git is in detached HEAD so use the env var
-const branch =
-  process.env.VERCEL_GIT_COMMIT_REF ||
-  execSync("git branch --show-current", { encoding: "utf-8" }).trim();
-
-const match = branch.match(/^(v\d+\.\d+\.\d+)/);
-const version = match ? match[1] : "dev";
+const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+const version = `v${pkg.version}`;
 
 let content = "";
 if (fs.existsSync(envPath)) {
   content = fs.readFileSync(envPath, "utf-8");
-  // Replace existing line or append
   if (content.includes("NEXT_PUBLIC_APP_VERSION=")) {
     content = content.replace(
       /NEXT_PUBLIC_APP_VERSION=.*/,
@@ -29,4 +23,4 @@ if (fs.existsSync(envPath)) {
 }
 
 fs.writeFileSync(envPath, content);
-console.log(`Set NEXT_PUBLIC_APP_VERSION=${version} (branch: ${branch})`);
+console.log(`Set NEXT_PUBLIC_APP_VERSION=${version}`);
