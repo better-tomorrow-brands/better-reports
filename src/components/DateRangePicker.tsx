@@ -9,6 +9,7 @@ export const presets = [
   { label: "Today", getValue: () => ({ from: startOfDay(new Date()), to: endOfDay(new Date()) }) },
   { label: "Yesterday", getValue: () => ({ from: startOfYesterday(), to: endOfYesterday() }) },
   { label: "Last 7 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 6)), to: endOfDay(new Date()) }) },
+  { label: "Last 14 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 13)), to: endOfDay(new Date()) }) },
   { label: "Last 30 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 29)), to: endOfDay(new Date()) }) },
   { label: "Last 90 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 89)), to: endOfDay(new Date()) }) },
   { label: "Last 12 months", getValue: () => ({ from: startOfDay(subDays(new Date(), 364)), to: endOfDay(new Date()) }) },
