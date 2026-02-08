@@ -306,11 +306,14 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
     isRepeatCustomer,
   };
 
+  // On update, exclude utmSource/utmMedium/utmCampaign to preserve manual edits
+  const { utmSource, utmMedium, utmCampaign, ...updateData } = orderData;
+
   await db
     .insert(orders)
     .values(orderData)
     .onConflictDoUpdate({
       target: orders.shopifyId,
-      set: orderData,
+      set: updateData,
     });
 }
