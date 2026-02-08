@@ -20,13 +20,12 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "revenue", label: "Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "orders", label: "Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "fbSpend", label: "FB Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "shopifyRevenue", label: "Shopify", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "amazonRevenue", label: "Amazon", color: "#f59e0b", visible: true, type: "bar", yAxisId: "left", showDots: false },
   { key: "netCashIn", label: "Net Cash In", color: "#f97316", visible: true, type: "line", yAxisId: "left", showDots: true },
 ];
 
-const STORAGE_KEY = "shopify-chart-settings";
+const STORAGE_KEY = "overall-chart-settings";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -45,9 +44,8 @@ function loadSeriesConfig(): SeriesConfig[] {
 
 interface DataPoint {
   date: string;
-  revenue: number;
-  orders: number;
-  fbSpend: number;
+  shopifyRevenue: number;
+  amazonRevenue: number;
   netCashIn: number;
 }
 
@@ -75,6 +73,11 @@ function formatCurrency(value: number): string {
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null;
   const visible = payload.filter((e) => !(e.name === "Forecast" && e.value === 0));
+  // Compute total revenue from stacked bars
+  const shopify = payload.find((e) => e.name === "Shopify")?.value ?? 0;
+  const amazon = payload.find((e) => e.name === "Amazon")?.value ?? 0;
+  const totalRevenue = shopify + amazon;
+
   return (
     <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
       <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
@@ -83,15 +86,24 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {entry.name === "Orders" ? entry.value : formatCurrency(entry.value)}
+            {formatCurrency(entry.value)}
           </span>
         </div>
       ))}
+      {shopify > 0 && amazon > 0 && (
+        <div className="flex items-center gap-2 py-0.5 mt-1 border-t border-zinc-200 dark:border-zinc-700 pt-1.5">
+          <span className="w-3 h-3 shrink-0" />
+          <span className="text-zinc-600 dark:text-zinc-400">Total Revenue:</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            {formatCurrency(totalRevenue)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }
 
-export function ShopifyChart() {
+export function OverallChart() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
@@ -100,7 +112,6 @@ export function ShopifyChart() {
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
 
-  // Load persisted config on mount
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
   }, []);
@@ -116,12 +127,12 @@ export function ShopifyChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/shopify?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await fetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      console.error("Failed to fetch shopify report:", err);
+      console.error("Failed to fetch overall report:", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -132,12 +143,14 @@ export function ShopifyChart() {
     fetchData();
   }, [fetchData]);
 
-  const barSeries = seriesConfig.find((s) => s.type === "bar");
+  const barSeries = seriesConfig.filter((s) => s.type === "bar" && s.visible);
+  const hasVisibleBars = barSeries.length > 0;
 
   const chartData = data.map((d, i) => {
-    let forecast = 0;
+    let shopifyForecast = 0;
+    let amazonForecast = 0;
 
-    if (i === data.length - 1 && groupBy !== "day" && barSeries?.visible) {
+    if (i === data.length - 1 && groupBy !== "day" && hasVisibleBars) {
       const today = new Date();
       const lastDate = new Date(d.date);
       let isCurrentPeriod = false;
@@ -160,9 +173,11 @@ export function ShopifyChart() {
       }
 
       if (isCurrentPeriod && daysElapsed > 0) {
-        const actual = d.revenue;
-        const remaining = (actual / daysElapsed) * (totalDays - daysElapsed);
-        forecast = Math.max(0, Math.round((remaining - actual) * 100) / 100);
+        const remainingDays = totalDays - daysElapsed;
+        const shopifyRemaining = (d.shopifyRevenue / daysElapsed) * remainingDays;
+        shopifyForecast = Math.max(0, Math.round((shopifyRemaining - d.shopifyRevenue) * 100) / 100);
+        const amazonRemaining = (d.amazonRevenue / daysElapsed) * remainingDays;
+        amazonForecast = Math.max(0, Math.round((amazonRemaining - d.amazonRevenue) * 100) / 100);
       }
     }
 
@@ -171,18 +186,19 @@ export function ShopifyChart() {
       dateLabel: groupBy === "month"
         ? format(new Date(d.date), "MMM yyyy")
         : format(new Date(d.date), "dd MMM"),
-      forecast,
+      shopifyForecast,
+      amazonForecast,
     };
   });
 
   const totals = useMemo(() => {
     return data.reduce(
       (acc, d) => ({
-        revenue: acc.revenue + d.revenue,
-        orders: acc.orders + d.orders,
+        shopifyRevenue: acc.shopifyRevenue + d.shopifyRevenue,
+        amazonRevenue: acc.amazonRevenue + d.amazonRevenue,
         netCashIn: acc.netCashIn + d.netCashIn,
       }),
-      { revenue: 0, orders: 0, netCashIn: 0 }
+      { shopifyRevenue: 0, amazonRevenue: 0, netCashIn: 0 }
     );
   }, [data]);
 
@@ -254,7 +270,7 @@ export function ShopifyChart() {
                       dataKey={s.key}
                       name={s.label}
                       fill={s.color}
-                      stackId="bar"
+                      stackId="revenue"
                       maxBarSize={40}
                     />
                   ) : (
@@ -270,15 +286,28 @@ export function ShopifyChart() {
                     />
                   )
                 )}
-                {barSeries?.visible && (
+                {/* Forecast overlays */}
+                {seriesConfig.find((s) => s.key === "shopifyRevenue")?.visible && (
                   <Bar
                     yAxisId="left"
-                    dataKey="forecast"
+                    dataKey="shopifyForecast"
                     name="Forecast"
                     legendType="none"
-                    fill={barSeries.color}
+                    fill={seriesConfig.find((s) => s.key === "shopifyRevenue")!.color}
                     fillOpacity={0.3}
-                    stackId="bar"
+                    stackId="revenue"
+                    maxBarSize={40}
+                  />
+                )}
+                {seriesConfig.find((s) => s.key === "amazonRevenue")?.visible && (
+                  <Bar
+                    yAxisId="left"
+                    dataKey="amazonForecast"
+                    name="Forecast"
+                    legendType="none"
+                    fill={seriesConfig.find((s) => s.key === "amazonRevenue")!.color}
+                    fillOpacity={0.3}
+                    stackId="revenue"
                     radius={[2, 2, 0, 0]}
                     maxBarSize={40}
                   />
@@ -291,15 +320,21 @@ export function ShopifyChart() {
         {/* Scorecards */}
         <div className="flex flex-col gap-3 w-44 shrink-0 pt-11">
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.revenue)}
+              {loading ? "—" : formatCurrency(totals.shopifyRevenue + totals.amazonRevenue)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Shopify</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : totals.orders.toLocaleString()}
+              {loading ? "—" : formatCurrency(totals.shopifyRevenue)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Amazon</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : formatCurrency(totals.amazonRevenue)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">

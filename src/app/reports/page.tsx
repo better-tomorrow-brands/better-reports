@@ -2,16 +2,18 @@
 
 import { useState } from "react";
 import { ShopifyChart } from "@/components/reports/ShopifyChart";
+import { AmazonChart } from "@/components/reports/AmazonChart";
+import { OverallChart } from "@/components/reports/OverallChart";
 import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
 
 const tabs = [
-  { key: "dashboard", label: "Dashboard" },
+  { key: "campaigns", label: "Dashboard" },
   { key: "cashflow", label: "Cashflow" },
+  { key: "overall", label: "Overall" },
   { key: "amazon", label: "Amazon" },
   { key: "shopify", label: "Shopify" },
   { key: "facebook-ads", label: "Facebook Ads" },
-  { key: "campaigns", label: "Campaigns" },
   { key: "sessions", label: "Sessions" },
   { key: "traffic", label: "Traffic" },
   { key: "ecommerce", label: "E-commerce" },
@@ -20,7 +22,7 @@ const tabs = [
 type TabKey = (typeof tabs)[number]["key"];
 
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [activeTab, setActiveTab] = useState<TabKey>("campaigns");
 
   return (
     <div className="page-container">
@@ -48,7 +50,11 @@ export default function ReportsPage() {
       </div>
 
       <div className="page-content">
-        {activeTab === "shopify" ? (
+        {activeTab === "overall" ? (
+          <OverallChart />
+        ) : activeTab === "amazon" ? (
+          <AmazonChart />
+        ) : activeTab === "shopify" ? (
           <ShopifyChart />
         ) : activeTab === "facebook-ads" ? (
           <FacebookAdsChart />

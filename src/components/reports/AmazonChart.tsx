@@ -20,13 +20,12 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "revenue", label: "Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "orders", label: "Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "fbSpend", label: "FB Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
-  { key: "netCashIn", label: "Net Cash In", color: "#f97316", visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "revenue", label: "Revenue", color: "#f59e0b", visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "unitsOrdered", label: "Units Ordered", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
+  { key: "sessions", label: "Sessions", color: "#8b5cf6", visible: false, type: "line", yAxisId: "left", showDots: false },
 ];
 
-const STORAGE_KEY = "shopify-chart-settings";
+const STORAGE_KEY = "amazon-chart-settings";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -46,9 +45,8 @@ function loadSeriesConfig(): SeriesConfig[] {
 interface DataPoint {
   date: string;
   revenue: number;
-  orders: number;
-  fbSpend: number;
-  netCashIn: number;
+  unitsOrdered: number;
+  sessions: number;
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -83,7 +81,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {entry.name === "Orders" ? entry.value : formatCurrency(entry.value)}
+            {entry.name === "Units Ordered" || entry.name === "Sessions"
+              ? entry.value.toLocaleString()
+              : formatCurrency(entry.value)}
           </span>
         </div>
       ))}
@@ -91,7 +91,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function ShopifyChart() {
+export function AmazonChart() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
@@ -100,7 +100,6 @@ export function ShopifyChart() {
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
 
-  // Load persisted config on mount
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
   }, []);
@@ -116,12 +115,12 @@ export function ShopifyChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/shopify?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await fetch(`/api/reports/amazon?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      console.error("Failed to fetch shopify report:", err);
+      console.error("Failed to fetch amazon report:", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -179,10 +178,10 @@ export function ShopifyChart() {
     return data.reduce(
       (acc, d) => ({
         revenue: acc.revenue + d.revenue,
-        orders: acc.orders + d.orders,
-        netCashIn: acc.netCashIn + d.netCashIn,
+        unitsOrdered: acc.unitsOrdered + d.unitsOrdered,
+        sessions: acc.sessions + d.sessions,
       }),
-      { revenue: 0, orders: 0, netCashIn: 0 }
+      { revenue: 0, unitsOrdered: 0, sessions: 0 }
     );
   }, [data]);
 
@@ -297,15 +296,15 @@ export function ShopifyChart() {
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units Ordered</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : totals.orders.toLocaleString()}
+              {loading ? "—" : totals.unitsOrdered.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Net Cash In</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.netCashIn)}
+              {loading ? "—" : totals.sessions.toLocaleString()}
             </p>
           </div>
         </div>
