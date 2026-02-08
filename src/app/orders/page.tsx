@@ -278,6 +278,10 @@ export default function OrdersPage() {
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
 
+  // Sync
+  const [syncing, setSyncing] = useState(false);
+  const [syncMessage, setSyncMessage] = useState<string | null>(null);
+
   // UTM campaign options from DB
   const [utmCampaignOptions, setUtmCampaignOptions] = useState<string[]>([]);
 
@@ -309,7 +313,7 @@ export default function OrdersPage() {
       .catch(() => {});
   }, []);
 
-  useEffect(() => {
+  const fetchOrders = useCallback(() => {
     fetch("/api/orders?limit=1000")
       .then((res) => res.json())
       .then((data) => {
@@ -323,6 +327,30 @@ export default function OrdersPage() {
       .catch(() => setError("Failed to load orders"))
       .finally(() => setLoading(false));
   }, []);
+
+  useEffect(() => {
+    fetchOrders();
+  }, [fetchOrders]);
+
+  const handleSync = useCallback(async () => {
+    setSyncing(true);
+    setSyncMessage(null);
+    try {
+      const res = await fetch("/api/orders/sync", { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) {
+        setSyncMessage(data.error || "Sync failed");
+      } else {
+        setSyncMessage(`Synced ${data.upserted} order${data.upserted === 1 ? "" : "s"}`);
+        fetchOrders();
+      }
+    } catch {
+      setSyncMessage("Sync failed");
+    } finally {
+      setSyncing(false);
+      setTimeout(() => setSyncMessage(null), 3000);
+    }
+  }, [fetchOrders]);
 
   useEffect(() => {
     setVisibleColumns(getInitialColumns());
@@ -645,6 +673,32 @@ export default function OrdersPage() {
             onChange={(e) => setSearch(e.target.value)}
             className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
           />
+
+          {/* Sync */}
+          <div className="relative">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="btn btn-secondary btn-sm"
+            >
+              {syncing ? (
+                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
+              )}
+              {syncing ? "Syncing..." : "Sync"}
+            </button>
+            {syncMessage && (
+              <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
+                {syncMessage}
+              </div>
+            )}
+          </div>
 
           {/* Sort */}
           <div className="relative" ref={sortModalRef}>
