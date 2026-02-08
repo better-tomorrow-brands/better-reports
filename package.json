@@ -3,7 +3,7 @@
   "version": "1.0.6",
   "private": true,
   "scripts": {
-    "dev": "next dev",
+    "dev": "node scripts/set-version.js && next dev",
     "build": "node scripts/set-version.js && drizzle-kit migrate && next build",
     "start": "next start",
     "lint": "eslint",
@@ -15,6 +15,7 @@
     "@clerk/nextjs": "^6.37.3",
     "@neondatabase/serverless": "^1.0.2",
     "@tremor/react": "^3.18.7",
+    "csv-parse": "^6.1.0",
     "date-fns": "^4.1.0",
     "drizzle-orm": "^0.45.1",
     "googleapis": "^171.0.0",

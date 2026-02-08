@@ -17,8 +17,16 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/cron/amazon",
+      "path": "/api/cron/amazon?job=sales-traffic",
       "schedule": "0 8 * * *"
+    },
+    {
+      "path": "/api/cron/amazon?job=finances",
+      "schedule": "30 8 * * *"
+    },
+    {
+      "path": "/api/cron/amazon?job=inventory",
+      "schedule": "0 9 * * *"
     }
   ]
 }

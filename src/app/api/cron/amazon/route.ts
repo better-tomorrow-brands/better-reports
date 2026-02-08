@@ -1,39 +1,121 @@
-import { NextResponse } from 'next/server';
-import { db } from '@/lib/db';
-import { syncLogs } from '@/lib/db/schema';
+import { NextResponse } from "next/server";
+import { db } from "@/lib/db";
+import { syncLogs } from "@/lib/db/schema";
+import { getAmazonSettings } from "@/lib/settings";
+import {
+  fetchSalesTrafficReport,
+  upsertSalesTraffic,
+  fetchFinancialEvents,
+  upsertFinancialEvents,
+  fetchInventory,
+  upsertInventory,
+} from "@/lib/amazon";
+
+export const maxDuration = 300;
+
+function formatDate(d: Date): string {
+  return d.toISOString().split("T")[0];
+}
+
+function daysAgo(n: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() - n);
+  return formatDate(d);
+}
 
 export async function GET(request: Request) {
-  // Verify cron secret in production
-  const authHeader = request.headers.get('authorization');
+  const authHeader = request.headers.get("authorization");
   if (
     process.env.CRON_SECRET &&
     authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
-    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  try {
-    // TODO: Implement Amazon Selling Partner API integration
-    // Will need: AMAZON_REFRESH_TOKEN, AMAZON_CLIENT_ID, AMAZON_CLIENT_SECRET
+  const url = new URL(request.url);
+  const job = url.searchParams.get("job") || "sales-traffic";
 
-    const timestamp = new Date();
+  const settings = await getAmazonSettings();
+  if (!settings) {
+    return NextResponse.json(
+      { error: "Amazon settings not configured" },
+      { status: 400 }
+    );
+  }
+
+  const timestamp = new Date();
+
+  try {
+    let result: Record<string, unknown>;
+
+    switch (job) {
+      case "sales-traffic": {
+        // Lookback strategy: fetch multiple date ranges to catch late data
+        const lookbacks = [
+          { start: daysAgo(3), end: daysAgo(2) },   // day-2 to day-3
+          { start: daysAgo(7), end: daysAgo(7) },   // day-7
+          { start: daysAgo(30), end: daysAgo(30) },  // day-30
+        ];
+
+        let totalRows = 0;
+        for (const lb of lookbacks) {
+          const rows = await fetchSalesTrafficReport(settings, lb.start, lb.end);
+          const upserted = await upsertSalesTraffic(rows);
+          totalRows += upserted;
+        }
+
+        result = { job, totalRows, lookbacks };
+        break;
+      }
+
+      case "finances": {
+        const postedAfter = new Date(daysAgo(3) + "T00:00:00Z").toISOString();
+        const postedBefore = new Date(Date.now() - 3 * 60000).toISOString(); // 3 min ago per API requirement
+        const txns = await fetchFinancialEvents(settings, postedAfter, postedBefore);
+        const upserted = await upsertFinancialEvents(txns);
+        result = { job, transactions: txns.length, upserted };
+        break;
+      }
+
+      case "inventory": {
+        const items = await fetchInventory(settings);
+        const snapshotDate = formatDate(new Date());
+        const upserted = await upsertInventory(items, snapshotDate);
+        result = { job, items: items.length, upserted, snapshotDate };
+        break;
+      }
+
+      default:
+        return NextResponse.json(
+          { error: `Unknown job: ${job}. Use: sales-traffic, finances, inventory` },
+          { status: 400 }
+        );
+    }
 
     await db.insert(syncLogs).values({
-      source: "amazon",
-      status: "pending",
+      source: `amazon-${job}`,
+      status: "success",
       syncedAt: timestamp,
-      details: "Cron job triggered - placeholder",
+      details: JSON.stringify(result),
     });
 
-    return NextResponse.json({
-      success: true,
-      message: 'Amazon sync placeholder',
-      timestamp,
-    });
+    return NextResponse.json({ success: true, ...result, timestamp });
   } catch (error) {
-    console.error('Amazon sync error:', error);
+    console.error(`Amazon ${job} sync error:`, error);
+
+    await db.insert(syncLogs).values({
+      source: `amazon-${job}`,
+      status: "error",
+      syncedAt: timestamp,
+      details: (error instanceof Error ? error.message : String(error)).replace(/\0/g, "").slice(0, 1000),
+    });
+
+    const errMsg = (error instanceof Error ? error.message : String(error)).replace(/\0/g, "");
     return NextResponse.json(
-      { error: 'Failed to sync Amazon data' },
+      {
+        error: `Failed to sync Amazon ${job}`,
+        details: errMsg,
+      },
       { status: 500 }
     );
   }

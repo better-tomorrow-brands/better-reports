@@ -15,6 +15,13 @@ export interface ShopifySettings {
   webhook_secret: string;
 }
 
+export interface AmazonSettings {
+  client_id: string;
+  client_secret: string;
+  refresh_token: string;
+  marketplace_id: string; // A1F83G8C2ARO7P for UK
+}
+
 export interface LifecycleSettings {
   newMaxDays: number;      // New: ≤ this many days (default 30)
   reorderMaxDays: number;  // Due Reorder: newMaxDays+1 to this (default 60)
@@ -60,6 +67,16 @@ export async function getShopifySettings(): Promise<ShopifySettings | null> {
 
 export async function saveShopifySettings(shopify: ShopifySettings): Promise<void> {
   await setSetting("shopify", JSON.stringify(shopify));
+}
+
+export async function getAmazonSettings(): Promise<AmazonSettings | null> {
+  const raw = await getSetting("amazon");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function saveAmazonSettings(amazon: AmazonSettings): Promise<void> {
+  await setSetting("amazon", JSON.stringify(amazon));
 }
 
 export const DEFAULT_LIFECYCLE_SETTINGS: LifecycleSettings = {
