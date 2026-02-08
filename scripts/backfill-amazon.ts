@@ -220,7 +220,7 @@ async function main() {
     current.setDate(current.getDate() + 1);
   }
 
-  const toProcess = dates.filter((d) => !existingDates.has(d));
+  const toProcess = dates.filter((d) => !existingDates.has(d)).reverse(); // most recent first
   console.log(`   Total dates: ${dates.length}, to process: ${toProcess.length}, skipping: ${dates.length - toProcess.length}\n`);
 
   let success = 0;
