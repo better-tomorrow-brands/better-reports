@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { ShopifyChart } from "@/components/reports/ShopifyChart";
+import { AmazonChart } from "@/components/reports/AmazonChart";
 import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
 
@@ -48,7 +49,9 @@ export default function ReportsPage() {
       </div>
 
       <div className="page-content">
-        {activeTab === "shopify" ? (
+        {activeTab === "amazon" ? (
+          <AmazonChart />
+        ) : activeTab === "shopify" ? (
           <ShopifyChart />
         ) : activeTab === "facebook-ads" ? (
           <FacebookAdsChart />

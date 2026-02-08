@@ -1,6 +1,6 @@
 {
   "name": "better-reports",
-  "version": "1.0.9",
+  "version": "1.0.10",
   "private": true,
   "scripts": {
     "dev": "node scripts/set-version.js && next dev",
