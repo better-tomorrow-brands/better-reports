@@ -1,6 +1,6 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { getMetaSettings, saveMetaSettings, getShopifySettings, saveShopifySettings } from "@/lib/settings";
+import { getMetaSettings, saveMetaSettings, getShopifySettings, saveShopifySettings, getAmazonSettings, saveAmazonSettings } from "@/lib/settings";
 
 export async function GET() {
   const { userId } = await auth();
@@ -11,6 +11,7 @@ export async function GET() {
   try {
     const meta = await getMetaSettings();
     const shopify = await getShopifySettings();
+    const amazon = await getAmazonSettings();
 
     // Mask tokens for display
     const maskedMeta = meta
@@ -34,7 +35,19 @@ export async function GET() {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify });
+    const maskedAmazon = amazon
+      ? {
+          ...amazon,
+          client_secret: amazon.client_secret
+            ? `${amazon.client_secret.slice(0, 6)}...`
+            : "",
+          refresh_token: amazon.refresh_token
+            ? `${amazon.refresh_token.slice(0, 10)}...${amazon.refresh_token.slice(-4)}`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon });
   } catch (error) {
     console.error("Settings GET error:", error);
     return NextResponse.json(
@@ -79,6 +92,23 @@ export async function POST(request: Request) {
         }
       }
       await saveShopifySettings(body.shopify);
+    }
+
+    if (body.amazon) {
+      // If secrets look masked, keep the existing ones
+      if (body.amazon.client_secret?.includes("...")) {
+        const existing = await getAmazonSettings();
+        if (existing) {
+          body.amazon.client_secret = existing.client_secret;
+        }
+      }
+      if (body.amazon.refresh_token?.includes("...")) {
+        const existing = await getAmazonSettings();
+        if (existing) {
+          body.amazon.refresh_token = existing.refresh_token;
+        }
+      }
+      await saveAmazonSettings(body.amazon);
     }
 
     return NextResponse.json({ success: true });

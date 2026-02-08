@@ -12,6 +12,117 @@ import {
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
+// ── Products (Master product database) ────────────────────
+export const products = pgTable("products", {
+  id: serial("id").primaryKey(),
+  sku: text("sku").notNull().unique(),
+  productName: text("product_name"),
+  brand: text("brand"),
+  unitBarcode: text("unit_barcode"),
+  asin: text("asin"),
+  parentAsin: text("parent_asin"),
+  shippoSku: text("shippo_sku"),
+
+  piecesPerPack: integer("pieces_per_pack"),
+  packWeightKg: decimal("pack_weight_kg", { precision: 10, scale: 3 }),
+  packLengthCm: decimal("pack_length_cm", { precision: 10, scale: 2 }),
+  packWidthCm: decimal("pack_width_cm", { precision: 10, scale: 2 }),
+  packHeightCm: decimal("pack_height_cm", { precision: 10, scale: 2 }),
+  unitCbm: decimal("unit_cbm", { precision: 10, scale: 6 }),
+  dimensionalWeight: decimal("dimensional_weight", { precision: 10, scale: 3 }),
+
+  unitPriceUsd: decimal("unit_price_usd", { precision: 10, scale: 4 }),
+  unitPriceGbp: decimal("unit_price_gbp", { precision: 10, scale: 4 }),
+  packCostGbp: decimal("pack_cost_gbp", { precision: 10, scale: 4 }),
+  landedCost: decimal("landed_cost", { precision: 10, scale: 4 }),
+  unitLcogs: decimal("unit_lcogs", { precision: 10, scale: 4 }),
+  dtcRrp: decimal("dtc_rrp", { precision: 10, scale: 2 }),
+  ppUnit: decimal("pp_unit", { precision: 10, scale: 4 }),
+  dtcRrpExVat: decimal("dtc_rrp_ex_vat", { precision: 10, scale: 2 }),
+
+  // Amazon channel fields
+  amazonRrp: decimal("amazon_rrp", { precision: 10, scale: 2 }),
+  fbaFee: decimal("fba_fee", { precision: 10, scale: 2 }),
+  referralPercent: decimal("referral_percent", { precision: 5, scale: 2 }),
+
+  // DTC channel fields
+  dtcFulfillmentFee: decimal("dtc_fulfillment_fee", { precision: 10, scale: 2 }),
+  dtcCourier: decimal("dtc_courier", { precision: 10, scale: 2 }),
+
+  cartonBarcode: text("carton_barcode"),
+  unitsPerMasterCarton: integer("units_per_master_carton"),
+  piecesPerMasterCarton: integer("pieces_per_master_carton"),
+  grossWeightKg: decimal("gross_weight_kg", { precision: 10, scale: 3 }),
+  cartonWidthCm: decimal("carton_width_cm", { precision: 10, scale: 2 }),
+  cartonLengthCm: decimal("carton_length_cm", { precision: 10, scale: 2 }),
+  cartonHeightCm: decimal("carton_height_cm", { precision: 10, scale: 2 }),
+  cartonCbm: decimal("carton_cbm", { precision: 10, scale: 6 }),
+
+  active: boolean("active").default(true),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Amazon Sales & Traffic (Daily by-ASIN) ───────────────
+export const amazonSalesTraffic = pgTable("amazon_sales_traffic", {
+  id: serial("id").primaryKey(),
+  date: date("date").notNull(),
+  parentAsin: text("parent_asin"),
+  childAsin: text("child_asin").notNull(),
+  // Sales metrics
+  unitsOrdered: integer("units_ordered").default(0),
+  unitsOrderedB2b: integer("units_ordered_b2b").default(0),
+  orderedProductSales: decimal("ordered_product_sales", { precision: 12, scale: 2 }).default("0"),
+  orderedProductSalesB2b: decimal("ordered_product_sales_b2b", { precision: 12, scale: 2 }).default("0"),
+  totalOrderItems: integer("total_order_items").default(0),
+  totalOrderItemsB2b: integer("total_order_items_b2b").default(0),
+  // Traffic metrics
+  browserSessions: integer("browser_sessions").default(0),
+  mobileSessions: integer("mobile_sessions").default(0),
+  sessions: integer("sessions").default(0),
+  browserSessionPercentage: real("browser_session_percentage").default(0),
+  mobileSessionPercentage: real("mobile_session_percentage").default(0),
+  sessionPercentage: real("session_percentage").default(0),
+  browserPageViews: integer("browser_page_views").default(0),
+  mobilePageViews: integer("mobile_page_views").default(0),
+  pageViews: integer("page_views").default(0),
+  browserPageViewsPercentage: real("browser_page_views_percentage").default(0),
+  mobilePageViewsPercentage: real("mobile_page_views_percentage").default(0),
+  pageViewsPercentage: real("page_views_percentage").default(0),
+  buyBoxPercentage: real("buy_box_percentage").default(0),
+  unitSessionPercentage: real("unit_session_percentage").default(0),
+  unitSessionPercentageB2b: real("unit_session_percentage_b2b").default(0),
+}, (table) => [
+  uniqueIndex("amazon_sales_traffic_date_asin_idx")
+    .on(table.date, table.childAsin),
+]);
+
+// ── Amazon Financial Events ──────────────────────────────
+export const amazonFinancialEvents = pgTable("amazon_financial_events", {
+  id: serial("id").primaryKey(),
+  transactionId: text("transaction_id").notNull().unique(),
+  transactionType: text("transaction_type"),
+  postedDate: timestamp("posted_date", { withTimezone: true }),
+  totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
+  totalCurrency: text("total_currency"),
+  relatedIdentifiers: text("related_identifiers"), // JSON
+  items: text("items"), // JSON
+  breakdowns: text("breakdowns"), // JSON
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Inventory Snapshots (Daily per-SKU) ──────────────────
+export const inventorySnapshots = pgTable("inventory_snapshots", {
+  id: serial("id").primaryKey(),
+  sku: text("sku").notNull(),
+  date: date("date").notNull(),
+  amazonQty: integer("amazon_qty").default(0),
+  warehouseQty: integer("warehouse_qty").default(0),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("inventory_snapshots_sku_date_idx").on(table.sku, table.date),
+]);
+
 // ── Users ──────────────────────────────────────────────
 export const users = pgTable("users", {
   id: text("id").primaryKey(), // Clerk user ID
