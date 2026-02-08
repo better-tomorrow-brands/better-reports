@@ -1,24 +1,35 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Link from "next/link";
 import { UserButton } from "@clerk/nextjs";
 import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 
 const navLinks = [
   { href: "/reports", label: "Reports" },
-  { href: "/orders", label: "Orders" },
-  { href: "/customers", label: "Customers" },
-  { href: "/inventory", label: "Inventory" },
-  { href: "/campaigns", label: "Campaigns" },
-  { href: "/users", label: "Users" },
-  { href: "/settings", label: "Settings" },
+  { href: "/orders", label: "Orders", adminOnly: true },
+  { href: "/customers", label: "Customers", adminOnly: true },
+  { href: "/inventory", label: "Inventory", adminOnly: true },
+  { href: "/campaigns", label: "Campaigns", adminOnly: true },
+  { href: "/users", label: "Users", adminOnly: true },
+  { href: "/settings", label: "Settings", adminOnly: true },
 ];
 
 const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
 export default function Sidebar() {
   const [isOpen, setIsOpen] = useState(true);
+  const [role, setRole] = useState<string | null>(null);
+
+  useEffect(() => {
+    fetch("/api/users/me")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setRole(data?.role ?? "user"))
+      .catch(() => setRole("user"));
+  }, []);
+
+  const isAdmin = role === "admin" || role === "super_admin";
+  const visibleLinks = navLinks.filter((link) => !link.adminOnly || isAdmin);
 
   return (
     <aside
@@ -48,7 +59,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex flex-col gap-1 px-3 text-sm flex-1">
-        {navLinks.map((link) => (
+        {visibleLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}
