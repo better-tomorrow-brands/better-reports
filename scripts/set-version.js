@@ -2,10 +2,9 @@ const { execSync } = require("child_process");
 const fs = require("fs");
 const path = require("path");
 
-const envPath = path.resolve(__dirname, "..", ".env.local");
+const pkgPath = path.resolve(__dirname, "..", "package.json");
 
 function getVersionFromBranch(branch) {
-  // Extract semver from branch name, e.g. "v1.0.9-amazon" → "1.0.9"
   const match = branch.match(/v?(\d+\.\d+\.\d+)/);
   return match ? match[1] : null;
 }
@@ -18,33 +17,23 @@ try {
   version = getVersionFromBranch(branch);
 } catch {}
 
-// 2. Fallback: Vercel env var (branch name available in CI)
+// 2. Fallback: Vercel env var
 if (!version && process.env.VERCEL_GIT_COMMIT_REF) {
   version = getVersionFromBranch(process.env.VERCEL_GIT_COMMIT_REF);
 }
 
-// 3. Fallback: package.json
-if (!version) {
-  const pkg = JSON.parse(fs.readFileSync(path.resolve(__dirname, "..", "package.json"), "utf-8"));
+// If we found a version from the branch, update package.json so it persists after merge to master
+if (version) {
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
+  if (pkg.version !== version) {
+    pkg.version = version;
+    fs.writeFileSync(pkgPath, JSON.stringify(pkg, null, 2) + "\n");
+    console.log(`Updated package.json version to ${version}`);
+  }
+} else {
+  // No version in branch name — use package.json as-is
+  const pkg = JSON.parse(fs.readFileSync(pkgPath, "utf-8"));
   version = pkg.version;
 }
 
-const versionStr = `v${version}`;
-
-let content = "";
-if (fs.existsSync(envPath)) {
-  content = fs.readFileSync(envPath, "utf-8");
-  if (content.includes("NEXT_PUBLIC_APP_VERSION=")) {
-    content = content.replace(
-      /NEXT_PUBLIC_APP_VERSION=.*/,
-      `NEXT_PUBLIC_APP_VERSION=${versionStr}`
-    );
-  } else {
-    content = content.trimEnd() + `\nNEXT_PUBLIC_APP_VERSION=${versionStr}\n`;
-  }
-} else {
-  content = `NEXT_PUBLIC_APP_VERSION=${versionStr}\n`;
-}
-
-fs.writeFileSync(envPath, content);
-console.log(`Set NEXT_PUBLIC_APP_VERSION=${versionStr} (from branch)`);
+console.log(`App version: v${version}`);
