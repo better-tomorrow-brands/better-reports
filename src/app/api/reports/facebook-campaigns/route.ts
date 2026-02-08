@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, facebookAds, campaignsFcb } from "@/lib/db/schema";
+import { orders, facebookAds, campaignsFcb, posthogAnalytics } from "@/lib/db/schema";
 import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const [campaignRows, fbRows, orderRows] = await Promise.all([
+    const [campaignRows, fbRows, orderRows, allOrdersRow, sessionsRow] = await Promise.all([
       // Campaign name lookup from campaigns_fcb
       db
         .select({
@@ -42,7 +42,7 @@ export async function GET(request: Request) {
         .where(and(gte(facebookAds.date, from), lte(facebookAds.date, to)))
         .groupBy(facebookAds.utmCampaign),
 
-      // Orders grouped by utm_campaign
+      // Orders grouped by utm_campaign (facebook only)
       db
         .select({
           utmCampaign: orders.utmCampaign,
@@ -58,6 +58,33 @@ export async function GET(request: Request) {
           )
         )
         .groupBy(orders.utmCampaign),
+
+      // Total orders + revenue (all sources, unfiltered)
+      db
+        .select({
+          orderCount: count().as("order_count"),
+          revenue: sum(orders.total).as("revenue"),
+        })
+        .from(orders)
+        .where(
+          and(
+            gte(orders.createdAt, new Date(from)),
+            lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
+          )
+        ),
+
+      // Total sessions from PostHog
+      db
+        .select({
+          sessions: sum(posthogAnalytics.totalSessions).as("sessions"),
+        })
+        .from(posthogAnalytics)
+        .where(
+          and(
+            gte(posthogAnalytics.date, from),
+            lte(posthogAnalytics.date, to)
+          )
+        ),
     ]);
 
     // Build lookup maps
@@ -111,7 +138,29 @@ export async function GET(request: Request) {
     // Sort by ad spend descending
     rows.sort((a, b) => b.adSpend - a.adSpend);
 
-    return NextResponse.json({ rows });
+    // Build unfiltered totals for scorecards
+    const totalRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
+    const totalOrders = Number(allOrdersRow[0]?.orderCount) || 0;
+    const totalSessions = Number(sessionsRow[0]?.sessions) || 0;
+    const totalAdSpend = rows.reduce((s, r) => s + r.adSpend, 0);
+    const conversionRate = totalSessions > 0
+      ? Math.round((totalOrders / totalSessions) * 10000) / 100
+      : 0;
+    const roas = totalAdSpend > 0
+      ? Math.round((totalRevenue / totalAdSpend) * 100) / 100
+      : 0;
+
+    return NextResponse.json({
+      rows,
+      totals: {
+        revenue: totalRevenue,
+        sessions: totalSessions,
+        orders: totalOrders,
+        conversionRate,
+        adSpend: Math.round(totalAdSpend * 100) / 100,
+        roas,
+      },
+    });
   } catch (error) {
     console.error("Reports facebook-campaigns GET error:", error);
     return NextResponse.json(

@@ -7,12 +7,11 @@ import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
 
 const tabs = [
-  { key: "dashboard", label: "Dashboard" },
+  { key: "campaigns", label: "Dashboard" },
   { key: "cashflow", label: "Cashflow" },
   { key: "amazon", label: "Amazon" },
   { key: "shopify", label: "Shopify" },
   { key: "facebook-ads", label: "Facebook Ads" },
-  { key: "campaigns", label: "Campaigns" },
   { key: "sessions", label: "Sessions" },
   { key: "traffic", label: "Traffic" },
   { key: "ecommerce", label: "E-commerce" },
@@ -21,7 +20,7 @@ const tabs = [
 type TabKey = (typeof tabs)[number]["key"];
 
 export default function ReportsPage() {
-  const [activeTab, setActiveTab] = useState<TabKey>("dashboard");
+  const [activeTab, setActiveTab] = useState<TabKey>("campaigns");
 
   return (
     <div className="page-container">

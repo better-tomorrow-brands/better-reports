@@ -47,6 +47,15 @@ interface CampaignRow {
   costPerResult: number;
 }
 
+interface Totals {
+  revenue: number;
+  sessions: number;
+  orders: number;
+  conversionRate: number;
+  adSpend: number;
+  roas: number;
+}
+
 type SortKey = keyof CampaignRow;
 type SortDir = "asc" | "desc";
 
@@ -147,9 +156,10 @@ function TableSettingsPopover({
 
 export function FacebookCampaignsTable() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
-    () => presets.find((p) => p.label === "Last 7 days")!.getValue()
+    () => presets.find((p) => p.label === "Today")!.getValue()
   );
   const [rows, setRows] = useState<CampaignRow[]>([]);
+  const [overallTotals, setOverallTotals] = useState<Totals>({ revenue: 0, sessions: 0, orders: 0, conversionRate: 0, adSpend: 0, roas: 0 });
   const [loading, setLoading] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
   const [sortKey, setSortKey] = useState<SortKey>("roas");
@@ -185,9 +195,11 @@ export function FacebookCampaignsTable() {
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setRows(json.rows);
+      setOverallTotals(json.totals);
     } catch (err) {
       console.error("Failed to fetch facebook campaigns:", err);
       setRows([]);
+      setOverallTotals({ revenue: 0, sessions: 0, orders: 0, conversionRate: 0, adSpend: 0, roas: 0 });
     } finally {
       setLoading(false);
     }
@@ -253,7 +265,49 @@ export function FacebookCampaignsTable() {
         <TableSettingsPopover columns={columns} onChange={handleColumnsChange} />
       </div>
 
-      {/* Table */}
+      {/* Overall */}
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Overall</h2>
+      <div className="grid grid-cols-6 gap-3 mb-6">
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : formatCurrency(overallTotals.revenue)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : overallTotals.sessions.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : overallTotals.orders.toLocaleString()}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Conversion Rate</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : `${overallTotals.conversionRate.toFixed(2)}%`}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : formatCurrency(overallTotals.adSpend)}
+          </p>
+        </div>
+        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">ROAS</p>
+          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+            {loading ? "—" : overallTotals.roas.toFixed(2)}
+          </p>
+        </div>
+      </div>
+
+      {/* Facebook performance */}
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Facebook Performance</h2>
       {loading ? (
         <div className="flex items-center justify-center h-80 text-zinc-400">
           Loading...
