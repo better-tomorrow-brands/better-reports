@@ -184,6 +184,7 @@ export function DateRangePicker({
                   month={leftMonth}
                   onMonthChange={setLeftMonth}
                   showOutsideDays
+                  weekStartsOn={1}
                   hideNavigation
                   classNames={{
                     root: "rdp-root",
@@ -230,6 +231,7 @@ export function DateRangePicker({
                   month={rightMonth}
                   onMonthChange={setRightMonth}
                   showOutsideDays
+                  weekStartsOn={1}
                   hideNavigation
                   classNames={{
                     root: "rdp-root",

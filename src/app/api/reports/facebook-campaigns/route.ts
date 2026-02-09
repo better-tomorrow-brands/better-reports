@@ -1,7 +1,7 @@
 import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, facebookAds, campaignsFcb, posthogAnalytics } from "@/lib/db/schema";
+import { orders, facebookAds, campaignsFcb, posthogAnalytics, amazonSalesTraffic } from "@/lib/db/schema";
 import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
 
 export async function GET(request: Request) {
@@ -22,7 +22,7 @@ export async function GET(request: Request) {
       );
     }
 
-    const [campaignRows, fbRows, orderRows, allOrdersRow, sessionsRow] = await Promise.all([
+    const [campaignRows, fbRows, orderRows, allOrdersRow, sessionsRow, amazonRow] = await Promise.all([
       // Campaign name lookup from campaigns_fcb
       db
         .select({
@@ -85,6 +85,20 @@ export async function GET(request: Request) {
             lte(posthogAnalytics.date, to)
           )
         ),
+
+      // Amazon revenue + orders
+      db
+        .select({
+          revenue: sum(amazonSalesTraffic.orderedProductSales).as("revenue"),
+          orders: sum(amazonSalesTraffic.unitsOrdered).as("orders"),
+        })
+        .from(amazonSalesTraffic)
+        .where(
+          and(
+            gte(amazonSalesTraffic.date, from),
+            lte(amazonSalesTraffic.date, to)
+          )
+        ),
     ]);
 
     // Build lookup maps
@@ -139,26 +153,22 @@ export async function GET(request: Request) {
     rows.sort((a, b) => b.adSpend - a.adSpend);
 
     // Build unfiltered totals for scorecards
-    const totalRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
-    const totalOrders = Number(allOrdersRow[0]?.orderCount) || 0;
+    const shopifyRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
+    const shopifyOrders = Number(allOrdersRow[0]?.orderCount) || 0;
+    const amazonRevenue = Math.round((Number(amazonRow[0]?.revenue) || 0) * 100) / 100;
+    const amazonOrders = Number(amazonRow[0]?.orders) || 0;
     const totalSessions = Number(sessionsRow[0]?.sessions) || 0;
     const totalAdSpend = rows.reduce((s, r) => s + r.adSpend, 0);
-    const conversionRate = totalSessions > 0
-      ? Math.round((totalOrders / totalSessions) * 10000) / 100
-      : 0;
-    const roas = totalAdSpend > 0
-      ? Math.round((totalRevenue / totalAdSpend) * 100) / 100
-      : 0;
 
     return NextResponse.json({
       rows,
       totals: {
-        revenue: totalRevenue,
+        shopifyRevenue,
+        shopifyOrders,
+        amazonRevenue,
+        amazonOrders,
         sessions: totalSessions,
-        orders: totalOrders,
-        conversionRate,
         adSpend: Math.round(totalAdSpend * 100) / 100,
-        roas,
       },
     });
   } catch (error) {
