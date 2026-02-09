@@ -27,6 +27,20 @@
   /* Interactive */
   --primary-bg: #18181b;
   --primary-text: #ffffff;
+
+  /* Brand / Chart colors */
+  --color-shopify: #c4d34f;
+  --color-amazon: #f59e0b;
+  --color-facebook: #4472c4;
+  --color-fb-spend: #6366f1;
+  --color-net-cash: #f97316;
+  --color-roas: #10b981;
+  --color-sessions: #8b5cf6;
+  --color-bounce: #ef4444;
+  --color-visitors: #2d2d2d;
+  --color-organic: #f4b940;
+  --color-social: #4285f4;
+  --color-direct: #7bc67e;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -89,10 +103,20 @@ body {
 
 .page-content {
   flex: 1;
-  overflow: hidden;
+  overflow: auto;
   padding: 0 1.5rem 1.5rem;
   display: flex;
   flex-direction: column;
+}
+
+/* Mobile padding */
+@media (max-width: 768px) {
+  .page-header {
+    padding: 1rem 1rem 0;
+  }
+  .page-content {
+    padding: 0 1rem 1rem;
+  }
 }
 
 /* ============================================

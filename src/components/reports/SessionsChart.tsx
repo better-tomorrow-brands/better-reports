@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
@@ -21,12 +21,13 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "shopifyRevenue", label: "Shopify", color: chartColors.shopify, visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "amazonRevenue", label: "Amazon", color: chartColors.amazon, visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "netCashIn", label: "Net Cash In", color: chartColors.netCash, visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "totalSessions", label: "Sessions", color: chartColors.shopify, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "uniqueVisitors", label: "Unique Visitors", color: chartColors.visitors, visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "pageviews", label: "Pageviews", color: chartColors.fbSpend, visible: true, type: "line", yAxisId: "left", showDots: false },
+  { key: "bounceRate", label: "Bounce Rate %", color: chartColors.bounce, visible: false, type: "line", yAxisId: "right", showDots: true },
 ];
 
-const STORAGE_KEY = "overall-chart-settings";
+const STORAGE_KEY = "sessions-chart-settings";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -45,9 +46,17 @@ function loadSeriesConfig(): SeriesConfig[] {
 
 interface DataPoint {
   date: string;
-  shopifyRevenue: number;
-  amazonRevenue: number;
-  netCashIn: number;
+  totalSessions: number;
+  uniqueVisitors: number;
+  pageviews: number;
+  bounceRate: number;
+  avgSessionDuration: number;
+  mobileSessions: number;
+  desktopSessions: number;
+  directSessions: number;
+  organicSessions: number;
+  paidSessions: number;
+  socialSessions: number;
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -63,62 +72,33 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    minimumFractionDigits: 2,
-  }).format(value);
+function formatDuration(seconds: number): string {
+  const m = Math.floor(seconds / 60);
+  const s = Math.round(seconds % 60);
+  return m > 0 ? `${m}m ${s}s` : `${s}s`;
 }
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null;
-  const shopify = payload.find((e) => e.name === "Shopify")?.value ?? 0;
-  const amazon = payload.find((e) => e.name === "Amazon")?.value ?? 0;
-  const shopifyForecast = payload.find((e) => e.name === "Forecast" && e.color === (payload.find((p) => p.name === "Shopify")?.color))?.value ?? 0;
-  const totalRevenue = shopify + amazon;
-  // Filter out forecast entries from main list
-  const visible = payload.filter((e) => e.name !== "Forecast");
-  // Sum all forecast values
-  const totalForecast = payload
-    .filter((e) => e.name === "Forecast")
-    .reduce((sum, e) => sum + (e.value ?? 0), 0);
-
   return (
     <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
       <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
-      {visible.map((entry) => (
+      {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2 py-0.5">
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(entry.value)}
+            {entry.name === "Bounce Rate %"
+              ? `${entry.value}%`
+              : entry.value.toLocaleString()}
           </span>
         </div>
       ))}
-      {(shopify > 0 || amazon > 0) && (
-        <div className="flex items-center gap-2 py-0.5 mt-1 border-t border-zinc-200 dark:border-zinc-700 pt-1.5">
-          <span className="w-3 h-3 rounded-sm shrink-0 bg-zinc-900 dark:bg-zinc-100" />
-          <span className="text-zinc-600 dark:text-zinc-400">Total Revenue:</span>
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(totalRevenue)}
-          </span>
-        </div>
-      )}
-      {totalForecast > 0 && (
-        <div className="flex items-center gap-2 py-0.5">
-          <span className="w-3 h-3 rounded-sm shrink-0 bg-zinc-900/40 dark:bg-zinc-100/40" />
-          <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(totalRevenue + totalForecast)}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
-export function OverallChart() {
+export function SessionsChart() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
@@ -142,12 +122,12 @@ export function OverallChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await fetch(`/api/reports/sessions?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      console.error("Failed to fetch overall report:", err);
+      console.error("Failed to fetch sessions report:", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -158,63 +138,31 @@ export function OverallChart() {
     fetchData();
   }, [fetchData]);
 
-  const barSeries = seriesConfig.filter((s) => s.type === "bar" && s.visible);
-  const hasVisibleBars = barSeries.length > 0;
+  const chartData = data.map((d) => ({
+    ...d,
+    dateLabel: groupBy === "month"
+      ? format(new Date(d.date), "MMM yyyy")
+      : format(new Date(d.date), "dd MMM"),
+  }));
 
-  const chartData = data.map((d, i) => {
-    let shopifyForecast = 0;
-    let amazonForecast = 0;
-
-    if (i === data.length - 1 && groupBy !== "day" && hasVisibleBars) {
-      const today = new Date();
-      const lastDate = new Date(d.date);
-      let isCurrentPeriod = false;
-      let daysElapsed = 0;
-      let totalDays = 0;
-
-      if (groupBy === "month") {
-        isCurrentPeriod = lastDate.getFullYear() === today.getFullYear() && lastDate.getMonth() === today.getMonth();
-        if (isCurrentPeriod) {
-          daysElapsed = today.getDate();
-          totalDays = getDaysInMonth(today);
-        }
-      } else if (groupBy === "week") {
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-        isCurrentPeriod = d.date === format(weekStart, "yyyy-MM-dd");
-        if (isCurrentPeriod) {
-          daysElapsed = differenceInDays(startOfDay(today), weekStart) + 1;
-          totalDays = 7;
-        }
-      }
-
-      if (isCurrentPeriod && daysElapsed > 0) {
-        const remainingDays = totalDays - daysElapsed;
-        const shopifyRemaining = (d.shopifyRevenue / daysElapsed) * remainingDays;
-        shopifyForecast = Math.max(0, Math.round((shopifyRemaining - d.shopifyRevenue) * 100) / 100);
-        const amazonRemaining = (d.amazonRevenue / daysElapsed) * remainingDays;
-        amazonForecast = Math.max(0, Math.round((amazonRemaining - d.amazonRevenue) * 100) / 100);
-      }
-    }
-
-    return {
-      ...d,
-      dateLabel: groupBy === "month"
-        ? format(new Date(d.date), "MMM yyyy")
-        : format(new Date(d.date), "dd MMM"),
-      shopifyForecast,
-      amazonForecast,
-    };
-  });
+  const hasRightAxis = seriesConfig.some((s) => s.yAxisId === "right" && s.visible);
 
   const totals = useMemo(() => {
-    return data.reduce(
+    const sum = data.reduce(
       (acc, d) => ({
-        shopifyRevenue: acc.shopifyRevenue + d.shopifyRevenue,
-        amazonRevenue: acc.amazonRevenue + d.amazonRevenue,
-        netCashIn: acc.netCashIn + d.netCashIn,
+        totalSessions: acc.totalSessions + d.totalSessions,
+        uniqueVisitors: acc.uniqueVisitors + d.uniqueVisitors,
+        pageviews: acc.pageviews + d.pageviews,
+        avgSessionDuration: acc.avgSessionDuration + d.avgSessionDuration,
+        bounceRate: acc.bounceRate + d.bounceRate,
       }),
-      { shopifyRevenue: 0, amazonRevenue: 0, netCashIn: 0 }
+      { totalSessions: 0, uniqueVisitors: 0, pageviews: 0, avgSessionDuration: 0, bounceRate: 0 }
     );
+    return {
+      ...sum,
+      avgSessionDuration: data.length > 0 ? sum.avgSessionDuration / data.length : 0,
+      bounceRate: data.length > 0 ? Math.round((sum.bounceRate / data.length) * 100) / 100 : 0,
+    };
   }, [data]);
 
   return (
@@ -271,6 +219,17 @@ export function OverallChart() {
                   axisLine={false}
                   width={50}
                 />
+                {hasRightAxis && (
+                  <YAxis
+                    yAxisId="right"
+                    orientation="right"
+                    tickFormatter={(v) => `${v}%`}
+                    tick={{ fontSize: 12, fill: "var(--color-zinc-500)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={45}
+                  />
+                )}
                 <Tooltip content={<CustomTooltip />} />
                 <Legend
                   verticalAlign="top"
@@ -285,8 +244,8 @@ export function OverallChart() {
                       dataKey={s.key}
                       name={s.label}
                       fill={s.color}
-                      stackId="revenue"
                       maxBarSize={40}
+                      radius={[2, 2, 0, 0]}
                     />
                   ) : (
                     <Line
@@ -301,32 +260,6 @@ export function OverallChart() {
                     />
                   )
                 )}
-                {/* Forecast overlays */}
-                {seriesConfig.find((s) => s.key === "shopifyRevenue")?.visible && (
-                  <Bar
-                    yAxisId="left"
-                    dataKey="shopifyForecast"
-                    name="Forecast"
-                    legendType="none"
-                    fill={seriesConfig.find((s) => s.key === "shopifyRevenue")!.color}
-                    fillOpacity={0.3}
-                    stackId="revenue"
-                    maxBarSize={40}
-                  />
-                )}
-                {seriesConfig.find((s) => s.key === "amazonRevenue")?.visible && (
-                  <Bar
-                    yAxisId="left"
-                    dataKey="amazonForecast"
-                    name="Forecast"
-                    legendType="none"
-                    fill={seriesConfig.find((s) => s.key === "amazonRevenue")!.color}
-                    fillOpacity={0.3}
-                    stackId="revenue"
-                    radius={[2, 2, 0, 0]}
-                    maxBarSize={40}
-                  />
-                )}
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -335,27 +268,33 @@ export function OverallChart() {
         {/* Scorecards */}
         <div className="flex flex-col gap-3 w-44 shrink-0 pt-11">
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.shopifyRevenue + totals.amazonRevenue)}
+              {loading ? "—" : totals.totalSessions.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Shopify</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Unique Visitors</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.shopifyRevenue)}
+              {loading ? "—" : totals.uniqueVisitors.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Amazon</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Pageviews</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.amazonRevenue)}
+              {loading ? "—" : totals.pageviews.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Net Cash In</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Avg Duration</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.netCashIn)}
+              {loading ? "—" : formatDuration(totals.avgSessionDuration)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Bounce Rate</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : `${totals.bounceRate}%`}
             </p>
           </div>
         </div>

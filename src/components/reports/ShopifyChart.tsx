@@ -5,6 +5,7 @@ import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } fro
 import { DateRange } from "react-day-picker";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
+import { chartColors } from "@/lib/chart-colors";
 import {
   ComposedChart,
   Bar,
@@ -20,10 +21,10 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "revenue", label: "Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "orders", label: "Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "fbSpend", label: "FB Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
-  { key: "netCashIn", label: "Net Cash In", color: "#f97316", visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "revenue", label: "Revenue", color: chartColors.shopify, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "orders", label: "Orders", color: chartColors.facebook, visible: false, type: "line", yAxisId: "left", showDots: false },
+  { key: "fbSpend", label: "FB Spend", color: chartColors.fbSpend, visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "netCashIn", label: "Net Cash In", color: chartColors.netCash, visible: true, type: "line", yAxisId: "left", showDots: true },
 ];
 
 const STORAGE_KEY = "shopify-chart-settings";
@@ -74,7 +75,9 @@ function formatCurrency(value: number): string {
 
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null;
-  const visible = payload.filter((e) => !(e.name === "Forecast" && e.value === 0));
+  const revenue = payload.find((e) => e.name === "Revenue")?.value ?? 0;
+  const forecast = payload.find((e) => e.name === "Forecast")?.value ?? 0;
+  const visible = payload.filter((e) => e.name !== "Forecast");
   return (
     <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
       <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
@@ -87,6 +90,15 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           </span>
         </div>
       ))}
+      {forecast > 0 && (
+        <div className="flex items-center gap-2 py-0.5 mt-1 border-t border-zinc-200 dark:border-zinc-700 pt-1.5">
+          <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: visible.find((e) => e.name === "Revenue")?.color, opacity: 0.4 }} />
+          <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            {formatCurrency(revenue + forecast)}
+          </span>
+        </div>
+      )}
     </div>
   );
 }

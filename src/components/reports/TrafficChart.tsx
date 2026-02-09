@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
@@ -21,12 +21,14 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "revenue", label: "Revenue", color: chartColors.amazon, visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "unitsOrdered", label: "Units Ordered", color: chartColors.facebook, visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "sessions", label: "Sessions", color: chartColors.sessions, visible: false, type: "line", yAxisId: "left", showDots: false },
+  { key: "organicSessions", label: "Organic", color: chartColors.organic, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "socialSessions", label: "Social", color: chartColors.social, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "directSessions", label: "Direct", color: chartColors.direct, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "paidSessions", label: "Paid", color: chartColors.bounce, visible: false, type: "bar", yAxisId: "left", showDots: false },
+  { key: "totalSessions", label: "Total Sessions", color: chartColors.visitors, visible: true, type: "line", yAxisId: "left", showDots: true },
 ];
 
-const STORAGE_KEY = "amazon-chart-settings";
+const STORAGE_KEY = "traffic-chart-settings";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -45,9 +47,11 @@ function loadSeriesConfig(): SeriesConfig[] {
 
 interface DataPoint {
   date: string;
-  revenue: number;
-  unitsOrdered: number;
-  sessions: number;
+  totalSessions: number;
+  organicSessions: number;
+  socialSessions: number;
+  directSessions: number;
+  paidSessions: number;
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -63,51 +67,29 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
-  return new Intl.NumberFormat("en-GB", {
-    style: "currency",
-    currency: "GBP",
-    minimumFractionDigits: 2,
-  }).format(value);
-}
-
 function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
   if (!active || !payload?.length) return null;
-  const revenue = payload.find((e) => e.name === "Revenue")?.value ?? 0;
-  const forecast = payload.find((e) => e.name === "Forecast")?.value ?? 0;
-  const visible = payload.filter((e) => e.name !== "Forecast");
   return (
     <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
       <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
-      {visible.map((entry) => (
+      {payload.map((entry) => (
         <div key={entry.name} className="flex items-center gap-2 py-0.5">
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {entry.name === "Units Ordered" || entry.name === "Sessions"
-              ? entry.value.toLocaleString()
-              : formatCurrency(entry.value)}
+            {entry.value.toLocaleString()}
           </span>
         </div>
       ))}
-      {forecast > 0 && (
-        <div className="flex items-center gap-2 py-0.5 mt-1 border-t border-zinc-200 dark:border-zinc-700 pt-1.5">
-          <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: visible.find((e) => e.name === "Revenue")?.color, opacity: 0.4 }} />
-          <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
-          <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(revenue + forecast)}
-          </span>
-        </div>
-      )}
     </div>
   );
 }
 
-export function AmazonChart() {
+export function TrafficChart() {
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
-  const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [groupBy, setGroupBy] = useState<GroupBy>("week");
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
@@ -127,12 +109,12 @@ export function AmazonChart() {
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/amazon?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await fetch(`/api/reports/sessions?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      console.error("Failed to fetch amazon report:", err);
+      console.error("Failed to fetch traffic report:", err);
       setData([]);
     } finally {
       setLoading(false);
@@ -143,57 +125,23 @@ export function AmazonChart() {
     fetchData();
   }, [fetchData]);
 
-  const barSeries = seriesConfig.find((s) => s.type === "bar");
-
-  const chartData = data.map((d, i) => {
-    let forecast = 0;
-
-    if (i === data.length - 1 && groupBy !== "day" && barSeries?.visible) {
-      const today = new Date();
-      const lastDate = new Date(d.date);
-      let isCurrentPeriod = false;
-      let daysElapsed = 0;
-      let totalDays = 0;
-
-      if (groupBy === "month") {
-        isCurrentPeriod = lastDate.getFullYear() === today.getFullYear() && lastDate.getMonth() === today.getMonth();
-        if (isCurrentPeriod) {
-          daysElapsed = today.getDate();
-          totalDays = getDaysInMonth(today);
-        }
-      } else if (groupBy === "week") {
-        const weekStart = startOfWeek(today, { weekStartsOn: 1 });
-        isCurrentPeriod = d.date === format(weekStart, "yyyy-MM-dd");
-        if (isCurrentPeriod) {
-          daysElapsed = differenceInDays(startOfDay(today), weekStart) + 1;
-          totalDays = 7;
-        }
-      }
-
-      if (isCurrentPeriod && daysElapsed > 0) {
-        const actual = d.revenue;
-        const remaining = (actual / daysElapsed) * (totalDays - daysElapsed);
-        forecast = Math.max(0, Math.round((remaining - actual) * 100) / 100);
-      }
-    }
-
-    return {
-      ...d,
-      dateLabel: groupBy === "month"
-        ? format(new Date(d.date), "MMM yyyy")
-        : format(new Date(d.date), "dd MMM"),
-      forecast,
-    };
-  });
+  const chartData = data.map((d) => ({
+    ...d,
+    dateLabel: groupBy === "month"
+      ? format(new Date(d.date), "MMM yyyy")
+      : format(new Date(d.date), "dd MMM"),
+  }));
 
   const totals = useMemo(() => {
     return data.reduce(
       (acc, d) => ({
-        revenue: acc.revenue + d.revenue,
-        unitsOrdered: acc.unitsOrdered + d.unitsOrdered,
-        sessions: acc.sessions + d.sessions,
+        totalSessions: acc.totalSessions + d.totalSessions,
+        organicSessions: acc.organicSessions + d.organicSessions,
+        socialSessions: acc.socialSessions + d.socialSessions,
+        directSessions: acc.directSessions + d.directSessions,
+        paidSessions: acc.paidSessions + d.paidSessions,
       }),
-      { revenue: 0, unitsOrdered: 0, sessions: 0 }
+      { totalSessions: 0, organicSessions: 0, socialSessions: 0, directSessions: 0, paidSessions: 0 }
     );
   }, [data]);
 
@@ -257,43 +205,29 @@ export function AmazonChart() {
                   height={36}
                   wrapperStyle={{ fontSize: 12 }}
                 />
-                {seriesConfig.filter((s) => s.visible).map((s) =>
-                  s.type === "bar" ? (
-                    <Bar
-                      key={s.key}
-                      yAxisId={s.yAxisId}
-                      dataKey={s.key}
-                      name={s.label}
-                      fill={s.color}
-                      stackId="bar"
-                      maxBarSize={40}
-                    />
-                  ) : (
-                    <Line
-                      key={s.key}
-                      yAxisId={s.yAxisId}
-                      type="monotone"
-                      dataKey={s.key}
-                      name={s.label}
-                      stroke={s.color}
-                      strokeWidth={2}
-                      dot={s.showDots ? { r: 3, fill: s.color } : false}
-                    />
-                  )
-                )}
-                {barSeries?.visible && (
+                {seriesConfig.filter((s) => s.visible && s.type === "bar").map((s) => (
                   <Bar
-                    yAxisId="left"
-                    dataKey="forecast"
-                    name="Forecast"
-                    legendType="none"
-                    fill={barSeries.color}
-                    fillOpacity={0.3}
-                    stackId="bar"
-                    radius={[2, 2, 0, 0]}
+                    key={s.key}
+                    yAxisId={s.yAxisId}
+                    dataKey={s.key}
+                    name={s.label}
+                    fill={s.color}
+                    stackId="source"
                     maxBarSize={40}
                   />
-                )}
+                ))}
+                {seriesConfig.filter((s) => s.visible && s.type === "line").map((s) => (
+                  <Line
+                    key={s.key}
+                    yAxisId={s.yAxisId}
+                    type="monotone"
+                    dataKey={s.key}
+                    name={s.label}
+                    stroke={s.color}
+                    strokeWidth={2}
+                    dot={s.showDots ? { r: 3, fill: s.color } : false}
+                  />
+                ))}
               </ComposedChart>
             </ResponsiveContainer>
           )}
@@ -302,21 +236,33 @@ export function AmazonChart() {
         {/* Scorecards */}
         <div className="flex flex-col gap-3 w-44 shrink-0 pt-11">
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Sessions</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.revenue)}
+              {loading ? "—" : totals.totalSessions.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units Ordered</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Direct</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : totals.unitsOrdered.toLocaleString()}
+              {loading ? "—" : totals.directSessions.toLocaleString()}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Social</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : totals.sessions.toLocaleString()}
+              {loading ? "—" : totals.socialSessions.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Organic</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : totals.organicSessions.toLocaleString()}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Paid</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : totals.paidSessions.toLocaleString()}
             </p>
           </div>
         </div>
