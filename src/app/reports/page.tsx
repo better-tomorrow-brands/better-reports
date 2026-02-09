@@ -6,6 +6,9 @@ import { AmazonChart } from "@/components/reports/AmazonChart";
 import { OverallChart } from "@/components/reports/OverallChart";
 import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
+import { SessionsChart } from "@/components/reports/SessionsChart";
+import { TrafficChart } from "@/components/reports/TrafficChart";
+import { EcommerceChart } from "@/components/reports/EcommerceChart";
 
 const tabs = [
   { key: "campaigns", label: "Dashboard" },
@@ -32,12 +35,12 @@ export default function ReportsPage() {
         </div>
 
         {/* Tabs */}
-        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
+        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.key}
               onClick={() => setActiveTab(tab.key)}
-              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px whitespace-nowrap shrink-0 ${
                 activeTab === tab.key
                   ? "border-zinc-900 dark:border-white text-zinc-900 dark:text-white"
                   : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
@@ -60,6 +63,12 @@ export default function ReportsPage() {
           <FacebookAdsChart />
         ) : activeTab === "campaigns" ? (
           <FacebookCampaignsTable />
+        ) : activeTab === "sessions" ? (
+          <SessionsChart />
+        ) : activeTab === "traffic" ? (
+          <TrafficChart />
+        ) : activeTab === "ecommerce" ? (
+          <EcommerceChart />
         ) : (
           tabs
             .filter((tab) => tab.key === activeTab)

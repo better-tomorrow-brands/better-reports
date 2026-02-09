@@ -6,6 +6,7 @@ import { DateRange } from "react-day-picker";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { CampaignFilterPopover } from "@/components/reports/CampaignFilterPopover";
+import { chartColors } from "@/lib/chart-colors";
 import {
   ComposedChart,
   Bar,
@@ -21,10 +22,10 @@ import {
 type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
-  { key: "adRevenue", label: "Ad Revenue", color: "#c4d34f", visible: true, type: "bar", yAxisId: "left", showDots: false },
-  { key: "adSpend", label: "Ad Spend", color: "#6366f1", visible: true, type: "line", yAxisId: "left", showDots: true },
-  { key: "fbOrders", label: "FB Orders", color: "#4472c4", visible: false, type: "line", yAxisId: "left", showDots: false },
-  { key: "roas", label: "ROAS", color: "#10b981", visible: true, type: "line", yAxisId: "right", showDots: false },
+  { key: "adRevenue", label: "Ad Revenue", color: chartColors.shopify, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "adSpend", label: "Ad Spend", color: chartColors.fbSpend, visible: true, type: "line", yAxisId: "left", showDots: true },
+  { key: "fbOrders", label: "FB Orders", color: chartColors.facebook, visible: false, type: "line", yAxisId: "left", showDots: false },
+  { key: "roas", label: "ROAS", color: chartColors.roas, visible: true, type: "line", yAxisId: "right", showDots: false },
 ];
 
 const STORAGE_KEY = "facebook-ads-chart-settings";

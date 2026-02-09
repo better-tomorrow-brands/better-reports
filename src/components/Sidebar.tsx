@@ -18,7 +18,9 @@ const navLinks = [
 const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(() =>
+    typeof window !== "undefined" ? window.innerWidth >= 768 : true
+  );
   const [role, setRole] = useState<string | null>(null);
 
   useEffect(() => {
