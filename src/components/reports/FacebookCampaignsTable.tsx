@@ -48,12 +48,31 @@ interface CampaignRow {
 }
 
 interface Totals {
-  revenue: number;
+  shopifyRevenue: number;
+  shopifyOrders: number;
+  amazonRevenue: number;
+  amazonOrders: number;
   sessions: number;
-  orders: number;
-  conversionRate: number;
   adSpend: number;
-  roas: number;
+}
+
+interface OverallSources {
+  shopify: boolean;
+  amazon: boolean;
+}
+
+const DEFAULT_SOURCES: OverallSources = { shopify: true, amazon: true };
+const SOURCES_STORAGE_KEY = "dashboard-overall-sources";
+
+function loadOverallSources(): OverallSources {
+  if (typeof window === "undefined") return DEFAULT_SOURCES;
+  try {
+    const stored = localStorage.getItem(SOURCES_STORAGE_KEY);
+    if (!stored) return DEFAULT_SOURCES;
+    return { ...DEFAULT_SOURCES, ...JSON.parse(stored) };
+  } catch {
+    return DEFAULT_SOURCES;
+  }
 }
 
 type SortKey = keyof CampaignRow;
@@ -93,12 +112,16 @@ function SortIcon({ direction }: { direction: SortDir | null }) {
   );
 }
 
-function TableSettingsPopover({
+function DashboardSettingsPopover({
   columns,
-  onChange,
+  onColumnsChange,
+  sources,
+  onSourcesChange,
 }: {
   columns: ColumnConfig[];
-  onChange: (updated: ColumnConfig[]) => void;
+  onColumnsChange: (updated: ColumnConfig[]) => void;
+  sources: OverallSources;
+  onSourcesChange: (updated: OverallSources) => void;
 }) {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -118,7 +141,7 @@ function TableSettingsPopover({
       <button
         onClick={() => setOpen(!open)}
         className="p-1 rounded hover:bg-zinc-100 dark:hover:bg-zinc-800 text-zinc-500"
-        aria-label="Table settings"
+        aria-label="Dashboard settings"
       >
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z" />
@@ -128,25 +151,48 @@ function TableSettingsPopover({
 
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 w-48">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Columns</p>
-          <div className="flex flex-col gap-2">
-            {columns.map((col) => (
-              <label key={col.key} className="flex items-center gap-2 cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={col.visible}
-                  onChange={(e) =>
-                    onChange(
-                      columns.map((c) =>
-                        c.key === col.key ? { ...c, visible: e.target.checked } : c
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Overall</p>
+          <div className="flex flex-col gap-2 mb-3">
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sources.shopify}
+                onChange={(e) => onSourcesChange({ ...sources, shopify: e.target.checked })}
+                className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+              />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">Shopify</span>
+            </label>
+            <label className="flex items-center gap-2 cursor-pointer">
+              <input
+                type="checkbox"
+                checked={sources.amazon}
+                onChange={(e) => onSourcesChange({ ...sources, amazon: e.target.checked })}
+                className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+              />
+              <span className="text-sm text-zinc-700 dark:text-zinc-300">Amazon</span>
+            </label>
+          </div>
+          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Facebook Table</p>
+            <div className="flex flex-col gap-2">
+              {columns.map((col) => (
+                <label key={col.key} className="flex items-center gap-2 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={col.visible}
+                    onChange={(e) =>
+                      onColumnsChange(
+                        columns.map((c) =>
+                          c.key === col.key ? { ...c, visible: e.target.checked } : c
+                        )
                       )
-                    )
-                  }
-                  className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                />
-                <span className="text-sm text-zinc-700 dark:text-zinc-300">{col.label}</span>
-              </label>
-            ))}
+                    }
+                    className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                  />
+                  <span className="text-sm text-zinc-700 dark:text-zinc-300">{col.label}</span>
+                </label>
+              ))}
+            </div>
           </div>
         </div>
       )}
@@ -159,19 +205,26 @@ export function FacebookCampaignsTable() {
     () => presets.find((p) => p.label === "Today")!.getValue()
   );
   const [rows, setRows] = useState<CampaignRow[]>([]);
-  const [overallTotals, setOverallTotals] = useState<Totals>({ revenue: 0, sessions: 0, orders: 0, conversionRate: 0, adSpend: 0, roas: 0 });
+  const [overallTotals, setOverallTotals] = useState<Totals>({ shopifyRevenue: 0, shopifyOrders: 0, amazonRevenue: 0, amazonOrders: 0, sessions: 0, adSpend: 0 });
   const [loading, setLoading] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
+  const [sources, setSources] = useState<OverallSources>(DEFAULT_SOURCES);
   const [sortKey, setSortKey] = useState<SortKey>("roas");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   useEffect(() => {
     setColumns(loadColumnConfig());
+    setSources(loadOverallSources());
   }, []);
 
   const handleColumnsChange = (updated: ColumnConfig[]) => {
     setColumns(updated);
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
+  };
+
+  const handleSourcesChange = (updated: OverallSources) => {
+    setSources(updated);
+    localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(updated));
   };
 
   const handleSort = (key: SortKey) => {
@@ -199,7 +252,7 @@ export function FacebookCampaignsTable() {
     } catch (err) {
       console.error("Failed to fetch facebook campaigns:", err);
       setRows([]);
-      setOverallTotals({ revenue: 0, sessions: 0, orders: 0, conversionRate: 0, adSpend: 0, roas: 0 });
+      setOverallTotals({ shopifyRevenue: 0, shopifyOrders: 0, amazonRevenue: 0, amazonOrders: 0, sessions: 0, adSpend: 0 });
     } finally {
       setLoading(false);
     }
@@ -247,6 +300,22 @@ export function FacebookCampaignsTable() {
     };
   }, [rows]);
 
+  const combinedTotals = useMemo(() => {
+    const revenue =
+      (sources.shopify ? overallTotals.shopifyRevenue : 0) +
+      (sources.amazon ? overallTotals.amazonRevenue : 0);
+    const totalOrders =
+      (sources.shopify ? overallTotals.shopifyOrders : 0) +
+      (sources.amazon ? overallTotals.amazonOrders : 0);
+    const conversionRate = overallTotals.sessions > 0
+      ? Math.round((totalOrders / overallTotals.sessions) * 10000) / 100
+      : 0;
+    const roas = overallTotals.adSpend > 0
+      ? Math.round((revenue / overallTotals.adSpend) * 100) / 100
+      : 0;
+    return { revenue, orders: totalOrders, sessions: overallTotals.sessions, conversionRate, adSpend: overallTotals.adSpend, roas };
+  }, [overallTotals, sources]);
+
   const isVisible = (key: string) =>
     columns.find((c) => c.key === key)?.visible ?? true;
 
@@ -262,7 +331,7 @@ export function FacebookCampaignsTable() {
       {/* Controls */}
       <div className="flex items-center gap-3 mb-4 justify-end">
         <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <TableSettingsPopover columns={columns} onChange={handleColumnsChange} />
+        <DashboardSettingsPopover columns={columns} onColumnsChange={handleColumnsChange} sources={sources} onSourcesChange={handleSourcesChange} />
       </div>
 
       {/* Overall */}
@@ -271,37 +340,37 @@ export function FacebookCampaignsTable() {
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : formatCurrency(overallTotals.revenue)}
+            {loading ? "—" : formatCurrency(combinedTotals.revenue)}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : overallTotals.sessions.toLocaleString()}
+            {loading ? "—" : combinedTotals.sessions.toLocaleString()}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : overallTotals.orders.toLocaleString()}
+            {loading ? "—" : combinedTotals.orders.toLocaleString()}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Conversion Rate</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : `${overallTotals.conversionRate.toFixed(2)}%`}
+            {loading ? "—" : `${combinedTotals.conversionRate.toFixed(2)}%`}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : formatCurrency(overallTotals.adSpend)}
+            {loading ? "—" : formatCurrency(combinedTotals.adSpend)}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">ROAS</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : overallTotals.roas.toFixed(2)}
+            {loading ? "—" : combinedTotals.roas.toFixed(2)}
           </p>
         </div>
       </div>
