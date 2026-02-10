@@ -1,5 +1,7 @@
 import { clerkMiddleware, createRouteMatcher } from "@clerk/nextjs/server";
 
+console.log("Log for brand and deploy");
+
 const isPublicRoute = createRouteMatcher([
   "/sign-in(.*)",
   "/api/cron/(.*)",
