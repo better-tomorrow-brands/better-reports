@@ -1286,7 +1286,20 @@ export default function InventoryPage() {
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
-              <p className="text-zinc-500 p-4">Loading...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[48, 160, 64, 80, 72, 80, 80, 24].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(8)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[48, 160, 64, 80, 72, 80, 80, 24].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table<Product>
                 columns={columns}
@@ -1301,7 +1314,20 @@ export default function InventoryPage() {
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
-              <p className="text-zinc-500 p-4">Loading...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96, 96].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(8)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96, 96].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table<Product>
                 columns={amazonColumns}
@@ -1316,7 +1342,20 @@ export default function InventoryPage() {
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
-              <p className="text-zinc-500 p-4">Loading...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(8)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table<Product>
                 columns={dtcColumns}
@@ -1352,7 +1391,20 @@ export default function InventoryPage() {
               )}
             </div>
             {inventoryLoading ? (
-              <p className="text-zinc-500 p-4">Loading...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[48, 160, 64, 72, 64, 80, 56, 24].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(8)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[48, 160, 64, 72, 64, 80, 56, 24].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table<InventoryItem>
                 columns={inventoryColumns}

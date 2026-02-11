@@ -1935,7 +1935,20 @@ export default function CampaignsPage() {
             )}
 
             {fbLoading ? (
-              <p className="text-zinc-500 p-4">Loading...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[120, 80, 120, 80, 80, 80, 48, 24].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(8)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[120, 80, 120, 80, 80, 80, 48, 24].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : (
               <Table
                 columns={fbColumns.filter((c) => fbVisibleColumns.has(String(c.key)) || c.key === "actions")}
@@ -1951,7 +1964,20 @@ export default function CampaignsPage() {
         {activeTab === "whatsapp" && (
           <div className="pt-4">
             {waLoading ? (
-              <p className="text-sm text-zinc-500 p-4">Loading campaigns...</p>
+              <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+                <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                  {[120, 96, 56, 56, 56, 56, 80, 24].map((w, i) => (
+                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+                {[...Array(6)].map((_, row) => (
+                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                    {[120, 96, 56, 56, 56, 56, 80, 24].map((w, col) => (
+                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    ))}
+                  </div>
+                ))}
+              </div>
             ) : waCampaigns.length === 0 ? (
               <div className="text-center py-12 border border-dashed border-zinc-300 dark:border-zinc-700 rounded-lg m-4">
                 <p className="text-zinc-500 mb-4">No campaigns yet</p>
