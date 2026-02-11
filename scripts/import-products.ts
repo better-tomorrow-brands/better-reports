@@ -14,6 +14,14 @@ import { parse } from "path";
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
 
+// Pass --org=<id> to target a specific org; defaults to 1
+const args = process.argv.slice(2).reduce((acc, arg) => {
+  const [key, val] = arg.replace(/^--/, "").split("=");
+  acc[key] = val;
+  return acc;
+}, {} as Record<string, string>);
+const ORG_ID = parseInt(args.org || "1");
+
 function parseCSV(content: string): Record<string, string>[] {
   const lines: string[] = [];
   let current = "";
@@ -101,6 +109,7 @@ async function main() {
     await db
       .insert(schema.products)
       .values({
+        orgId: ORG_ID,
         sku: row.sku,
         productName: row.product_name || null,
         brand: row.brand || null,
@@ -139,7 +148,7 @@ async function main() {
         active: toBool(row.active),
       })
       .onConflictDoUpdate({
-        target: schema.products.sku,
+        target: [schema.products.orgId, schema.products.sku],
         set: {
           productName: row.product_name || null,
           brand: row.brand || null,
