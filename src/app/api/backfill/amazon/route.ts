@@ -28,7 +28,13 @@ export async function GET(request: Request) {
   const start = url.searchParams.get("start");
   const end = url.searchParams.get("end");
 
-  const settings = await getAmazonSettings();
+  const orgIdParam = url.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
+  const settings = await getAmazonSettings(orgId);
   if (!settings) {
     return NextResponse.json(
       { error: "Amazon settings not configured" },
@@ -48,10 +54,11 @@ export async function GET(request: Request) {
 
         const results: Array<{ date: string; status: string; rows?: number; error?: string }> = [];
 
-        // Get dates we already have to skip them
+        // Get dates we already have (for this org) to skip them
         const existingRows = await db
           .select({ date: amazonSalesTraffic.date })
           .from(amazonSalesTraffic)
+          .where(sql`${amazonSalesTraffic.orgId} = ${orgId}`)
           .groupBy(amazonSalesTraffic.date);
         const existingDates = new Set(existingRows.map((r) => r.date));
 
@@ -70,7 +77,7 @@ export async function GET(request: Request) {
 
           try {
             const rows = await fetchSalesTrafficReport(settings, dateStr, dateStr);
-            const upserted = await upsertSalesTraffic(rows);
+            const upserted = await upsertSalesTraffic(rows, orgId);
             results.push({ date: dateStr, status: "success", rows: upserted });
             console.log(`Amazon backfill ${dateStr}: ${upserted} rows`);
           } catch (error) {
@@ -102,14 +109,14 @@ export async function GET(request: Request) {
           : new Date(Date.now() - 3 * 60000).toISOString(); // 3 min ago per API requirement
 
         const txns = await fetchFinancialEvents(settings, postedAfter, postedBefore);
-        const upserted = await upsertFinancialEvents(txns);
+        const upserted = await upsertFinancialEvents(txns, orgId);
         return NextResponse.json({ success: true, job, transactions: txns.length, upserted });
       }
 
       case "inventory": {
         const items = await fetchInventory(settings);
         const snapshotDate = new Date().toISOString().split("T")[0];
-        const upserted = await upsertInventory(items, snapshotDate);
+        const upserted = await upsertInventory(items, snapshotDate, orgId);
         return NextResponse.json({ success: true, job, items: items.length, upserted, snapshotDate });
       }
 

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getShopifySettings } from "@/lib/settings";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 
 interface ShopifyCustomerEdge {
   node: {
@@ -48,7 +48,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const settings = await getShopifySettings();
+  const orgIdParam = url.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
+  const settings = await getShopifySettings(orgId);
   if (!settings?.store_domain || !settings?.access_token) {
     return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
   }
@@ -123,6 +129,7 @@ export async function GET(request: Request) {
       const node = edge.node;
       try {
         const customerData = {
+          orgId,
           shopifyCustomerId: node.legacyResourceId,
           firstName: node.firstName || undefined,
           lastName: node.lastName || undefined,
@@ -136,19 +143,19 @@ export async function GET(request: Request) {
           lastOrderAt: node.lastOrder ? new Date(node.lastOrder.createdAt) : undefined,
         };
 
-        // Upsert by email (if exists) or shopifyCustomerId
+        // Upsert by email (if exists) or shopifyCustomerId, scoped to org
         if (customerData.email) {
           const existing = await db
             .select()
             .from(customers)
-            .where(eq(customers.email, customerData.email))
+            .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)))
             .limit(1);
 
           if (existing.length > 0) {
             await db
               .update(customers)
               .set(customerData)
-              .where(eq(customers.email, customerData.email));
+              .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)));
           } else {
             await db.insert(customers).values(customerData);
           }
@@ -157,14 +164,14 @@ export async function GET(request: Request) {
           const existing = await db
             .select()
             .from(customers)
-            .where(eq(customers.shopifyCustomerId, node.legacyResourceId))
+            .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, node.legacyResourceId)))
             .limit(1);
 
           if (existing.length > 0) {
             await db
               .update(customers)
               .set(customerData)
-              .where(eq(customers.shopifyCustomerId, node.legacyResourceId));
+              .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, node.legacyResourceId)));
           } else {
             await db.insert(customers).values(customerData);
           }

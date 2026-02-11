@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback } from "react";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { chartColors } from "@/lib/chart-colors";
 import {
   BarChart,
@@ -48,7 +50,9 @@ function formatAxisValue(value: number): string {
 }
 
 export function EcommerceChart() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+  const { apiFetch, currentOrg } = useOrg();
+  const [dateRange, setDateRange] = usePersistedDateRange(
+    "dr-ecommerce",
     () => presets.find((p) => p.label === "Last 7 days")!.getValue()
   );
   const [funnel, setFunnel] = useState<FunnelData | null>(null);
@@ -56,12 +60,12 @@ export function EcommerceChart() {
   const [loading, setLoading] = useState(true);
 
   const fetchData = useCallback(async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
+    if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/ecommerce?from=${from}&to=${to}`);
+      const res = await apiFetch(`/api/reports/ecommerce?from=${from}&to=${to}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setFunnel(json.funnel);
@@ -73,7 +77,7 @@ export function EcommerceChart() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange]);
+  }, [dateRange, apiFetch, currentOrg]);
 
   useEffect(() => {
     fetchData();

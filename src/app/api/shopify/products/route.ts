@@ -1,6 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getShopifySettings } from "@/lib/settings";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 interface ShopifyProduct {
   id: string;
@@ -33,26 +33,21 @@ interface GraphQLResponse {
 }
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { orgId } = await requireOrgFromRequest(request);
+    const settings = await getShopifySettings(orgId);
+    if (!settings?.store_domain || !settings?.access_token) {
+      return NextResponse.json(
+        { error: "Shopify not configured" },
+        { status: 400 }
+      );
+    }
 
-  const settings = await getShopifySettings();
-  if (!settings?.store_domain || !settings?.access_token) {
-    return NextResponse.json(
-      { error: "Shopify not configured" },
-      { status: 400 }
-    );
-  }
+    const url = new URL(request.url);
+    const search = url.searchParams.get("search") || "";
+    const searchFilter = search ? `query: "title:*${search}*"` : "";
 
-  const url = new URL(request.url);
-  const search = url.searchParams.get("search") || "";
-
-  // Build GraphQL query with optional search
-  const searchFilter = search ? `query: "title:*${search}*"` : "";
-
-  const query = `{
+    const query = `{
     products(first: 50${searchFilter ? `, ${searchFilter}` : ""}) {
       edges {
         node {
@@ -73,7 +68,6 @@ export async function GET(request: Request) {
     }
   }`;
 
-  try {
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -109,6 +103,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ products });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Shopify products error:", error);
     return NextResponse.json(
       { error: "Failed to fetch products", details: error instanceof Error ? error.message : String(error) },

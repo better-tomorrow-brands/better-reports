@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
+import { useOrg } from "@/contexts/OrgContext";
 
 // ── Types ──────────────────────────────────────────────────
 interface Product {
@@ -526,6 +527,7 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
 // ── Main page ──────────────────────────────────────────────
 
 export default function InventoryPage() {
+  const { apiFetch, currentOrg } = useOrg();
   const [activeTab, setActiveTab] = useState<TabKey>("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -616,14 +618,15 @@ export default function InventoryPage() {
 
   // ── Fetch products ───────────────────────────────────────
   const fetchProducts = useCallback(async () => {
+    if (!currentOrg) return;
     setLoading(true);
     try {
-      const res = await fetch("/api/products");
+      const res = await apiFetch("/api/products");
       if (res.ok) setProducts(await res.json());
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiFetch, currentOrg]);
 
   useEffect(() => {
     fetchProducts();
@@ -631,9 +634,10 @@ export default function InventoryPage() {
 
   // ── Fetch inventory snapshots ──────────────────────────
   const fetchInventoryData = useCallback(async () => {
+    if (!currentOrg) return;
     setInventoryLoading(true);
     try {
-      const res = await fetch("/api/inventory");
+      const res = await apiFetch("/api/inventory");
       if (res.ok) {
         const data = await res.json();
         setInventoryItems(data.items);
@@ -642,7 +646,7 @@ export default function InventoryPage() {
     } finally {
       setInventoryLoading(false);
     }
-  }, []);
+  }, [apiFetch, currentOrg]);
 
   useEffect(() => {
     if (activeTab === "inventory") {
@@ -652,7 +656,7 @@ export default function InventoryPage() {
 
   // ── CRUD helpers ─────────────────────────────────────────
   const saveField = useCallback(async (id: number, field: string, value: unknown) => {
-    const res = await fetch("/api/products", {
+    const res = await apiFetch("/api/products", {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ id, [field]: value }),
@@ -661,12 +665,12 @@ export default function InventoryPage() {
       const updated = await res.json();
       setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
     }
-  }, []);
+  }, [apiFetch]);
 
   const addProduct = useCallback(async () => {
     const sku = prompt("Enter SKU:");
     if (!sku?.trim()) return;
-    const res = await fetch("/api/products", {
+    const res = await apiFetch("/api/products", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ sku: sku.trim() }),
@@ -675,15 +679,15 @@ export default function InventoryPage() {
       const newProduct = await res.json();
       setProducts((prev) => [...prev, newProduct]);
     }
-  }, []);
+  }, [apiFetch]);
 
   const deleteProduct = useCallback(async (id: number) => {
     if (!confirm("Delete this product?")) return;
-    const res = await fetch(`/api/products?id=${id}`, { method: "DELETE" });
+    const res = await apiFetch(`/api/products?id=${id}`, { method: "DELETE" });
     if (res.ok) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
     }
-  }, []);
+  }, [apiFetch]);
 
   // ── Inventory edit modal state ──────────────────────────
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
@@ -703,7 +707,7 @@ export default function InventoryPage() {
     const amazonQty = Number(editAmazonQty) || 0;
     const warehouseQty = Number(editWarehouseQty) || 0;
     try {
-      const res = await fetch("/api/inventory", {
+      const res = await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sku: editingInventory.sku, amazonQty, warehouseQty }),
@@ -721,7 +725,7 @@ export default function InventoryPage() {
     } finally {
       setSavingInventory(false);
     }
-  }, [editingInventory, editAmazonQty, editWarehouseQty]);
+  }, [editingInventory, editAmazonQty, editWarehouseQty, apiFetch]);
 
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
@@ -729,14 +733,14 @@ export default function InventoryPage() {
     const missing = products.filter((p) => p.active && !existingSkus.has(p.sku));
     if (missing.length === 0) return;
     for (const p of missing) {
-      await fetch("/api/inventory", {
+      await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ sku: p.sku, amazonQty: 0, warehouseQty: 0 }),
       });
     }
     fetchInventoryData();
-  }, [inventoryItems, products, fetchInventoryData]);
+  }, [inventoryItems, products, fetchInventoryData, apiFetch]);
 
   // ── Inventory columns ─────────────────────────────────
   const inventoryColumns: Column<InventoryItem>[] = useMemo(() => [

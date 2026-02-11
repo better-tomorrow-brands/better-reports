@@ -1,5 +1,8 @@
 @import "tailwindcss";
 
+/* Class-based dark mode so users can override the system preference */
+@custom-variant dark (&:where(.dark, .dark *));
+
 /* ============================================
    Theme Variables
    ============================================ */
@@ -43,31 +46,29 @@
   --color-direct: #7bc67e;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
+.dark {
+  --background: #0a0a0a;
+  --foreground: #ededed;
 
-    /* Borders */
-    --border-color: #27272a;
-    --border-color-light: #18181b;
+  /* Borders */
+  --border-color: #27272a;
+  --border-color-light: #18181b;
 
-    /* Surface colors */
-    --surface-bg: #18181b;
-    --surface-hover: #27272a;
+  /* Surface colors */
+  --surface-bg: #18181b;
+  --surface-hover: #27272a;
 
-    /* Status colors */
-    --status-success-bg: #14532d;
-    --status-success-text: #86efac;
-    --status-warning-bg: #422006;
-    --status-warning-text: #fde047;
-    --status-error-bg: #450a0a;
-    --status-error-text: #fecaca;
+  /* Status colors */
+  --status-success-bg: #14532d;
+  --status-success-text: #86efac;
+  --status-warning-bg: #422006;
+  --status-warning-text: #fde047;
+  --status-error-bg: #450a0a;
+  --status-error-text: #fecaca;
 
-    /* Interactive */
-    --primary-bg: #f4f4f5;
-    --primary-text: #18181b;
-  }
+  /* Interactive */
+  --primary-bg: #f4f4f5;
+  --primary-text: #18181b;
 }
 
 @theme inline {

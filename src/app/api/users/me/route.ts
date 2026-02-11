@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
+import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, userOrganizations, organizations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 
 export async function GET() {
@@ -11,17 +11,54 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const user = await db
+    let userRows = await db
       .select({ id: users.id, email: users.email, name: users.name, role: users.role })
       .from(users)
       .where(eq(users.id, userId))
       .limit(1);
 
-    if (!user.length) {
-      return NextResponse.json({ error: "User not found" }, { status: 404 });
+    // Auto-create user row on first access (webhook may not have fired yet)
+    if (!userRows.length) {
+      const clerkUser = await currentUser();
+      const email = clerkUser?.primaryEmailAddress?.emailAddress ?? "";
+      const name = clerkUser?.fullName ?? null;
+      await db
+        .insert(users)
+        .values({ id: userId, email, name, role: "user" })
+        .onConflictDoNothing();
+
+      // Assign to default org if configured
+      const defaultOrgId = process.env.DEFAULT_ORG_ID ? Number(process.env.DEFAULT_ORG_ID) : null;
+      if (defaultOrgId && !isNaN(defaultOrgId)) {
+        await db
+          .insert(userOrganizations)
+          .values({ userId, orgId: defaultOrgId, role: "user" })
+          .onConflictDoNothing();
+      }
+
+      userRows = await db
+        .select({ id: users.id, email: users.email, name: users.name, role: users.role })
+        .from(users)
+        .where(eq(users.id, userId))
+        .limit(1);
     }
 
-    return NextResponse.json(user[0]);
+    const user = userRows;
+
+    // Also return the user's org memberships
+    const memberships = await db
+      .select({
+        id: organizations.id,
+        name: organizations.name,
+        slug: organizations.slug,
+        role: userOrganizations.role,
+      })
+      .from(userOrganizations)
+      .innerJoin(organizations, eq(userOrganizations.orgId, organizations.id))
+      .where(eq(userOrganizations.userId, userId))
+      .orderBy(organizations.name);
+
+    return NextResponse.json({ ...user[0], orgs: memberships });
   } catch (error) {
     console.error("Failed to fetch user:", error);
     return NextResponse.json({ error: "Failed to fetch user" }, { status: 500 });

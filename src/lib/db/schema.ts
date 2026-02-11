@@ -9,13 +9,43 @@ import {
   date,
   real,
   uniqueIndex,
+  primaryKey,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
+
+// ── Organizations ──────────────────────────────────────
+export const organizations = pgTable("organizations", {
+  id: serial("id").primaryKey(),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Users ──────────────────────────────────────────────
+export const users = pgTable("users", {
+  id: text("id").primaryKey(), // Clerk user ID
+  email: text("email").notNull(),
+  name: text("name"),
+  role: text("role").notNull().default("user"), // super_admin | admin | user
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── User Organizations (Junction) ─────────────────────
+export const userOrganizations = pgTable("user_organizations", {
+  id: serial("id").primaryKey(),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  role: text("role").notNull().default("user"), // admin | user
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("user_organizations_user_org_idx").on(table.userId, table.orgId),
+]);
 
 // ── Products (Master product database) ────────────────────
 export const products = pgTable("products", {
   id: serial("id").primaryKey(),
-  sku: text("sku").notNull().unique(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  sku: text("sku").notNull(),
   productName: text("product_name"),
   brand: text("brand"),
   unitBarcode: text("unit_barcode"),
@@ -61,11 +91,14 @@ export const products = pgTable("products", {
   active: boolean("active").default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("products_org_sku_idx").on(table.orgId, table.sku),
+]);
 
 // ── Amazon Sales & Traffic (Daily by-ASIN) ───────────────
 export const amazonSalesTraffic = pgTable("amazon_sales_traffic", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   date: date("date").notNull(),
   parentAsin: text("parent_asin"),
   childAsin: text("child_asin").notNull(),
@@ -93,14 +126,15 @@ export const amazonSalesTraffic = pgTable("amazon_sales_traffic", {
   unitSessionPercentage: real("unit_session_percentage").default(0),
   unitSessionPercentageB2b: real("unit_session_percentage_b2b").default(0),
 }, (table) => [
-  uniqueIndex("amazon_sales_traffic_date_asin_idx")
-    .on(table.date, table.childAsin),
+  uniqueIndex("amazon_sales_traffic_org_date_asin_idx")
+    .on(table.orgId, table.date, table.childAsin),
 ]);
 
 // ── Amazon Financial Events ──────────────────────────────
 export const amazonFinancialEvents = pgTable("amazon_financial_events", {
   id: serial("id").primaryKey(),
-  transactionId: text("transaction_id").notNull().unique(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  transactionId: text("transaction_id").notNull(),
   transactionType: text("transaction_type"),
   postedDate: timestamp("posted_date", { withTimezone: true }),
   totalAmount: decimal("total_amount", { precision: 12, scale: 2 }),
@@ -109,39 +143,38 @@ export const amazonFinancialEvents = pgTable("amazon_financial_events", {
   items: text("items"), // JSON
   breakdowns: text("breakdowns"), // JSON
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("amazon_financial_events_org_transaction_idx")
+    .on(table.orgId, table.transactionId),
+]);
 
 // ── Inventory Snapshots (Daily per-SKU) ──────────────────
 export const inventorySnapshots = pgTable("inventory_snapshots", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   sku: text("sku").notNull(),
   date: date("date").notNull(),
   amazonQty: integer("amazon_qty").default(0),
   warehouseQty: integer("warehouse_qty").default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
-  uniqueIndex("inventory_snapshots_sku_date_idx").on(table.sku, table.date),
+  uniqueIndex("inventory_snapshots_org_sku_date_idx").on(table.orgId, table.sku, table.date),
 ]);
-
-// ── Users ──────────────────────────────────────────────
-export const users = pgTable("users", {
-  id: text("id").primaryKey(), // Clerk user ID
-  email: text("email").notNull(),
-  name: text("name"),
-  role: text("role").notNull().default("user"), // super_admin | admin | user
-  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
-});
 
 // ── App Settings ───────────────────────────────────────
 export const settings = pgTable("settings", {
-  key: text("key").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  key: text("key").notNull(),
   value: text("value").notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  primaryKey({ columns: [table.orgId, table.key] }),
+]);
 
 // ── Facebook Campaigns (Ad Attribution) ───────────────
 export const campaignsFcb = pgTable("campaigns_fcb", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   campaign: text("campaign"),
   adGroup: text("ad_group"),
   ad: text("ad"),
@@ -163,6 +196,7 @@ export const campaignsFcb = pgTable("campaigns_fcb", {
 // ── WhatsApp Campaigns ────────────────────────────────
 export const campaignsWa = pgTable("campaigns_wa", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   name: text("name").notNull(),
   templateName: text("template_name").notNull(),
   customerCount: integer("customer_count").default(0),
@@ -201,6 +235,7 @@ export const campaignMessages = pgTable("campaign_messages", {
 // ── Sync Logs ──────────────────────────────────────────
 export const syncLogs = pgTable("sync_logs", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   source: text("source").notNull(),
   status: text("status").notNull().default("pending"),
   syncedAt: timestamp("synced_at", { withTimezone: true }).notNull(),
@@ -211,10 +246,11 @@ export const syncLogs = pgTable("sync_logs", {
 // ── Customers ─────────────────────────────────────────
 export const customers = pgTable("customers", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   shopifyCustomerId: text("shopify_customer_id"),
   firstName: text("first_name"),
   lastName: text("last_name"),
-  email: text("email").unique(),
+  email: text("email"),
   emailMarketingConsent: boolean("email_marketing_consent").default(false),
   phone: text("phone"),
   totalSpent: decimal("total_spent", { precision: 10, scale: 2 }).default("0"),
@@ -224,12 +260,15 @@ export const customers = pgTable("customers", {
   lastOrderAt: timestamp("last_order_at", { withTimezone: true }),
   // lapse (days since last order) computed on read from lastOrderAt
   // lifecycle (New/Reorder/At Risk/Lost) computed from lapse using settings thresholds
-});
+}, (table) => [
+  uniqueIndex("customers_org_email_idx").on(table.orgId, table.email),
+]);
 
 // ── Orders (Shopify) ───────────────────────────────────
 export const orders = pgTable("orders", {
   id: serial("id").primaryKey(),
-  shopifyId: text("shopify_id").notNull().unique(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  shopifyId: text("shopify_id").notNull(),
   orderNumber: text("order_number"),
   email: text("email"),
   customerName: text("customer_name"),
@@ -255,12 +294,15 @@ export const orders = pgTable("orders", {
   isRepeatCustomer: boolean("is_repeat_customer").default(false),
   customerId: integer("customer_id").references(() => customers.id),
   receivedAt: timestamp("received_at", { withTimezone: true }).defaultNow(),
-});
+}, (table) => [
+  uniqueIndex("orders_org_shopify_id_idx").on(table.orgId, table.shopifyId),
+]);
 
 // ── PostHog Analytics (Daily) ─────────────────────────
 export const posthogAnalytics = pgTable("posthog_analytics", {
   id: serial("id").primaryKey(),
-  date: date("date").notNull().unique(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  date: date("date").notNull(),
   uniqueVisitors: integer("unique_visitors").notNull().default(0),
   totalSessions: integer("total_sessions").notNull().default(0),
   pageviews: integer("pageviews").notNull().default(0),
@@ -278,11 +320,14 @@ export const posthogAnalytics = pgTable("posthog_analytics", {
   checkoutStarted: integer("checkout_started").notNull().default(0),
   purchases: integer("purchases").notNull().default(0),
   conversionRate: real("conversion_rate").notNull().default(0),
-});
+}, (table) => [
+  uniqueIndex("posthog_analytics_org_date_idx").on(table.orgId, table.date),
+]);
 
 // ── Facebook Ads (Daily Ad-Level) ────────────────────
 export const facebookAds = pgTable("facebook_ads", {
   id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
   date: date("date").notNull(),
   campaign: text("campaign").notNull().default(""),
   adset: text("adset").notNull().default(""),
@@ -301,11 +346,30 @@ export const facebookAds = pgTable("facebook_ads", {
   purchaseValue: real("purchase_value").notNull().default(0),
   roas: real("roas").notNull().default(0),
 }, (table) => [
-  uniqueIndex("facebook_ads_date_campaign_adset_ad_idx")
-    .on(table.date, table.campaign, table.adset, table.ad),
+  uniqueIndex("facebook_ads_org_date_campaign_adset_ad_idx")
+    .on(table.orgId, table.date, table.campaign, table.adset, table.ad),
 ]);
 
 // ── Relations ─────────────────────────────────────────
+
+export const organizationsRelations = relations(organizations, ({ many }) => ({
+  userOrganizations: many(userOrganizations),
+}));
+
+export const usersRelations = relations(users, ({ many }) => ({
+  userOrganizations: many(userOrganizations),
+}));
+
+export const userOrganizationsRelations = relations(userOrganizations, ({ one }) => ({
+  user: one(users, {
+    fields: [userOrganizations.userId],
+    references: [users.id],
+  }),
+  organization: one(organizations, {
+    fields: [userOrganizations.orgId],
+    references: [organizations.id],
+  }),
+}));
 
 export const customersRelations = relations(customers, ({ many }) => ({
   orders: many(orders),
@@ -345,4 +409,3 @@ export const campaignMessagesRelations = relations(campaignMessages, ({ one }) =
     references: [customers.id],
   }),
 }));
-

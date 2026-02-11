@@ -1,24 +1,20 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaignsWa } from "@/lib/db/schema";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const { id } = await params;
     const campaignId = parseInt(id);
 
     const campaign = await db.query.campaignsWa.findFirst({
-      where: eq(campaignsWa.id, campaignId),
+      where: and(eq(campaignsWa.id, campaignId), eq(campaignsWa.orgId, orgId)),
       with: {
         campaignsWaCustomers: {
           with: {
@@ -34,6 +30,9 @@ export async function GET(
 
     return NextResponse.json({ campaign });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaign-WA GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch campaign", details: error instanceof Error ? error.message : String(error) },

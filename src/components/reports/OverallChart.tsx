@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { chartColors } from "@/lib/chart-colors";
 import {
@@ -119,7 +121,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function OverallChart() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+  const { apiFetch, currentOrg } = useOrg();
+  const [dateRange, setDateRange] = usePersistedDateRange(
+    "dr-overall",
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
   const [groupBy, setGroupBy] = useState<GroupBy>("month");
@@ -137,12 +141,12 @@ export function OverallChart() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
+    if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
+      const res = await apiFetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
@@ -152,7 +156,7 @@ export function OverallChart() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, groupBy]);
+  }, [dateRange, groupBy, apiFetch, currentOrg]);
 
   useEffect(() => {
     fetchData();

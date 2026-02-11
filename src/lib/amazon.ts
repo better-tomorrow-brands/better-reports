@@ -84,8 +84,8 @@ function sleep(ms: number) {
 }
 
 // ── Test Connection ──────────────────────────────────────
-export async function testAmazonConnection(): Promise<{ success: boolean; message: string }> {
-  const settings = await getAmazonSettings();
+export async function testAmazonConnection(orgId: number): Promise<{ success: boolean; message: string }> {
+  const settings = await getAmazonSettings(orgId);
   if (!settings) {
     return { success: false, message: "Amazon settings not configured" };
   }
@@ -249,12 +249,13 @@ export async function fetchSalesTrafficReport(
 }
 
 // ── Upsert Sales & Traffic ───────────────────────────────
-export async function upsertSalesTraffic(rows: SalesTrafficRow[]) {
+export async function upsertSalesTraffic(rows: SalesTrafficRow[], orgId: number) {
   let upserted = 0;
   for (const row of rows) {
     await db
       .insert(amazonSalesTraffic)
       .values({
+        orgId,
         date: row.date,
         parentAsin: row.parentAsin,
         childAsin: row.childAsin,
@@ -281,7 +282,7 @@ export async function upsertSalesTraffic(rows: SalesTrafficRow[]) {
         unitSessionPercentageB2b: row.unitSessionPercentageB2b,
       })
       .onConflictDoUpdate({
-        target: [amazonSalesTraffic.date, amazonSalesTraffic.childAsin],
+        target: [amazonSalesTraffic.orgId, amazonSalesTraffic.date, amazonSalesTraffic.childAsin],
         set: {
           parentAsin: row.parentAsin,
           unitsOrdered: row.unitsOrdered,
@@ -374,12 +375,13 @@ export async function fetchFinancialEvents(
 }
 
 // ── Upsert Financial Events ──────────────────────────────
-export async function upsertFinancialEvents(txns: FinancialTransaction[]) {
+export async function upsertFinancialEvents(txns: FinancialTransaction[], orgId: number) {
   let upserted = 0;
   for (const txn of txns) {
     await db
       .insert(amazonFinancialEvents)
       .values({
+        orgId,
         transactionId: txn.transactionId,
         transactionType: txn.transactionType,
         postedDate: txn.postedDate ? new Date(txn.postedDate) : null,
@@ -390,7 +392,7 @@ export async function upsertFinancialEvents(txns: FinancialTransaction[]) {
         breakdowns: txn.breakdowns,
       })
       .onConflictDoUpdate({
-        target: amazonFinancialEvents.transactionId,
+        target: [amazonFinancialEvents.orgId, amazonFinancialEvents.transactionId],
         set: {
           transactionType: txn.transactionType,
           postedDate: txn.postedDate ? new Date(txn.postedDate) : null,
@@ -495,18 +497,19 @@ export async function fetchInventory(settings: AmazonSettings): Promise<Inventor
 }
 
 // ── Upsert Inventory ─────────────────────────────────────
-export async function upsertInventory(items: InventoryRow[], snapshotDate: string) {
+export async function upsertInventory(items: InventoryRow[], snapshotDate: string, orgId: number) {
   let upserted = 0;
   for (const item of items) {
     await db
       .insert(inventorySnapshots)
       .values({
+        orgId,
         sku: item.sellerSku,
         date: snapshotDate,
         amazonQty: item.totalQuantity,
       })
       .onConflictDoUpdate({
-        target: [inventorySnapshots.sku, inventorySnapshots.date],
+        target: [inventorySnapshots.orgId, inventorySnapshots.sku, inventorySnapshots.date],
         set: {
           amazonQty: item.totalQuantity,
           updatedAt: new Date(),

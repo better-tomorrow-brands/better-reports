@@ -1,23 +1,24 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { desc, eq } from "drizzle-orm";
+import { desc, eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaignsFcb } from "@/lib/db/schema";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
-export async function GET() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
+export async function GET(request: Request) {
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
     const rows = await db
       .select()
       .from(campaignsFcb)
+      .where(eq(campaignsFcb.orgId, orgId))
       .orderBy(desc(campaignsFcb.createdAt));
 
     return NextResponse.json({ campaigns: rows });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaigns GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch campaigns", details: error instanceof Error ? error.message : String(error) },
@@ -27,17 +28,14 @@ export async function GET() {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const body = await request.json();
 
     const newCampaign = await db
       .insert(campaignsFcb)
       .values({
+        orgId,
         campaign: body.campaign || null,
         adGroup: body.adGroup || null,
         ad: body.ad || null,
@@ -57,6 +55,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ campaign: newCampaign[0] });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaigns POST error:", error);
     return NextResponse.json(
       { error: "Failed to create campaign", details: error instanceof Error ? error.message : String(error) },
@@ -66,12 +67,8 @@ export async function POST(request: Request) {
 }
 
 export async function PUT(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const body = await request.json();
     const { id, ...data } = body;
 
@@ -98,11 +95,14 @@ export async function PUT(request: Request) {
         status: data.status || "active",
         updatedAt: new Date(),
       })
-      .where(eq(campaignsFcb.id, id))
+      .where(and(eq(campaignsFcb.id, id), eq(campaignsFcb.orgId, orgId)))
       .returning();
 
     return NextResponse.json({ campaign: updated[0] });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaigns PUT error:", error);
     return NextResponse.json(
       { error: "Failed to update campaign", details: error instanceof Error ? error.message : String(error) },
@@ -112,12 +112,8 @@ export async function PUT(request: Request) {
 }
 
 export async function DELETE(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const url = new URL(request.url);
     const id = url.searchParams.get("id");
 
@@ -125,10 +121,15 @@ export async function DELETE(request: Request) {
       return NextResponse.json({ error: "Campaign ID required" }, { status: 400 });
     }
 
-    await db.delete(campaignsFcb).where(eq(campaignsFcb.id, parseInt(id)));
+    await db
+      .delete(campaignsFcb)
+      .where(and(eq(campaignsFcb.id, parseInt(id)), eq(campaignsFcb.orgId, orgId)));
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaigns DELETE error:", error);
     return NextResponse.json(
       { error: "Failed to delete campaign", details: error instanceof Error ? error.message : String(error) },

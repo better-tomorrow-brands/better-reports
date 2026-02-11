@@ -18,6 +18,12 @@ export async function GET(request: Request) {
     const dateParam = url.searchParams.get('date');
     const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
 
+    const orgIdParam = url.searchParams.get('orgId');
+    if (!orgIdParam) {
+      return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
+    }
+    const orgId = parseInt(orgIdParam);
+
     // Fetch from PostHog
     const analytics = await getDailyAnalytics(date);
 
@@ -25,7 +31,7 @@ export async function GET(request: Request) {
     const result = await appendDailyAnalytics(analytics);
 
     // Write to Neon
-    await upsertPosthogAnalytics(analytics);
+    await upsertPosthogAnalytics(analytics, orgId);
 
     return NextResponse.json({
       success: true,

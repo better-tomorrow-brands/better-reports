@@ -14,6 +14,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const uploadUrl = new URL(request.url);
+  const orgIdParam = uploadUrl.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
   try {
     const formData = await request.formData();
     const file = formData.get("file") as File | null;
@@ -113,7 +120,7 @@ export async function POST(request: Request) {
           throw new Error("Missing date value");
         }
 
-        await upsertPosthogAnalytics(analytics);
+        await upsertPosthogAnalytics(analytics, orgId);
         inserted++;
       } catch (error) {
         errors++;

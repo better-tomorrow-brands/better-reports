@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { getShopifySettings } from "@/lib/settings";
 import { upsertOrder, ShopifyOrderPayload } from "@/lib/shopify-orders";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 interface ShopifyOrderEdge {
   node: {
@@ -137,18 +137,15 @@ const ORDERS_QUERY = `{
   }
 }`;
 
-export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const settings = await getShopifySettings();
-  if (!settings?.store_domain || !settings?.access_token) {
-    return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
-  }
-
+export async function POST(request: Request) {
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
+    const settings = await getShopifySettings(orgId);
+    if (!settings?.store_domain || !settings?.access_token) {
+      return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
+    }
+
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -177,7 +174,7 @@ export async function POST() {
     for (const edge of orders) {
       try {
         const payload = convertToPayload(edge.node);
-        await upsertOrder(payload);
+        await upsertOrder(payload, orgId);
         upserted++;
       } catch (err) {
         failed++;
@@ -192,6 +189,9 @@ export async function POST() {
       failed,
     });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Order sync error:", error);
     return NextResponse.json(
       { error: "Sync failed", details: error instanceof Error ? error.message : String(error) },

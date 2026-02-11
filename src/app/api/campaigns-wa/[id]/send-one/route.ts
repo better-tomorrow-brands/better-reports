@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaignsWa, campaignsWaCustomers, customers } from "@/lib/db/schema";
 import { getMetaSettings, getShopifySettings } from "@/lib/settings";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 function formatPhone(phone: string): string {
   let cleaned = phone.replace(/[\s\-()]/g, "");
@@ -57,12 +57,8 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const { id } = await params;
     const campaignId = parseInt(id);
     const body = await request.json();
@@ -73,14 +69,14 @@ export async function POST(
     }
 
     // Get Meta settings
-    const metaSettings = await getMetaSettings();
+    const metaSettings = await getMetaSettings(orgId);
     if (!metaSettings?.access_token || !metaSettings?.phone_number_id) {
       return NextResponse.json({ error: "WhatsApp not configured" }, { status: 400 });
     }
 
     // Get campaign and customer record
     const campaign = await db.query.campaignsWa.findFirst({
-      where: eq(campaignsWa.id, campaignId),
+      where: and(eq(campaignsWa.id, campaignId), eq(campaignsWa.orgId, orgId)),
     });
 
     if (!campaign) {
@@ -174,7 +170,7 @@ export async function POST(
       .where(eq(campaignsWaCustomers.id, campaignCustomerId));
 
     // Add Shopify note
-    const shopifySettings = await getShopifySettings();
+    const shopifySettings = await getShopifySettings(orgId);
     if (shopifySettings?.store_domain && shopifySettings?.access_token && customerRecord.customer?.shopifyCustomerId) {
       const timestamp = new Date().toLocaleDateString("en-GB", {
         day: "2-digit",
@@ -195,6 +191,9 @@ export async function POST(
 
     return NextResponse.json({ success: true });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Send one error:", error);
     return NextResponse.json(
       { error: "Failed to send", details: error instanceof Error ? error.message : String(error) },

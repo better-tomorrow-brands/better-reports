@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -228,6 +229,7 @@ function StatusBadge({ status, type }: { status: string | null; type: "fb" | "wa
 // ── Main Component ─────────────────────────────────────
 
 export default function CampaignsPage() {
+  const { apiFetch, currentOrg } = useOrg();
   const [activeTab, setActiveTab] = useState<"facebook" | "whatsapp" | "manual">("facebook");
 
   // ── Facebook State ─────────────────────────────────
@@ -675,10 +677,12 @@ export default function CampaignsPage() {
   // ── Load Data ──────────────────────────────────────
 
   useEffect(() => {
+    if (!currentOrg) return;
     loadFbCampaigns();
     loadWaCampaigns();
     loadTemplates();
-  }, []);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentOrg?.id]);
 
   // Close dropdowns when clicking outside
   useEffect(() => {
@@ -760,7 +764,7 @@ export default function CampaignsPage() {
 
   async function loadFbCampaigns() {
     try {
-      const res = await fetch("/api/campaigns");
+      const res = await apiFetch("/api/campaigns");
       const data = await res.json();
       if (data.error) {
         setFbError(data.error);
@@ -776,7 +780,7 @@ export default function CampaignsPage() {
 
   async function loadWaCampaigns() {
     try {
-      const res = await fetch("/api/campaigns-wa");
+      const res = await apiFetch("/api/campaigns-wa");
       const data = await res.json();
       if (!data.error) {
         setWaCampaigns(data.campaigns || []);
@@ -788,7 +792,7 @@ export default function CampaignsPage() {
 
   async function loadTemplates() {
     try {
-      const res = await fetch("/api/whatsapp/templates");
+      const res = await apiFetch("/api/whatsapp/templates");
       const data = await res.json();
       if (data.error) {
         setTemplatesError(data.error);
@@ -808,7 +812,7 @@ export default function CampaignsPage() {
     setLoadingProducts(true);
     setProductError("");
     try {
-      const res = await fetch(`/api/shopify/products?search=${encodeURIComponent(query)}`);
+      const res = await apiFetch(`/api/shopify/products?search=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data.error) {
         setProductError(data.error + (data.details ? `: ${data.details}` : ""));
@@ -828,7 +832,7 @@ export default function CampaignsPage() {
     setLoadingDiscounts(true);
     setDiscountError("");
     try {
-      const res = await fetch(`/api/shopify/discounts?search=${encodeURIComponent(query)}`);
+      const res = await apiFetch(`/api/shopify/discounts?search=${encodeURIComponent(query)}`);
       const data = await res.json();
       if (data.error) {
         setDiscountError(data.error + (data.details ? `: ${data.details}` : ""));
@@ -849,7 +853,7 @@ export default function CampaignsPage() {
 
     setCreatingDiscount(true);
     try {
-      const res = await fetch("/api/shopify/discounts", {
+      const res = await apiFetch("/api/shopify/discounts", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -906,7 +910,7 @@ export default function CampaignsPage() {
 
     try {
       const method = fbIsEditing ? "PUT" : "POST";
-      const res = await fetch("/api/campaigns", {
+      const res = await apiFetch("/api/campaigns", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(fbForm),
@@ -931,7 +935,7 @@ export default function CampaignsPage() {
 
     setFbDeleting(true);
     try {
-      const res = await fetch(`/api/campaigns?id=${fbDeleteId}`, {
+      const res = await apiFetch(`/api/campaigns?id=${fbDeleteId}`, {
         method: "DELETE",
       });
 
@@ -1035,7 +1039,7 @@ export default function CampaignsPage() {
 
     try {
       const method = waIsEditing ? "PUT" : "POST";
-      const res = await fetch("/api/campaigns-wa", {
+      const res = await apiFetch("/api/campaigns-wa", {
         method,
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -1064,7 +1068,7 @@ export default function CampaignsPage() {
 
     setWaDeleting(true);
     try {
-      const res = await fetch(`/api/campaigns-wa?id=${waDeleteId}`, {
+      const res = await apiFetch(`/api/campaigns-wa?id=${waDeleteId}`, {
         method: "DELETE",
       });
 
@@ -1088,8 +1092,8 @@ export default function CampaignsPage() {
     setCustomersLoading(true);
     try {
       const [customersRes, lifecycleRes] = await Promise.all([
-        fetch("/api/customers?limit=1000"),
-        fetch("/api/settings/lifecycle"),
+        apiFetch("/api/customers?limit=1000"),
+        apiFetch("/api/settings/lifecycle"),
       ]);
       const customersData = await customersRes.json();
       const lifecycleData = await lifecycleRes.json();
@@ -1592,7 +1596,7 @@ export default function CampaignsPage() {
       );
 
       try {
-        const res = await fetch("/api/whatsapp/send", {
+        const res = await apiFetch("/api/whatsapp/send", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({

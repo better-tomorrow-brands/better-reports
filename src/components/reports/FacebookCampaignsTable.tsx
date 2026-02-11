@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 
 interface ColumnConfig {
   key: string;
@@ -201,7 +203,9 @@ function DashboardSettingsPopover({
 }
 
 export function FacebookCampaignsTable() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+  const { apiFetch, currentOrg } = useOrg();
+  const [dateRange, setDateRange] = usePersistedDateRange(
+    "dr-campaigns",
     () => presets.find((p) => p.label === "Today")!.getValue()
   );
   const [rows, setRows] = useState<CampaignRow[]>([]);
@@ -237,12 +241,12 @@ export function FacebookCampaignsTable() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
+    if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
-      const res = await fetch(
+      const res = await apiFetch(
         `/api/reports/facebook-campaigns?from=${from}&to=${to}`
       );
       if (!res.ok) throw new Error("Failed to fetch");
@@ -256,7 +260,7 @@ export function FacebookCampaignsTable() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange]);
+  }, [dateRange, apiFetch]);
 
   useEffect(() => {
     fetchData();

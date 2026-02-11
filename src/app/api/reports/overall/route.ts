@@ -1,16 +1,13 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, facebookAds, amazonSalesTraffic } from "@/lib/db/schema";
-import { sql, gte, lte, and, sum, count } from "drizzle-orm";
+import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
@@ -37,6 +34,7 @@ export async function GET(request: Request) {
       .from(orders)
       .where(
         and(
+          eq(orders.orgId, orgId),
           gte(orders.createdAt, new Date(from)),
           lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
         )
@@ -54,6 +52,7 @@ export async function GET(request: Request) {
       .from(amazonSalesTraffic)
       .where(
         and(
+          eq(amazonSalesTraffic.orgId, orgId),
           gte(amazonSalesTraffic.date, from),
           lte(amazonSalesTraffic.date, to)
         )
@@ -71,6 +70,7 @@ export async function GET(request: Request) {
       .from(facebookAds)
       .where(
         and(
+          eq(facebookAds.orgId, orgId),
           gte(facebookAds.date, from),
           lte(facebookAds.date, to)
         )
@@ -96,7 +96,6 @@ export async function GET(request: Request) {
         const amazonRevenue = amazonByDate.get(date) || 0;
         const fbSpend = fbByDate.get(date) || 0;
 
-        // Net Cash In: Shopify (revenue - 2% fees - fulfillment - fb spend) + Amazon revenue
         const shopifyFees = shopifyRevenue * 0.02;
         const fulfillmentFees = orderCount * 4.93;
         const shopifyNet = shopifyRevenue - shopifyFees - fulfillmentFees - fbSpend;
@@ -112,6 +111,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Reports overall GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch report data", details: error instanceof Error ? error.message : String(error) },

@@ -5,6 +5,7 @@ import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 
 interface Customer {
   id: number;
@@ -141,6 +142,7 @@ function getInitialColumns(): Set<string> {
 }
 
 export default function CustomersPage() {
+  const { apiFetch, currentOrg } = useOrg();
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -190,9 +192,10 @@ export default function CustomersPage() {
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
   const fetchCustomers = useCallback(() => {
+    if (!currentOrg) return;
     Promise.all([
-      fetch("/api/customers?limit=1000").then((res) => res.json()),
-      fetch("/api/settings/lifecycle").then((res) => res.json()),
+      apiFetch("/api/customers?limit=1000").then((res) => res.json()),
+      apiFetch("/api/settings/lifecycle").then((res) => res.json()),
     ])
       .then(([customersData, lifecycleData]) => {
         if (customersData.error) {
@@ -207,7 +210,7 @@ export default function CustomersPage() {
       })
       .catch(() => setError("Failed to load customers"))
       .finally(() => setLoading(false));
-  }, []);
+  }, [apiFetch, currentOrg]);
 
   useEffect(() => {
     fetchCustomers();
@@ -217,7 +220,7 @@ export default function CustomersPage() {
     setSyncing(true);
     setSyncMessage(null);
     try {
-      const res = await fetch("/api/customers/sync", { method: "POST" });
+      const res = await apiFetch("/api/customers/sync", { method: "POST" });
       const data = await res.json();
       if (!res.ok) {
         setSyncMessage(data.error || "Sync failed");
@@ -231,7 +234,7 @@ export default function CustomersPage() {
       setSyncing(false);
       setTimeout(() => setSyncMessage(null), 3000);
     }
-  }, [fetchCustomers]);
+  }, [fetchCustomers, apiFetch]);
 
   useEffect(() => {
     setVisibleColumns(getInitialColumns());
@@ -530,9 +533,44 @@ export default function CustomersPage() {
 
   if (loading) {
     return (
-      <div className="p-6">
-        <h1 className="text-2xl font-bold mb-6">Customers</h1>
-        <p className="text-muted">Loading...</p>
+      <div className="page-container">
+        <div className="page-header">
+          {/* Toolbar */}
+          <div className="flex justify-between items-center mb-4">
+            <div className="h-8 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
+            <div className="flex items-center gap-3">
+              {[48, 64, 64, 64, 80, 80, 144].map((w, i) => (
+                <div key={i} className="h-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" style={{ width: w }} />
+              ))}
+            </div>
+          </div>
+          {/* Scorecards */}
+          <div className="flex gap-3 overflow-x-hidden pb-1">
+            {[...Array(12)].map((_, i) => (
+              <div key={i} className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 w-40">
+                <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-3" />
+                <div className="h-7 w-14 bg-zinc-300 dark:bg-zinc-700 rounded animate-pulse" />
+              </div>
+            ))}
+          </div>
+        </div>
+        {/* Table */}
+        <div className="page-content">
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+            <div className="flex gap-6 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+              {[96, 128, 52, 80, 64, 88, 80, 104, 96].map((w, i) => (
+                <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+              ))}
+            </div>
+            {[...Array(14)].map((_, row) => (
+              <div key={row} className="flex gap-6 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+                {[96, 128, 52, 80, 64, 88, 80, 104, 96].map((w, col) => (
+                  <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
     );
   }

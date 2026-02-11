@@ -42,6 +42,12 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
+  const orgIdParam = url.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
   try {
     const csvPath = path.join(process.cwd(), "tmp", "product_database.csv");
     const csvContent = readFileSync(csvPath, "utf-8");
@@ -75,6 +81,7 @@ export async function GET(request: Request) {
       await db
         .insert(products)
         .values({
+          orgId,
           sku,
           productName: row[1]?.trim() || null,
           brand: row[2]?.trim() || null,

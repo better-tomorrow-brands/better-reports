@@ -1,16 +1,13 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, facebookAds } from "@/lib/db/schema";
-import { sql, gte, lte, and, sum, count } from "drizzle-orm";
+import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
@@ -26,7 +23,6 @@ export async function GET(request: Request) {
     const truncUnit = groupBy === "week" ? "week" : groupBy === "month" ? "month" : "day";
     const unit = sql.raw(`'${truncUnit}'`);
 
-    // Orders: group by truncated created_at
     const dateTruncOrders = sql`date_trunc(${unit}, ${orders.createdAt})::date`;
     const orderRows = await db
       .select({
@@ -37,6 +33,7 @@ export async function GET(request: Request) {
       .from(orders)
       .where(
         and(
+          eq(orders.orgId, orgId),
           gte(orders.createdAt, new Date(from)),
           lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
         )
@@ -44,7 +41,6 @@ export async function GET(request: Request) {
       .groupBy(dateTruncOrders)
       .orderBy(dateTruncOrders);
 
-    // Facebook Ads: group by truncated date
     const dateTruncFb = sql`date_trunc(${unit}, ${facebookAds.date}::timestamp)::date`;
     const fbRows = await db
       .select({
@@ -54,6 +50,7 @@ export async function GET(request: Request) {
       .from(facebookAds)
       .where(
         and(
+          eq(facebookAds.orgId, orgId),
           gte(facebookAds.date, from),
           lte(facebookAds.date, to)
         )
@@ -61,7 +58,6 @@ export async function GET(request: Request) {
       .groupBy(dateTruncFb)
       .orderBy(dateTruncFb);
 
-    // Merge by date
     const fbByDate = new Map(fbRows.map((r) => [r.date, Number(r.fbSpend) || 0]));
 
     const data = orderRows.map((row) => {
@@ -81,7 +77,6 @@ export async function GET(request: Request) {
       };
     });
 
-    // Add any fb-only dates that had no orders
     for (const [date, spend] of fbByDate) {
       if (!data.find((d) => d.date === date)) {
         data.push({
@@ -98,6 +93,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Reports shopify GET error:", error);
     return NextResponse.json(
       { error: "Failed to fetch report data", details: error instanceof Error ? error.message : String(error) },

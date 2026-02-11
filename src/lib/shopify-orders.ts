@@ -82,8 +82,8 @@ export function verifyShopifyHmac(body: string, hmacHeader: string, secret: stri
 
 // ── Customer Journey (UTM from Shopify) ────────────────
 
-export async function getCustomerJourney(orderId: number): Promise<UTMParams> {
-  const settings = await getShopifySettings();
+export async function getCustomerJourney(orderId: number, orgId: number): Promise<UTMParams> {
+  const settings = await getShopifySettings(orgId);
   if (!settings?.store_domain || !settings?.access_token) {
     return {};
   }
@@ -129,14 +129,15 @@ export async function getCustomerJourney(orderId: number): Promise<UTMParams> {
 
 export async function getAttributionFromCampaigns(
   discountCode: string,
-  skus: string
+  skus: string,
+  orgId: number
 ): Promise<AttributionResult | null> {
   // First: match by discount code
   if (discountCode) {
     const byDiscount = await db
       .select()
       .from(campaignsFcb)
-      .where(sql`LOWER(${campaignsFcb.discountCode}) = LOWER(${discountCode})`)
+      .where(and(eq(campaignsFcb.orgId, orgId), sql`LOWER(${campaignsFcb.discountCode}) = LOWER(${discountCode})`))
       .limit(1);
 
     if (byDiscount.length > 0) {
@@ -158,7 +159,7 @@ export async function getAttributionFromCampaigns(
     const allCampaigns = await db
       .select()
       .from(campaignsFcb)
-      .where(sql`${campaignsFcb.skus} IS NOT NULL AND ${campaignsFcb.skus} != ''`);
+      .where(and(eq(campaignsFcb.orgId, orgId), sql`${campaignsFcb.skus} IS NOT NULL AND ${campaignsFcb.skus} != ''`));
 
     for (const camp of allCampaigns) {
       const campaignSkuArray = (camp.skus || "")
@@ -234,11 +235,11 @@ function formatDate(dateString?: string): Date | null {
 
 // ── Main Upsert ────────────────────────────────────────
 
-export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
+export async function upsertOrder(data: ShopifyOrderPayload, orgId: number): Promise<void> {
   const shopifyId = data.id.toString();
 
   // Get UTM from Shopify API
-  const utmParams = await getCustomerJourney(data.id);
+  const utmParams = await getCustomerJourney(data.id, orgId);
   const hasConversionData = !!(utmParams.source || utmParams.campaign || utmParams.medium);
 
   let finalUtm: AttributionResult = {
@@ -253,7 +254,7 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
   if (!hasConversionData) {
     const discountCode = getDiscountCodes(data);
     const skus = getLineItemSkus(data);
-    const lookupResult = await getAttributionFromCampaigns(discountCode, skus);
+    const lookupResult = await getAttributionFromCampaigns(discountCode, skus, orgId);
     if (lookupResult) {
       finalUtm = lookupResult;
     }
@@ -270,6 +271,7 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
       .from(orders)
       .where(
         and(
+          eq(orders.orgId, orgId),
           eq(orders.email, customerEmail),
           lt(orders.createdAt, orderDate)
         )
@@ -280,6 +282,7 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
   }
 
   const orderData = {
+    orgId,
     shopifyId,
     orderNumber: data.order_number?.toString() || null,
     email: customerEmail,
@@ -313,7 +316,7 @@ export async function upsertOrder(data: ShopifyOrderPayload): Promise<void> {
     .insert(orders)
     .values(orderData)
     .onConflictDoUpdate({
-      target: orders.shopifyId,
+      target: [orders.orgId, orders.shopifyId],
       set: updateData,
     });
 }

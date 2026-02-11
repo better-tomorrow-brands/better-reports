@@ -3,7 +3,7 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users } from "@/lib/db/schema";
+import { users, userOrganizations } from "@/lib/db/schema";
 
 interface ClerkEmailAddress {
   email_address: string;
@@ -16,6 +16,7 @@ interface ClerkUserEvent {
     email_addresses: ClerkEmailAddress[];
     first_name: string | null;
     last_name: string | null;
+    public_metadata?: Record<string, unknown>;
   };
   type: string;
 }
@@ -71,6 +72,24 @@ export async function POST(request: Request) {
         set: { email: email || "", name },
       });
     console.log(`User upserted: ${data.id} (${email})`);
+
+    // On new user creation, assign to org from Clerk public_metadata or DEFAULT_ORG_ID env var
+    if (type === "user.created") {
+      const metaOrgId = data.public_metadata?.orgId;
+      const orgId = metaOrgId
+        ? Number(metaOrgId)
+        : process.env.DEFAULT_ORG_ID
+        ? Number(process.env.DEFAULT_ORG_ID)
+        : null;
+
+      if (orgId && !isNaN(orgId)) {
+        await db
+          .insert(userOrganizations)
+          .values({ userId: data.id, orgId, role: "user" })
+          .onConflictDoNothing();
+        console.log(`User ${data.id} assigned to org ${orgId}`);
+      }
+    }
   }
 
   if (type === "user.deleted") {

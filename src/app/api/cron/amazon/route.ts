@@ -35,7 +35,13 @@ export async function GET(request: Request) {
   const url = new URL(request.url);
   const job = url.searchParams.get("job") || "sales-traffic";
 
-  const settings = await getAmazonSettings();
+  const orgIdParam = url.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
+  const settings = await getAmazonSettings(orgId);
   if (!settings) {
     return NextResponse.json(
       { error: "Amazon settings not configured" },
@@ -60,7 +66,7 @@ export async function GET(request: Request) {
         let totalRows = 0;
         for (const lb of lookbacks) {
           const rows = await fetchSalesTrafficReport(settings, lb.start, lb.end);
-          const upserted = await upsertSalesTraffic(rows);
+          const upserted = await upsertSalesTraffic(rows, orgId);
           totalRows += upserted;
         }
 
@@ -72,7 +78,7 @@ export async function GET(request: Request) {
         const postedAfter = new Date(daysAgo(3) + "T00:00:00Z").toISOString();
         const postedBefore = new Date(Date.now() - 3 * 60000).toISOString(); // 3 min ago per API requirement
         const txns = await fetchFinancialEvents(settings, postedAfter, postedBefore);
-        const upserted = await upsertFinancialEvents(txns);
+        const upserted = await upsertFinancialEvents(txns, orgId);
         result = { job, transactions: txns.length, upserted };
         break;
       }
@@ -80,7 +86,7 @@ export async function GET(request: Request) {
       case "inventory": {
         const items = await fetchInventory(settings);
         const snapshotDate = formatDate(new Date());
-        const upserted = await upsertInventory(items, snapshotDate);
+        const upserted = await upsertInventory(items, snapshotDate, orgId);
         result = { job, items: items.length, upserted, snapshotDate };
         break;
       }
@@ -93,6 +99,7 @@ export async function GET(request: Request) {
     }
 
     await db.insert(syncLogs).values({
+      orgId,
       source: `amazon-${job}`,
       status: "success",
       syncedAt: timestamp,
@@ -104,6 +111,7 @@ export async function GET(request: Request) {
     console.error(`Amazon ${job} sync error:`, error);
 
     await db.insert(syncLogs).values({
+      orgId,
       source: `amazon-${job}`,
       status: "error",
       syncedAt: timestamp,
