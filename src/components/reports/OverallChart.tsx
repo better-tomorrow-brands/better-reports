@@ -1,11 +1,11 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
-import { DateRangePicker, presets } from "@/components/DateRangePicker";
-import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
+import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { chartColors } from "@/lib/chart-colors";
 import {
@@ -120,16 +120,21 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function OverallChart() {
+export function OverallChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
   const { apiFetch, currentOrg } = useOrg();
-  const [dateRange, setDateRange] = usePersistedDateRange(
-    "dr-overall",
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
-  const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
+  const [prevDateRange, setPrevDateRange] = useState(dateRange);
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+
+  if (dateRange !== prevDateRange) {
+    setPrevDateRange(dateRange);
+    setGroupBy(suggestGroupBy(dateRange));
+  }
 
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
@@ -192,11 +197,10 @@ export function OverallChart() {
       }
 
       if (isCurrentPeriod && daysElapsed > 0) {
-        const remainingDays = totalDays - daysElapsed;
-        const shopifyRemaining = (d.shopifyRevenue / daysElapsed) * remainingDays;
-        shopifyForecast = Math.max(0, Math.round((shopifyRemaining - d.shopifyRevenue) * 100) / 100);
-        const amazonRemaining = (d.amazonRevenue / daysElapsed) * remainingDays;
-        amazonForecast = Math.max(0, Math.round((amazonRemaining - d.amazonRevenue) * 100) / 100);
+        const shopifyProjected = (d.shopifyRevenue / daysElapsed) * totalDays;
+        shopifyForecast = Math.max(0, Math.round((shopifyProjected - d.shopifyRevenue) * 100) / 100);
+        const amazonProjected = (d.amazonRevenue / daysElapsed) * totalDays;
+        amazonForecast = Math.max(0, Math.round((amazonProjected - d.amazonRevenue) * 100) / 100);
       }
     }
 
@@ -223,28 +227,28 @@ export function OverallChart() {
 
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 justify-end">
-        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-          {groupByOrder.map((g) => (
-            <button
-              key={g}
-              onClick={() => setGroupBy(g)}
-              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-                groupBy === g
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              {groupByLabels[g]}
-            </button>
-          ))}
-        </div>
-
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-        <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
-      </div>
+      {controlsContainer && createPortal(
+        <>
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {groupByOrder.map((g) => (
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  groupBy === g
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {groupByLabels[g]}
+              </button>
+            ))}
+          </div>
+          <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+          <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
+        </>,
+        controlsContainer,
+      )}
 
       {/* Chart + Scorecards */}
       <div className="flex gap-4">

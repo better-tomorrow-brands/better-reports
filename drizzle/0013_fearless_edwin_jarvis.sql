@@ -1,0 +1,1 @@
+ALTER TABLE "inventory_snapshots" ADD COLUMN "shopify_qty" integer DEFAULT 0;

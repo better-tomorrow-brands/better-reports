@@ -3,7 +3,8 @@ import { headers } from "next/headers";
 import { NextResponse } from "next/server";
 import { eq } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { users, userOrganizations } from "@/lib/db/schema";
+import { users } from "@/lib/db/schema";
+import { ensureUser } from "@/lib/org-auth";
 
 interface ClerkEmailAddress {
   email_address: string;
@@ -60,36 +61,8 @@ export async function POST(request: Request) {
   const name = [data.first_name, data.last_name].filter(Boolean).join(" ") || null;
 
   if (type === "user.created" || type === "user.updated") {
-    await db
-      .insert(users)
-      .values({
-        id: data.id,
-        email: email || "",
-        name,
-      })
-      .onConflictDoUpdate({
-        target: users.id,
-        set: { email: email || "", name },
-      });
+    await ensureUser(data.id, email || "", name);
     console.log(`User upserted: ${data.id} (${email})`);
-
-    // On new user creation, assign to org from Clerk public_metadata or DEFAULT_ORG_ID env var
-    if (type === "user.created") {
-      const metaOrgId = data.public_metadata?.orgId;
-      const orgId = metaOrgId
-        ? Number(metaOrgId)
-        : process.env.DEFAULT_ORG_ID
-        ? Number(process.env.DEFAULT_ORG_ID)
-        : null;
-
-      if (orgId && !isNaN(orgId)) {
-        await db
-          .insert(userOrganizations)
-          .values({ userId: data.id, orgId, role: "user" })
-          .onConflictDoNothing();
-        console.log(`User ${data.id} assigned to org ${orgId}`);
-      }
-    }
   }
 
   if (type === "user.deleted") {

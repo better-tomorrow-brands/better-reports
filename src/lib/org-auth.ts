@@ -68,3 +68,62 @@ export async function requireOrgFromRequest(request: Request): Promise<{ userId:
   const userId = await requireOrgAccess(orgId);
   return { userId, orgId };
 }
+
+/**
+ * Ensures a user row exists for the given Clerk user ID and email.
+ * If a row already exists with the same email but a different Clerk ID
+ * (e.g. after account recreation), migrates the old row's role and org
+ * memberships to the new ID — preventing duplicates and preserving access.
+ */
+export async function ensureUser(
+  userId: string,
+  email: string,
+  name: string | null
+): Promise<void> {
+  // Check if this Clerk ID already exists — nothing to do
+  const byId = await db
+    .select({ id: users.id })
+    .from(users)
+    .where(eq(users.id, userId))
+    .limit(1);
+  if (byId.length) return;
+
+  // Check if email exists under a different Clerk ID
+  const byEmail = await db
+    .select({ id: users.id, role: users.role })
+    .from(users)
+    .where(eq(users.email, email))
+    .limit(1);
+
+  if (byEmail.length && byEmail[0].id !== userId) {
+    const oldId = byEmail[0].id;
+    const oldRole = byEmail[0].role;
+
+    // Create new user row preserving existing role
+    await db.insert(users)
+      .values({ id: userId, email, name, role: oldRole })
+      .onConflictDoNothing();
+
+    // Migrate org memberships from old Clerk ID to new one
+    await db.update(userOrganizations)
+      .set({ userId })
+      .where(eq(userOrganizations.userId, oldId));
+
+    // Remove the stale row
+    await db.delete(users).where(eq(users.id, oldId));
+    return;
+  }
+
+  // Brand new user — insert with default role
+  await db.insert(users)
+    .values({ id: userId, email, name, role: "user" })
+    .onConflictDoNothing();
+
+  // Assign to default org if configured
+  const defaultOrgId = process.env.DEFAULT_ORG_ID ? Number(process.env.DEFAULT_ORG_ID) : null;
+  if (defaultOrgId && !isNaN(defaultOrgId)) {
+    await db.insert(userOrganizations)
+      .values({ userId, orgId: defaultOrgId, role: "user" })
+      .onConflictDoNothing();
+  }
+}

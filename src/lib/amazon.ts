@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import {
   amazonSalesTraffic,
   amazonFinancialEvents,
+  amazonOrders,
   inventorySnapshots,
   syncLogs,
 } from "@/lib/db/schema";
@@ -513,6 +514,201 @@ export async function upsertInventory(items: InventoryRow[], snapshotDate: strin
         set: {
           amazonQty: item.totalQuantity,
           updatedAt: new Date(),
+        },
+      });
+    upserted++;
+  }
+  return upserted;
+}
+
+// ── Orders API (Real-Time) ───────────────────────────────
+
+interface AmazonOrder {
+  AmazonOrderId: string;
+  PurchaseDate: string;
+  LastUpdateDate: string;
+  OrderStatus: string;
+  FulfillmentChannel: string;
+  IsPrime: boolean;
+  IsBusinessOrder: boolean;
+}
+
+interface AmazonOrderItem {
+  OrderItemId: string;
+  ASIN: string;
+  SellerSKU: string;
+  Title: string;
+  QuantityOrdered: number;
+  QuantityShipped: number;
+  ItemPrice?: { Amount: string; CurrencyCode: string };
+}
+
+export async function fetchOrders(
+  settings: AmazonSettings,
+  lastUpdatedAfter: string
+): Promise<AmazonOrder[]> {
+  const orders: AmazonOrder[] = [];
+  let nextToken: string | null = null;
+
+  do {
+    const params = new URLSearchParams({
+      MarketplaceIds: settings.marketplace_id,
+      LastUpdatedAfter: lastUpdatedAfter,
+      OrderStatuses: "Pending,Unshipped,PartiallyShipped,Shipped,InvoiceUnconfirmed",
+    });
+    if (nextToken) params.set("NextToken", nextToken);
+
+    const res = await spApiRequest(
+      `/orders/v0/orders?${params.toString()}`,
+      settings
+    );
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Orders API error (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    const payload = data.payload || data;
+    const list = payload.Orders || [];
+
+    for (const o of list) {
+      orders.push({
+        AmazonOrderId: o.AmazonOrderId,
+        PurchaseDate: o.PurchaseDate,
+        LastUpdateDate: o.LastUpdateDate,
+        OrderStatus: o.OrderStatus,
+        FulfillmentChannel: o.FulfillmentChannel || "",
+        IsPrime: o.IsPrime === true,
+        IsBusinessOrder: o.IsBusinessOrder === true,
+      });
+    }
+
+    nextToken = payload.NextToken || null;
+  } while (nextToken);
+
+  return orders;
+}
+
+export async function fetchOrderItems(
+  settings: AmazonSettings,
+  orderId: string
+): Promise<AmazonOrderItem[]> {
+  const items: AmazonOrderItem[] = [];
+  let nextToken: string | null = null;
+
+  do {
+    const path = nextToken
+      ? `/orders/v0/orders/${orderId}/orderItems?NextToken=${encodeURIComponent(nextToken)}`
+      : `/orders/v0/orders/${orderId}/orderItems`;
+
+    const res = await spApiRequest(path, settings);
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`OrderItems API error (${res.status}): ${text}`);
+    }
+
+    const data = await res.json();
+    const payload = data.payload || data;
+    const list = payload.OrderItems || [];
+
+    for (const item of list) {
+      items.push({
+        OrderItemId: item.OrderItemId,
+        ASIN: item.ASIN || "",
+        SellerSKU: item.SellerSKU || "",
+        Title: item.Title || "",
+        QuantityOrdered: Number(item.QuantityOrdered ?? 0),
+        QuantityShipped: Number(item.QuantityShipped ?? 0),
+        ItemPrice: item.ItemPrice
+          ? { Amount: String(item.ItemPrice.Amount ?? "0"), CurrencyCode: item.ItemPrice.CurrencyCode || "GBP" }
+          : undefined,
+      });
+    }
+
+    nextToken = payload.NextToken || null;
+  } while (nextToken);
+
+  return items;
+}
+
+export async function syncRecentOrders(
+  settings: AmazonSettings,
+  orgId: number,
+  lastUpdatedAfter: string
+): Promise<{ ordersFound: number; itemsUpserted: number }> {
+  const ordersList = await fetchOrders(settings, lastUpdatedAfter);
+  let itemsUpserted = 0;
+
+  for (const order of ordersList) {
+    try {
+      const items = await fetchOrderItems(settings, order.AmazonOrderId);
+
+      const rows = items.map((item) => ({
+        orgId,
+        amazonOrderId: order.AmazonOrderId,
+        orderItemId: item.OrderItemId,
+        purchaseDate: new Date(order.PurchaseDate),
+        lastUpdateDate: order.LastUpdateDate ? new Date(order.LastUpdateDate) : null,
+        orderStatus: order.OrderStatus,
+        fulfillmentChannel: order.FulfillmentChannel,
+        asin: item.ASIN,
+        sellerSku: item.SellerSKU,
+        title: item.Title,
+        quantityOrdered: item.QuantityOrdered,
+        quantityShipped: item.QuantityShipped,
+        itemPrice: item.ItemPrice?.Amount ?? "0",
+        itemCurrency: item.ItemPrice?.CurrencyCode ?? "GBP",
+        isPrime: order.IsPrime,
+        isBusinessOrder: order.IsBusinessOrder,
+      }));
+
+      const upserted = await upsertAmazonOrders(rows, orgId);
+      itemsUpserted += upserted;
+    } catch (err) {
+      console.error(`Failed to fetch items for order ${order.AmazonOrderId}:`, err);
+    }
+  }
+
+  return { ordersFound: ordersList.length, itemsUpserted };
+}
+
+export async function upsertAmazonOrders(
+  rows: {
+    orgId: number;
+    amazonOrderId: string;
+    orderItemId: string;
+    purchaseDate: Date;
+    lastUpdateDate: Date | null;
+    orderStatus: string;
+    fulfillmentChannel: string;
+    asin: string;
+    sellerSku: string;
+    title: string;
+    quantityOrdered: number;
+    quantityShipped: number;
+    itemPrice: string;
+    itemCurrency: string;
+    isPrime: boolean;
+    isBusinessOrder: boolean;
+  }[],
+  orgId: number
+) {
+  let upserted = 0;
+  for (const row of rows) {
+    await db
+      .insert(amazonOrders)
+      .values(row)
+      .onConflictDoUpdate({
+        target: [amazonOrders.orgId, amazonOrders.amazonOrderId, amazonOrders.orderItemId],
+        set: {
+          orderStatus: row.orderStatus,
+          lastUpdateDate: row.lastUpdateDate,
+          quantityOrdered: row.quantityOrdered,
+          quantityShipped: row.quantityShipped,
+          itemPrice: row.itemPrice,
+          itemCurrency: row.itemCurrency,
         },
       });
     upserted++;

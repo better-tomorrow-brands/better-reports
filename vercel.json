@@ -17,16 +17,32 @@
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/cron/amazon?job=sales-traffic",
+      "path": "/api/cron/amazon?job=sales-traffic&orgId=1",
       "schedule": "0 8 * * *"
     },
     {
-      "path": "/api/cron/amazon?job=finances",
+      "path": "/api/cron/amazon?job=finances&orgId=1",
       "schedule": "30 8 * * *"
     },
     {
-      "path": "/api/cron/amazon?job=inventory",
+      "path": "/api/cron/amazon?job=inventory&orgId=1",
       "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/shopify-inventory?orgId=1",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-ads-request?orgId=1",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-ads-collect?orgId=1",
+      "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon?job=orders&orgId=1",
+      "schedule": "15 * * * *"
     }
   ]
 }

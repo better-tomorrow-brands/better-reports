@@ -156,6 +156,7 @@ export const inventorySnapshots = pgTable("inventory_snapshots", {
   date: date("date").notNull(),
   amazonQty: integer("amazon_qty").default(0),
   warehouseQty: integer("warehouse_qty").default(0),
+  shopifyQty: integer("shopify_qty").default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   uniqueIndex("inventory_snapshots_org_sku_date_idx").on(table.orgId, table.sku, table.date),
@@ -348,6 +349,105 @@ export const facebookAds = pgTable("facebook_ads", {
 }, (table) => [
   uniqueIndex("facebook_ads_org_date_campaign_adset_ad_idx")
     .on(table.orgId, table.date, table.campaign, table.adset, table.ad),
+]);
+
+// ── Amazon SP Ads (Daily Campaign-Level) ────────────────
+export const amazonSpAds = pgTable("amazon_sp_ads", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  date: date("date").notNull(),
+  // Dimensions
+  campaignId: text("campaign_id").notNull(),
+  campaignName: text("campaign_name"),
+  campaignStatus: text("campaign_status"),
+  campaignBudgetAmount: real("campaign_budget_amount"),
+  campaignBudgetType: text("campaign_budget_type"),
+  campaignBudgetCurrencyCode: text("campaign_budget_currency_code"),
+  campaignRuleBasedBudgetAmount: real("campaign_rule_based_budget_amount"),
+  campaignBiddingStrategy: text("campaign_bidding_strategy"),
+  campaignApplicableBudgetRuleId: text("campaign_applicable_budget_rule_id"),
+  campaignApplicableBudgetRuleName: text("campaign_applicable_budget_rule_name"),
+  // Core metrics
+  impressions: integer("impressions").default(0),
+  clicks: integer("clicks").default(0),
+  cost: real("cost").default(0),
+  spend: real("spend"),
+  costPerClick: real("cost_per_click"),
+  clickThroughRate: real("click_through_rate"),
+  topOfSearchImpressionShare: real("top_of_search_impression_share"),
+  // Sales (all attribution windows + same-SKU)
+  sales1d: real("sales_1d"),
+  sales7d: real("sales_7d"),
+  sales14d: real("sales_14d"),
+  sales30d: real("sales_30d"),
+  attributedSalesSameSku1d: real("attributed_sales_same_sku_1d"),
+  attributedSalesSameSku7d: real("attributed_sales_same_sku_7d"),
+  attributedSalesSameSku14d: real("attributed_sales_same_sku_14d"),
+  attributedSalesSameSku30d: real("attributed_sales_same_sku_30d"),
+  // Purchases (all attribution windows + same-SKU)
+  purchases1d: integer("purchases_1d"),
+  purchases7d: integer("purchases_7d"),
+  purchases14d: integer("purchases_14d"),
+  purchases30d: integer("purchases_30d"),
+  purchasesSameSku1d: integer("purchases_same_sku_1d"),
+  purchasesSameSku7d: integer("purchases_same_sku_7d"),
+  purchasesSameSku14d: integer("purchases_same_sku_14d"),
+  purchasesSameSku30d: integer("purchases_same_sku_30d"),
+  // Units sold (clicks + same-SKU)
+  unitsSoldClicks1d: integer("units_sold_clicks_1d"),
+  unitsSoldClicks7d: integer("units_sold_clicks_7d"),
+  unitsSoldClicks14d: integer("units_sold_clicks_14d"),
+  unitsSoldClicks30d: integer("units_sold_clicks_30d"),
+  unitsSoldSameSku1d: integer("units_sold_same_sku_1d"),
+  unitsSoldSameSku7d: integer("units_sold_same_sku_7d"),
+  unitsSoldSameSku14d: integer("units_sold_same_sku_14d"),
+  unitsSoldSameSku30d: integer("units_sold_same_sku_30d"),
+  // Efficiency
+  acosClicks14d: real("acos_clicks_14d"),
+  roasClicks14d: real("roas_clicks_14d"),
+  // Other
+  addToList: integer("add_to_list"),
+  // Timestamps
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("amazon_sp_ads_org_date_campaign_idx")
+    .on(table.orgId, table.date, table.campaignId),
+]);
+
+// ── Amazon Ads Pending Reports (Cron Bridge) ────────────
+export const amazonAdsPendingReports = pgTable("amazon_ads_pending_reports", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  reportId: text("report_id").notNull(),
+  reportDate: date("report_date").notNull(),
+  status: text("status").notNull().default("pending"), // pending | completed | failed
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+// ── Amazon Orders (SP-API, real-time) ────────────────────
+export const amazonOrders = pgTable("amazon_orders", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  amazonOrderId: text("amazon_order_id").notNull(),
+  orderItemId: text("order_item_id").notNull(),
+  purchaseDate: timestamp("purchase_date", { withTimezone: true }).notNull(),
+  lastUpdateDate: timestamp("last_update_date", { withTimezone: true }),
+  orderStatus: text("order_status"),
+  fulfillmentChannel: text("fulfillment_channel"),
+  asin: text("asin"),
+  sellerSku: text("seller_sku"),
+  title: text("title"),
+  quantityOrdered: integer("quantity_ordered").default(0),
+  quantityShipped: integer("quantity_shipped").default(0),
+  itemPrice: decimal("item_price", { precision: 12, scale: 2 }).default("0"),
+  itemCurrency: text("item_currency").default("GBP"),
+  isPrime: boolean("is_prime").default(false),
+  isBusinessOrder: boolean("is_business_order").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("amazon_orders_org_order_item_idx")
+    .on(table.orgId, table.amazonOrderId, table.orderItemId),
 ]);
 
 // ── Relations ─────────────────────────────────────────

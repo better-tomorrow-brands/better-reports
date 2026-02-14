@@ -9,6 +9,7 @@ import {
   upsertFinancialEvents,
   fetchInventory,
   upsertInventory,
+  syncRecentOrders,
 } from "@/lib/amazon";
 
 export const maxDuration = 300;
@@ -91,9 +92,16 @@ export async function GET(request: Request) {
         break;
       }
 
+      case "orders": {
+        const lastUpdatedAfter = new Date(Date.now() - 2 * 3600000).toISOString();
+        const { ordersFound, itemsUpserted } = await syncRecentOrders(settings, orgId, lastUpdatedAfter);
+        result = { job, ordersFound, itemsUpserted };
+        break;
+      }
+
       default:
         return NextResponse.json(
-          { error: `Unknown job: ${job}. Use: sales-traffic, finances, inventory` },
+          { error: `Unknown job: ${job}. Use: sales-traffic, finances, inventory, orders` },
           { status: 400 }
         );
     }

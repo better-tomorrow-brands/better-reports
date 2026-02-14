@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday, isSameDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday, isSameDay, differenceInDays } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 
 // Preset options
@@ -14,6 +14,14 @@ export const presets = [
   { label: "Last 90 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 90)), to: endOfYesterday() }) },
   { label: "Last 12 months", getValue: () => ({ from: startOfDay(subDays(new Date(), 365)), to: endOfYesterday() }) },
 ];
+
+export function suggestGroupBy(range: DateRange | undefined): "day" | "week" | "month" {
+  if (!range?.from || !range?.to) return "day";
+  const days = differenceInDays(range.to, range.from);
+  if (days >= 364) return "month";
+  if (days >= 89) return "week";
+  return "day";
+}
 
 interface DateRangePickerProps {
   dateRange: DateRange | undefined;
@@ -102,9 +110,9 @@ export function DateRangePicker({
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
-        className="btn btn-secondary btn-sm"
+        className="btn btn-secondary btn-xs"
       >
-        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+        <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
         </svg>
         {formatDateRange()}
@@ -261,7 +269,7 @@ export function DateRangePicker({
             <div className="date-range-footer">
               <button
                 type="button"
-                className="btn btn-secondary btn-sm"
+                className="btn btn-secondary btn-xs"
                 onClick={handleCancel}
               >
                 Cancel

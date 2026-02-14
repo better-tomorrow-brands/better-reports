@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
+import { Eye, EyeOff, Pencil, X } from "lucide-react";
 
 type SettingsTab = "shopify" | "meta" | "amazon" | "expenses" | "preferences";
 
@@ -31,6 +32,13 @@ interface AmazonForm {
   marketplace_id: string;
 }
 
+interface AmazonAdsForm {
+  client_id: string;
+  client_secret: string;
+  refresh_token: string;
+  profile_id: string;
+}
+
 export default function SettingsPage() {
   const { apiFetch, currentOrg } = useOrg();
   const { theme, setTheme } = useTheme();
@@ -56,15 +64,77 @@ export default function SettingsPage() {
     refresh_token: "",
     marketplace_id: "A1F83G8C2ARO7P",
   });
+  const [amazonAds, setAmazonAds] = useState<AmazonAdsForm>({
+    client_id: "",
+    client_secret: "",
+    refresh_token: "",
+    profile_id: "",
+  });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
   const [savingAmazon, setSavingAmazon] = useState(false);
+  const [savingAmazonAds, setSavingAmazonAds] = useState(false);
   const [testingAmazon, setTestingAmazon] = useState(false);
+  const [testingAmazonAds, setTestingAmazonAds] = useState(false);
   const [amazonTestResult, setAmazonTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [amazonAdsTestResult, setAmazonAdsTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+
+  // Saved snapshots — track what's persisted so we can detect changes & lock fields
+  const [savedMeta, setSavedMeta] = useState<MetaForm>({ phone_number_id: "", waba_id: "", access_token: "" });
+  const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ store_domain: "", access_token: "", webhook_secret: "" });
+  const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
+  const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
+
+  // Which locked fields are currently unlocked for editing / have their value revealed
+  const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
+  const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
+
+  const toggleEditing = useCallback((fieldKey: string, savedValue: string, restoreValue: (val: string) => void) => {
+    setEditingFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldKey)) {
+        // Cancel editing — restore saved value
+        next.delete(fieldKey);
+        restoreValue(savedValue);
+      } else {
+        // Start editing — clear the field so user types fresh
+        next.add(fieldKey);
+        restoreValue("");
+      }
+      return next;
+    });
+    // Hide value when toggling edit state
+    setVisibleFields((prev) => {
+      const next = new Set(prev);
+      next.delete(fieldKey);
+      return next;
+    });
+  }, []);
+
+  const toggleVisible = useCallback((fieldKey: string) => {
+    setVisibleFields((prev) => {
+      const next = new Set(prev);
+      if (next.has(fieldKey)) next.delete(fieldKey);
+      else next.add(fieldKey);
+      return next;
+    });
+  }, []);
+
+  // Reset lock/visibility state for a section after save
+  const resetFieldStates = useCallback((prefix: string) => {
+    setEditingFields((prev) => {
+      const next = new Set(Array.from(prev).filter((k) => !k.startsWith(prefix)));
+      return next;
+    });
+    setVisibleFields((prev) => {
+      const next = new Set(Array.from(prev).filter((k) => !k.startsWith(prefix)));
+      return next;
+    });
+  }, []);
 
   useEffect(() => {
     if (!currentOrg) return;
@@ -74,9 +144,24 @@ export default function SettingsPage() {
       fetch("/api/users/me").then((res) => res.json()).catch(() => ({ role: null })),
     ])
       .then(([settingsData, lifecycleData, userData]) => {
-        if (settingsData.meta) setMeta(settingsData.meta);
-        if (settingsData.shopify) setShopify(settingsData.shopify);
-        if (settingsData.amazon) setAmazon({ ...amazon, ...settingsData.amazon });
+        if (settingsData.meta) {
+          setMeta(settingsData.meta);
+          setSavedMeta(settingsData.meta);
+        }
+        if (settingsData.shopify) {
+          setShopify(settingsData.shopify);
+          setSavedShopify(settingsData.shopify);
+        }
+        if (settingsData.amazon) {
+          const merged = { ...amazon, ...settingsData.amazon };
+          setAmazon(merged);
+          setSavedAmazon(merged);
+        }
+        if (settingsData.amazon_ads) {
+          const merged = { ...amazonAds, ...settingsData.amazon_ads };
+          setAmazonAds(merged);
+          setSavedAmazonAds(merged);
+        }
         if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
         if (userData.role) setUserRole(userData.role);
       })
@@ -100,7 +185,11 @@ export default function SettingsPage() {
         setMessage({ type: "success", text: "Meta settings saved" });
         const reload = await apiFetch("/api/settings");
         const reloaded = await reload.json();
-        if (reloaded.meta) setMeta(reloaded.meta);
+        if (reloaded.meta) {
+          setMeta(reloaded.meta);
+          setSavedMeta(reloaded.meta);
+        }
+        resetFieldStates("meta.");
       } else {
         setMessage({ type: "error", text: data.details || data.error });
       }
@@ -127,7 +216,11 @@ export default function SettingsPage() {
         setMessage({ type: "success", text: "Shopify settings saved" });
         const reload = await apiFetch("/api/settings");
         const reloaded = await reload.json();
-        if (reloaded.shopify) setShopify(reloaded.shopify);
+        if (reloaded.shopify) {
+          setShopify(reloaded.shopify);
+          setSavedShopify(reloaded.shopify);
+        }
+        resetFieldStates("shopify.");
       } else {
         setMessage({ type: "error", text: data.details || data.error });
       }
@@ -178,7 +271,11 @@ export default function SettingsPage() {
         setMessage({ type: "success", text: "Amazon settings saved" });
         const reload = await apiFetch("/api/settings");
         const reloaded = await reload.json();
-        if (reloaded.amazon) setAmazon(reloaded.amazon);
+        if (reloaded.amazon) {
+          setAmazon(reloaded.amazon);
+          setSavedAmazon(reloaded.amazon);
+        }
+        resetFieldStates("amazon.");
       } else {
         setMessage({ type: "error", text: data.details || data.error });
       }
@@ -202,6 +299,136 @@ export default function SettingsPage() {
     } finally {
       setTestingAmazon(false);
     }
+  }
+
+  async function handleSaveAmazonAds() {
+    setSavingAmazonAds(true);
+    setMessage(null);
+
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amazon_ads: amazonAds }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "Amazon Ads settings saved" });
+        const reload = await apiFetch("/api/settings");
+        const reloaded = await reload.json();
+        if (reloaded.amazon_ads) {
+          setAmazonAds(reloaded.amazon_ads);
+          setSavedAmazonAds(reloaded.amazon_ads);
+        }
+        resetFieldStates("amazonAds.");
+      } else {
+        setMessage({ type: "error", text: data.details || data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingAmazonAds(false);
+    }
+  }
+
+  async function handleTestAmazonAds() {
+    setTestingAmazonAds(true);
+    setAmazonAdsTestResult(null);
+
+    try {
+      const res = await apiFetch("/api/test/amazon-ads");
+      const data = await res.json();
+      setAmazonAdsTestResult(data);
+    } catch {
+      setAmazonAdsTestResult({ success: false, message: "Request failed" });
+    } finally {
+      setTestingAmazonAds(false);
+    }
+  }
+
+  // Detect unsaved changes per section
+  const hasShopifyChanges = (Object.keys(shopify) as (keyof ShopifyForm)[]).some((k) => shopify[k] !== savedShopify[k]);
+  const hasMetaChanges = (Object.keys(meta) as (keyof MetaForm)[]).some((k) => meta[k] !== savedMeta[k]);
+  const hasAmazonChanges = (Object.keys(amazon) as (keyof AmazonForm)[]).some((k) => amazon[k] !== savedAmazon[k]);
+  const hasAmazonAdsChanges = (Object.keys(amazonAds) as (keyof AmazonAdsForm)[]).some((k) => amazonAds[k] !== savedAmazonAds[k]);
+
+  // Reusable locked-input component
+  function LockedInput({
+    fieldKey,
+    value,
+    savedValue,
+    onChange,
+    placeholder,
+    helpText,
+    label,
+    mono = false,
+  }: {
+    fieldKey: string;
+    value: string;
+    savedValue: string;
+    onChange: (val: string) => void;
+    placeholder: string;
+    helpText: React.ReactNode;
+    label: string;
+    mono?: boolean;
+  }) {
+    const isLocked = savedValue !== "" && !editingFields.has(fieldKey);
+    const isRevealed = visibleFields.has(fieldKey);
+    const isEditing = editingFields.has(fieldKey);
+
+    return (
+      <div>
+        <label className="block text-sm font-medium mb-1">{label}</label>
+        <div className="relative flex items-center gap-1.5">
+          <input
+            type={isLocked && !isRevealed ? "password" : "text"}
+            value={isLocked && !isRevealed ? "••••••••••••" : value}
+            onChange={(e) => onChange(e.target.value)}
+            placeholder={placeholder}
+            disabled={isLocked}
+            autoComplete="off"
+            data-1p-ignore
+            data-lpignore="true"
+            data-form-type="other"
+            className={`w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 text-sm ${
+              mono ? "font-mono" : ""
+            } ${
+              isLocked
+                ? "bg-zinc-100 dark:bg-zinc-800 opacity-60 cursor-not-allowed"
+                : "bg-white dark:bg-zinc-900"
+            }`}
+          />
+          {savedValue !== "" && (
+            <div className="flex items-center gap-0.5 shrink-0">
+              {isLocked && (
+                <button
+                  type="button"
+                  onClick={() => toggleVisible(fieldKey)}
+                  className="p-1.5 rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800"
+                  title={isRevealed ? "Hide value" : "Show value"}
+                >
+                  {isRevealed ? <EyeOff size={16} /> : <Eye size={16} />}
+                </button>
+              )}
+              <button
+                type="button"
+                onClick={() => toggleEditing(fieldKey, savedValue, onChange)}
+                className={`p-1.5 rounded-md hover:bg-zinc-100 dark:hover:bg-zinc-800 ${
+                  isEditing
+                    ? "text-amber-500 hover:text-amber-600"
+                    : "text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+                }`}
+                title={isEditing ? "Cancel editing" : "Edit value"}
+              >
+                {isEditing ? <X size={16} /> : <Pencil size={16} />}
+              </button>
+            </div>
+          )}
+        </div>
+        <p className="text-xs text-zinc-400 mt-1">{helpText}</p>
+      </div>
+    );
   }
 
   if (loading) {
@@ -293,47 +520,37 @@ export default function SettingsPage() {
             </p>
 
             <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Store Domain</label>
-                <input
-                  type="text"
-                  value={shopify.store_domain}
-                  onChange={(e) => setShopify({ ...shopify, store_domain: e.target.value })}
-                  placeholder="e.g. yourstore.myshopify.com"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  Your Shopify store domain (without https://).
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="shopify.store_domain"
+                label="Store Domain"
+                value={shopify.store_domain}
+                savedValue={savedShopify.store_domain}
+                onChange={(v) => setShopify({ ...shopify, store_domain: v })}
+                placeholder="e.g. yourstore.myshopify.com"
+                helpText="Your Shopify store domain (without https://)."
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Access Token</label>
-                <input
-                  type="password"
-                  value={shopify.access_token}
-                  onChange={(e) => setShopify({ ...shopify, access_token: e.target.value })}
-                  placeholder="shpat_xxxxx"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  Admin API access token from your Shopify custom app. In Shopify Admin → Apps → Develop apps → your app → API credentials.
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="shopify.access_token"
+                label="Access Token"
+                value={shopify.access_token}
+                savedValue={savedShopify.access_token}
+                onChange={(v) => setShopify({ ...shopify, access_token: v })}
+                placeholder="shpat_xxxxx"
+                helpText="Admin API access token from your Shopify custom app. In Shopify Admin → Apps → Develop apps → your app → API credentials."
+                mono
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Webhook Signing Secret</label>
-                <input
-                  type="password"
-                  value={shopify.webhook_secret}
-                  onChange={(e) => setShopify({ ...shopify, webhook_secret: e.target.value })}
-                  placeholder="Webhook signing secret from Shopify"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  Found in Shopify Admin → Settings → Notifications → Webhooks (at the bottom of the page).
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="shopify.webhook_secret"
+                label="Webhook Signing Secret"
+                value={shopify.webhook_secret}
+                savedValue={savedShopify.webhook_secret}
+                onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
+                placeholder="Webhook signing secret from Shopify"
+                helpText="Found in Shopify Admin → Settings → Notifications → Webhooks (at the bottom of the page)."
+                mono
+              />
 
               <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
                 <label className="block text-sm font-medium mb-1">Webhook URL</label>
@@ -346,7 +563,7 @@ export default function SettingsPage() {
 
             <button
               onClick={handleSaveShopify}
-              disabled={savingShopify}
+              disabled={savingShopify || !hasShopifyChanges}
               className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
             >
               {savingShopify ? "Saving..." : "Save"}
@@ -426,54 +643,41 @@ export default function SettingsPage() {
           </p>
 
           <div className="flex flex-col gap-4">
-            <div>
-              <label className="block text-sm font-medium mb-1">Phone Number ID</label>
-              <input
-                type="text"
-                value={meta.phone_number_id}
-                onChange={(e) => setMeta({ ...meta, phone_number_id: e.target.value })}
-                placeholder="e.g. 998388253356786"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-              />
-              <p className="text-xs text-zinc-400 mt-1">
-                Found in Meta Business Suite → WhatsApp → Phone numbers. Used to identify the number messages are sent from.
-              </p>
-            </div>
+            <LockedInput
+              fieldKey="meta.phone_number_id"
+              label="Phone Number ID"
+              value={meta.phone_number_id}
+              savedValue={savedMeta.phone_number_id}
+              onChange={(v) => setMeta({ ...meta, phone_number_id: v })}
+              placeholder="e.g. 998388253356786"
+              helpText="Found in Meta Business Suite → WhatsApp → Phone numbers. Used to identify the number messages are sent from."
+            />
 
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                WhatsApp Business Account ID (WABA ID)
-              </label>
-              <input
-                type="text"
-                value={meta.waba_id}
-                onChange={(e) => setMeta({ ...meta, waba_id: e.target.value })}
-                placeholder="e.g. 123456789012345"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-              />
-              <p className="text-xs text-zinc-400 mt-1">
-                Found in Meta Business Suite → WhatsApp Accounts. Used to fetch approved message templates.
-              </p>
-            </div>
+            <LockedInput
+              fieldKey="meta.waba_id"
+              label="WhatsApp Business Account ID (WABA ID)"
+              value={meta.waba_id}
+              savedValue={savedMeta.waba_id}
+              onChange={(v) => setMeta({ ...meta, waba_id: v })}
+              placeholder="e.g. 123456789012345"
+              helpText="Found in Meta Business Suite → WhatsApp Accounts. Used to fetch approved message templates."
+            />
 
-            <div>
-              <label className="block text-sm font-medium mb-1">Access Token</label>
-              <input
-                type="password"
-                value={meta.access_token}
-                onChange={(e) => setMeta({ ...meta, access_token: e.target.value })}
-                placeholder="System User token or temporary token"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-              />
-              <p className="text-xs text-zinc-400 mt-1">
-                System User token with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">whatsapp_business_messaging</code> permission. Create one in Meta Business Suite → System Users.
-              </p>
-            </div>
+            <LockedInput
+              fieldKey="meta.access_token"
+              label="Access Token"
+              value={meta.access_token}
+              savedValue={savedMeta.access_token}
+              onChange={(v) => setMeta({ ...meta, access_token: v })}
+              placeholder="System User token or temporary token"
+              helpText={<>System User token with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">whatsapp_business_messaging</code> permission. Create one in Meta Business Suite → System Users.</>}
+              mono
+            />
           </div>
 
           <button
             onClick={handleSaveMeta}
-            disabled={savingMeta}
+            disabled={savingMeta || !hasMetaChanges}
             className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
           >
             {savingMeta ? "Saving..." : "Save"}
@@ -491,69 +695,58 @@ export default function SettingsPage() {
             </p>
 
             <div className="flex flex-col gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Client ID</label>
-                <input
-                  type="text"
-                  value={amazon.client_id}
-                  onChange={(e) => setAmazon({ ...amazon, client_id: e.target.value })}
-                  placeholder="amzn1.application-oa2-client.xxxxx"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  From Seller Central → Apps &amp; Services → Develop Apps → your app → LWA credentials.
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="amazon.client_id"
+                label="Client ID"
+                value={amazon.client_id}
+                savedValue={savedAmazon.client_id}
+                onChange={(v) => setAmazon({ ...amazon, client_id: v })}
+                placeholder="amzn1.application-oa2-client.xxxxx"
+                helpText={<>From Seller Central → Apps &amp; Services → Develop Apps → your app → LWA credentials.</>}
+                mono
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Client Secret</label>
-                <input
-                  type="password"
-                  value={amazon.client_secret}
-                  onChange={(e) => setAmazon({ ...amazon, client_secret: e.target.value })}
-                  placeholder="Client secret from Amazon developer console"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  LWA client secret — shown once when you create the app. Store it securely.
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="amazon.client_secret"
+                label="Client Secret"
+                value={amazon.client_secret}
+                savedValue={savedAmazon.client_secret}
+                onChange={(v) => setAmazon({ ...amazon, client_secret: v })}
+                placeholder="Client secret from Amazon developer console"
+                helpText="LWA client secret — shown once when you create the app. Store it securely."
+                mono
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Refresh Token</label>
-                <input
-                  type="password"
-                  value={amazon.refresh_token}
-                  onChange={(e) => setAmazon({ ...amazon, refresh_token: e.target.value })}
-                  placeholder="Atzr|xxxxx"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
-                  Generated when the seller authorizes your app via the SP-API OAuth flow (starts with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">Atzr|</code>).
-                </p>
-              </div>
+              <LockedInput
+                fieldKey="amazon.refresh_token"
+                label="Refresh Token"
+                value={amazon.refresh_token}
+                savedValue={savedAmazon.refresh_token}
+                onChange={(v) => setAmazon({ ...amazon, refresh_token: v })}
+                placeholder="Atzr|xxxxx"
+                helpText={<>Generated when the seller authorizes your app via the SP-API OAuth flow (starts with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">Atzr|</code>).</>}
+                mono
+              />
 
-              <div>
-                <label className="block text-sm font-medium mb-1">Marketplace ID</label>
-                <input
-                  type="text"
-                  value={amazon.marketplace_id}
-                  onChange={(e) => setAmazon({ ...amazon, marketplace_id: e.target.value })}
-                  placeholder="A1F83G8C2ARO7P"
-                  className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-                />
-                <p className="text-xs text-zinc-400 mt-1">
+              <LockedInput
+                fieldKey="amazon.marketplace_id"
+                label="Marketplace ID"
+                value={amazon.marketplace_id}
+                savedValue={savedAmazon.marketplace_id}
+                onChange={(v) => setAmazon({ ...amazon, marketplace_id: v })}
+                placeholder="A1F83G8C2ARO7P"
+                helpText={<>
                   UK: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">A1F83G8C2ARO7P</code> &nbsp;
                   DE: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">A1PA6795UKMFR9</code> &nbsp;
                   US: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">ATVPDKIKX0DER</code>
-                </p>
-              </div>
+                </>}
+              />
             </div>
 
             <div className="mt-5 flex items-center gap-3">
               <button
                 onClick={handleSaveAmazon}
-                disabled={savingAmazon}
+                disabled={savingAmazon || !hasAmazonChanges}
                 className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
               >
                 {savingAmazon ? "Saving..." : "Save"}
@@ -576,6 +769,88 @@ export default function SettingsPage() {
                 }`}
               >
                 {amazonTestResult.message}
+              </div>
+            )}
+          </section>
+
+          {/* ── Amazon Ads API ──────────────────────── */}
+          <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+            <h2 className="text-lg font-semibold mb-1">Amazon Ads API</h2>
+            <p className="text-sm text-zinc-500 mb-4">
+              Connect your Amazon Advertising account for Sponsored Products campaign data.
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <LockedInput
+                fieldKey="amazonAds.client_id"
+                label="Client ID"
+                value={amazonAds.client_id}
+                savedValue={savedAmazonAds.client_id}
+                onChange={(v) => setAmazonAds({ ...amazonAds, client_id: v })}
+                placeholder="amzn1.application-oa2-client.xxxxx"
+                helpText="From the Amazon Ads developer console — this is a separate app from the SP-API."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.client_secret"
+                label="Client Secret"
+                value={amazonAds.client_secret}
+                savedValue={savedAmazonAds.client_secret}
+                onChange={(v) => setAmazonAds({ ...amazonAds, client_secret: v })}
+                placeholder="Client secret from Amazon Ads app"
+                helpText="LWA client secret for your Amazon Ads application."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.refresh_token"
+                label="Refresh Token"
+                value={amazonAds.refresh_token}
+                savedValue={savedAmazonAds.refresh_token}
+                onChange={(v) => setAmazonAds({ ...amazonAds, refresh_token: v })}
+                placeholder="Atzr|xxxxx"
+                helpText="Generated via the Amazon Ads OAuth flow. Separate from the SP-API refresh token."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.profile_id"
+                label="Profile ID"
+                value={amazonAds.profile_id}
+                savedValue={savedAmazonAds.profile_id}
+                onChange={(v) => setAmazonAds({ ...amazonAds, profile_id: v })}
+                placeholder="e.g. 366822873177837"
+                helpText="Your Amazon Advertising profile ID. Found via the Profiles API or in the Ads console URL."
+              />
+            </div>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={handleSaveAmazonAds}
+                disabled={savingAmazonAds || !hasAmazonAdsChanges}
+                className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {savingAmazonAds ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={handleTestAmazonAds}
+                disabled={testingAmazonAds}
+                className="px-4 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {testingAmazonAds ? "Testing..." : "Test Connection"}
+              </button>
+            </div>
+
+            {amazonAdsTestResult && (
+              <div
+                className={`mt-3 p-3 rounded-md text-sm ${
+                  amazonAdsTestResult.success
+                    ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
+                    : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
+                }`}
+              >
+                {amazonAdsTestResult.message}
               </div>
             )}
           </section>

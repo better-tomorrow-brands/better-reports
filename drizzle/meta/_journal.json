@@ -92,6 +92,34 @@
       "when": 1771084800000,
       "tag": "0012_volatile_jetstream",
       "breakpoints": true
+    },
+    {
+      "idx": 13,
+      "version": "7",
+      "when": 1771171200000,
+      "tag": "0013_fearless_edwin_jarvis",
+      "breakpoints": true
+    },
+    {
+      "idx": 14,
+      "version": "7",
+      "when": 1771257600000,
+      "tag": "0014_lean_living_tribunal",
+      "breakpoints": true
+    },
+    {
+      "idx": 15,
+      "version": "7",
+      "when": 1771344000000,
+      "tag": "0015_amazon_sp_ads_fix_columns",
+      "breakpoints": true
+    },
+    {
+      "idx": 16,
+      "version": "7",
+      "when": 1771430400000,
+      "tag": "0016_amazon_orders",
+      "breakpoints": true
     }
   ]
 }

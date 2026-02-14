@@ -3,6 +3,13 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
 import { useOrg } from "@/contexts/OrgContext";
+import { subDays, startOfDay, endOfYesterday, format, differenceInDays, addDays } from "date-fns";
+import {
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ReferenceLine, ResponsiveContainer,
+} from "recharts";
+import { DateRangePicker, suggestGroupBy } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 
 // ── Types ──────────────────────────────────────────────────
 interface Product {
@@ -54,7 +61,11 @@ interface InventoryItem {
   asin: string | null;
   amazonQty: number;
   warehouseQty: number;
+  shopifyQty: number;
   totalQty: number;
+  landedCost: number;
+  amazonRrp: number;
+  dtcRrp: number;
 }
 
 // ── Tabs ───────────────────────────────────────────────────
@@ -64,12 +75,46 @@ const tabs = [
   { key: "dtc", label: "DTC" },
   { key: "inventory", label: "Inventory" },
   { key: "forecast", label: "Forecast" },
+  { key: "unit-sales", label: "Unit Sales" },
 ] as const;
 
 type TabKey = (typeof tabs)[number]["key"];
 
 // ── Helpers ────────────────────────────────────────────────
 const BRAND_OPTIONS = ["Teevo", "Doogood"];
+const REORDER_THRESHOLD = 100;
+const FORECAST_HORIZON = 180;
+
+type ForecastSkuFilter = "all" | "8-rolls" | "24-rolls" | "48-rolls";
+type ForecastChannelFilter = "all" | "amazon" | "shopify";
+
+const LINE_COLORS = [
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ec4899", // pink
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+];
+
+const UNIT_SALES_COLORS: Record<string, string> = {
+  "8 Rolls": "#e4edaa",  // shopify light
+  "24 Rolls": "#c4d34f", // shopify
+  "48 Rolls": "#9aab2f", // shopify dark
+};
+
+const SKU_FILTER_PATTERNS: [string, ForecastSkuFilter][] = [
+  ["14641003", "48-rolls"],
+  ["14641002", "24-rolls"],
+  ["14641001", "8-rolls"],
+];
+
+function skuToFilterKey(sku: string): ForecastSkuFilter | null {
+  for (const [pattern, group] of SKU_FILTER_PATTERNS) {
+    if (sku.includes(pattern)) return group;
+  }
+  return null;
+}
 
 function n(val: string | null | undefined): number {
   if (!val) return 0;
@@ -85,6 +130,15 @@ function fmt(val: number | null | undefined): string {
 function pct(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return "-";
   return (val * 100).toFixed(1) + "%";
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 // ── Column definitions per tab ─────────────────────────────
@@ -159,9 +213,26 @@ const ALL_DTC_COLUMNS: ColDef[] = [
   { key: "dtcContribMargin", label: "Contribution Margin", defaultVisible: true },
 ];
 
+const ALL_INVENTORY_COLUMNS: ColDef[] = [
+  { key: "sku", label: "SKU", defaultVisible: true },
+  { key: "productName", label: "Product", defaultVisible: true },
+  { key: "brand", label: "Brand", defaultVisible: false },
+  { key: "asin", label: "ASIN", defaultVisible: false },
+  { key: "amazonQty", label: "Amazon Qty", defaultVisible: true },
+  { key: "shopifyQty", label: "Shopify Qty", defaultVisible: true },
+  { key: "warehouseQty", label: "Warehouse Qty", defaultVisible: true },
+  { key: "totalQty", label: "Total Qty", defaultVisible: true },
+  { key: "valueCost", label: "Value (Cost)", defaultVisible: true },
+  { key: "valueRrp", label: "Value (RRP)", defaultVisible: true },
+  { key: "runRate", label: "Run Rate", defaultVisible: true },
+  { key: "daysLeft", label: "Days Left", defaultVisible: true },
+  { key: "oosDate", label: "Out of Stock Forecast", defaultVisible: true },
+];
+
 const COLUMN_STORAGE_KEY = "inventory-products-columns";
 const AMAZON_COLUMN_STORAGE_KEY = "inventory-amazon-columns";
 const DTC_COLUMN_STORAGE_KEY = "inventory-dtc-columns";
+const INVENTORY_COLUMN_STORAGE_KEY = "inventory-overall-columns-v2";
 
 function loadVisibleCols(storageKey: string, allCols: ColDef[]): Set<string> {
   if (typeof window === "undefined") return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
@@ -556,8 +627,11 @@ export default function InventoryPage() {
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleCols(COLUMN_STORAGE_KEY, ALL_COLUMNS));
   const [visibleAmazonCols, setVisibleAmazonCols] = useState<Set<string>>(() => loadVisibleCols(AMAZON_COLUMN_STORAGE_KEY, ALL_AMAZON_COLUMNS));
   const [visibleDtcCols, setVisibleDtcCols] = useState<Set<string>>(() => loadVisibleCols(DTC_COLUMN_STORAGE_KEY, ALL_DTC_COLUMNS));
+  const [visibleInventoryCols, setVisibleInventoryCols] = useState<Set<string>>(() => loadVisibleCols(INVENTORY_COLUMN_STORAGE_KEY, ALL_INVENTORY_COLUMNS));
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
+  const [showInventoryColPicker, setShowInventoryColPicker] = useState(false);
+  const inventoryColPickerRef = useRef<HTMLDivElement>(null);
 
   // DTC default filter — auto-apply Doogood brand on first visit
   const dtcFilterApplied = useRef(false);
@@ -573,6 +647,9 @@ export default function InventoryPage() {
       }
       if (colPickerRef.current && !colPickerRef.current.contains(event.target as Node)) {
         setShowColPicker(false);
+      }
+      if (inventoryColPickerRef.current && !inventoryColPickerRef.current.contains(event.target as Node)) {
+        setShowInventoryColPicker(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -603,6 +680,13 @@ export default function InventoryPage() {
     const { setCols, storageKey } = getActiveColState();
     setCols(new Set());
     localStorage.setItem(storageKey, JSON.stringify([]));
+  }
+
+  function toggleInventoryCol(key: string) {
+    const newSet = new Set(visibleInventoryCols);
+    if (newSet.has(key)) newSet.delete(key); else newSet.add(key);
+    setVisibleInventoryCols(newSet);
+    localStorage.setItem(INVENTORY_COLUMN_STORAGE_KEY, JSON.stringify([...newSet]));
   }
 
   // ── DTC default filter ──────────────────────────────────
@@ -649,7 +733,7 @@ export default function InventoryPage() {
   }, [apiFetch, currentOrg]);
 
   useEffect(() => {
-    if (activeTab === "inventory") {
+    if (activeTab === "inventory" || activeTab === "forecast" || activeTab === "unit-sales") {
       fetchInventoryData();
     }
   }, [activeTab, fetchInventoryData]);
@@ -689,15 +773,87 @@ export default function InventoryPage() {
     }
   }, [apiFetch]);
 
+  // ── Shopify forecast period ────────────────────────────
+  type ForecastPeriod = "7d" | "14d" | "30d";
+  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("30d");
+  const [forecastDateRange, setForecastDateRange] = useState<{ from: Date; to: Date } | undefined>(
+    () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfYesterday() })
+  );
+
+  // Sync toggle with date picker
+  const handleForecastPeriodChange = useCallback((period: ForecastPeriod) => {
+    setForecastPeriod(period);
+    const days = period === "7d" ? 7 : period === "14d" ? 14 : 30;
+    setForecastDateRange({ from: startOfDay(subDays(new Date(), days)), to: endOfYesterday() });
+  }, []);
+
+  // ── Run rate data ──────────────────────────────────────
+  const [shopifyUnits, setShopifyUnits] = useState<Record<string, number>>({});
+  const [amazonUnits, setAmazonUnits] = useState<Record<string, number>>({});
+
+  const fetchRunRate = useCallback(async () => {
+    if (!currentOrg || !forecastDateRange?.from || !forecastDateRange?.to) return;
+    try {
+      const from = format(forecastDateRange.from, "yyyy-MM-dd");
+      const to = format(forecastDateRange.to, "yyyy-MM-dd");
+      const res = await apiFetch(`/api/inventory/run-rate?from=${from}&to=${to}`);
+      if (res.ok) {
+        const data = await res.json();
+        setShopifyUnits(data.shopifyUnits ?? {});
+        setAmazonUnits(data.amazonUnits ?? {});
+      }
+    } catch (e) {
+      console.error("Failed to fetch run rate:", e);
+    }
+  }, [apiFetch, currentOrg, forecastDateRange]);
+
+  useEffect(() => {
+    if (activeTab === "inventory" || activeTab === "forecast") {
+      fetchRunRate();
+    }
+  }, [activeTab, fetchRunRate]);
+
+  const forecastDays = useMemo(() => {
+    if (!forecastDateRange?.from || !forecastDateRange?.to) return 30;
+    return differenceInDays(forecastDateRange.to, forecastDateRange.from) || 1;
+  }, [forecastDateRange]);
+
+  // ── Inventory sync ─────────────────────────────────────
+  const [syncing, setSyncing] = useState(false);
+
+  const syncShopifyInventory = useCallback(async () => {
+    if (!currentOrg) return;
+    setSyncing(true);
+    try {
+      const res = await apiFetch("/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync-shopify" }),
+      });
+      if (res.ok) {
+        fetchInventoryData();
+      } else {
+        const err = await res.json();
+        alert(`Sync failed: ${err.error}`);
+      }
+    } catch (e) {
+      alert(`Sync failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [apiFetch, currentOrg, fetchInventoryData]);
+
   // ── Inventory edit modal state ──────────────────────────
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [editAmazonQty, setEditAmazonQty] = useState("");
+  const [editShopifyQty, setEditShopifyQty] = useState("");
   const [editWarehouseQty, setEditWarehouseQty] = useState("");
   const [savingInventory, setSavingInventory] = useState(false);
 
   const openInventoryModal = useCallback((item: InventoryItem) => {
     setEditingInventory(item);
     setEditAmazonQty(String(item.amazonQty));
+    setEditShopifyQty(String(item.shopifyQty));
     setEditWarehouseQty(String(item.warehouseQty));
   }, []);
 
@@ -705,18 +861,19 @@ export default function InventoryPage() {
     if (!editingInventory) return;
     setSavingInventory(true);
     const amazonQty = Number(editAmazonQty) || 0;
+    const shopifyQty = Number(editShopifyQty) || 0;
     const warehouseQty = Number(editWarehouseQty) || 0;
     try {
       const res = await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, warehouseQty }),
+        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, shopifyQty, warehouseQty }),
       });
       if (res.ok) {
         setInventoryItems((prev) =>
           prev.map((item) =>
             item.sku === editingInventory.sku
-              ? { ...item, amazonQty, warehouseQty, totalQty: amazonQty + warehouseQty }
+              ? { ...item, amazonQty, shopifyQty, warehouseQty, totalQty: amazonQty + shopifyQty + warehouseQty }
               : item
           )
         );
@@ -725,7 +882,24 @@ export default function InventoryPage() {
     } finally {
       setSavingInventory(false);
     }
-  }, [editingInventory, editAmazonQty, editWarehouseQty, apiFetch]);
+  }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, apiFetch]);
+
+  // ── Forecast tab state ──────────────────────────────────
+  const [forecastSkuFilter, setForecastSkuFilter] = useState<ForecastSkuFilter>("all");
+  const [forecastChannelFilter, setForecastChannelFilter] = useState<ForecastChannelFilter>("all");
+
+  // ── Unit Sales tab state ──────────────────────────────
+  type UnitSalesChannel = "total" | "amazon" | "shopify";
+  type UnitSalesGroupBy = "day" | "week" | "month";
+  const [unitSalesData, setUnitSalesData] = useState<{ data: Record<string, number | string>[]; skus: string[] }>({ data: [], skus: [] });
+  const [unitSalesLoading, setUnitSalesLoading] = useState(false);
+  const [unitSalesDateRange, setUnitSalesDateRange] = usePersistedDateRange(
+    "dr-unit-sales",
+    () => ({ from: startOfDay(subDays(new Date(), 365)), to: endOfYesterday() })
+  );
+  const [unitSalesGroupBy, setUnitSalesGroupBy] = useState<UnitSalesGroupBy>("month");
+  const [unitSalesChannel, setUnitSalesChannel] = useState<UnitSalesChannel>("total");
+  const [unitSalesSkuFilter, setUnitSalesSkuFilter] = useState<ForecastSkuFilter>("all");
 
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
@@ -736,61 +910,245 @@ export default function InventoryPage() {
       await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: p.sku, amazonQty: 0, warehouseQty: 0 }),
+        body: JSON.stringify({ sku: p.sku, amazonQty: 0, shopifyQty: 0, warehouseQty: 0 }),
       });
     }
     fetchInventoryData();
   }, [inventoryItems, products, fetchInventoryData, apiFetch]);
 
-  // ── Inventory columns ─────────────────────────────────
-  const inventoryColumns: Column<InventoryItem>[] = useMemo(() => [
-    { key: "sku", label: "SKU", sticky: true, primary: true },
-    { key: "productName", label: "Product", className: "min-w-[180px]" },
-    { key: "brand", label: "Brand" },
-    { key: "asin", label: "ASIN" },
-    { key: "amazonQty", label: "Amazon Qty", render: (v) => String(v ?? 0) },
-    { key: "warehouseQty", label: "Warehouse Qty", render: (v) => String(v ?? 0) },
-    {
-      key: "totalQty",
-      label: "Total Qty",
-      render: (v) => {
-        const total = Number(v) || 0;
-        return (
-          <span className={`font-medium ${total === 0 ? "text-red-500" : ""}`}>
-            {total}
-          </span>
-        );
-      },
-    },
-    {
-      key: "actions" as keyof InventoryItem,
-      label: "",
-      render: (_: unknown, row: InventoryItem) => (
-        <button
-          onClick={() => openInventoryModal(row)}
-          className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-          title="Edit stock"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </button>
-      ),
-    },
-  ], [openInventoryModal]);
+  // ── Grouped inventory rows (Total / Amazon / Shopify per SKU) ──
+  type ChannelRow = {
+    sku: string;
+    productName: string | null;
+    channel: "Total" | "Amazon" | "Shopify" | "Warehouse";
+    inventory: number;
+    valueCost: number;
+    valueRrp: number;
+    runRate: number | null; // units/day, null = no data
+    daysLeft: number | null;
+    oosDate: string | null;
+    isFirstInGroup: boolean;
+    sourceItem: InventoryItem;
+  };
 
-  // ── Filter inventory by search ─────────────────────────
-  const filteredInventory = useMemo(() => {
-    if (!search.trim()) return inventoryItems;
-    const q = search.toLowerCase();
-    return inventoryItems.filter(
-      (item) =>
-        item.sku.toLowerCase().includes(q) ||
-        (item.productName || "").toLowerCase().includes(q) ||
-        (item.brand || "").toLowerCase().includes(q) ||
-        (item.asin || "").toLowerCase().includes(q)
-    );
-  }, [inventoryItems, search]);
+  const groupedRows = useMemo((): ChannelRow[] => {
+    const rows: ChannelRow[] = [];
+    for (const item of inventoryItems) {
+      const shopifySold = shopifyUnits[item.sku] ?? 0;
+      const amazonSold = amazonUnits[item.sku] ?? 0;
+      const shopifyRate = shopifySold > 0 ? shopifySold / forecastDays : null;
+      const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
+      const whQty = item.warehouseQty ?? 0;
+      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty;
+      const totalSold = shopifySold + amazonSold;
+      const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
+      const lc = item.landedCost ?? 0;
+
+      // Total row
+      const totalDaysLeft = totalRate ? Math.floor(totalQty / totalRate) : null;
+      const amazonValRrp = (item.amazonQty ?? 0) * (item.amazonRrp ?? 0);
+      const shopifyValRrp = (item.shopifyQty ?? 0) * (item.dtcRrp ?? 0);
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Total",
+        inventory: totalQty,
+        valueCost: totalQty * lc,
+        valueRrp: amazonValRrp + shopifyValRrp,
+        runRate: totalRate,
+        daysLeft: totalDaysLeft,
+        oosDate: totalDaysLeft !== null ? format(addDays(new Date(), totalDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: true,
+        sourceItem: item,
+      });
+
+      // Amazon row
+      const amzQty = item.amazonQty ?? 0;
+      const amazonDaysLeft = amazonRate ? Math.floor(amzQty / amazonRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Amazon",
+        inventory: amzQty,
+        valueCost: amzQty * lc,
+        valueRrp: amzQty * (item.amazonRrp ?? 0),
+        runRate: amazonRate,
+        daysLeft: amazonDaysLeft,
+        oosDate: amazonDaysLeft !== null ? format(addDays(new Date(), amazonDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+
+      // Shopify row
+      const shpQty = item.shopifyQty ?? 0;
+      const shopifyDaysLeft = shopifyRate ? Math.floor(shpQty / shopifyRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Shopify",
+        inventory: shpQty,
+        valueCost: shpQty * lc,
+        valueRrp: shpQty * (item.dtcRrp ?? 0),
+        runRate: shopifyRate,
+        daysLeft: shopifyDaysLeft,
+        oosDate: shopifyDaysLeft !== null ? format(addDays(new Date(), shopifyDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+
+      // Warehouse row
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Warehouse",
+        inventory: whQty,
+        valueCost: whQty * lc,
+        valueRrp: 0,
+        runRate: null,
+        daysLeft: null,
+        oosDate: null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+    }
+    return rows;
+  }, [inventoryItems, shopifyUnits, amazonUnits, forecastDays]);
+
+  // ── Filter grouped rows by column visibility ────────────
+  const filteredGroupedRows = useMemo(() => {
+    const filtered = groupedRows.filter((row) => {
+      if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty")) return false;
+      if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty")) return false;
+      if (row.channel === "Warehouse" && !visibleInventoryCols.has("warehouseQty")) return false;
+      if (row.channel === "Total" && !visibleInventoryCols.has("totalQty")) return false;
+      return true;
+    });
+    // Recalculate isFirstInGroup after filtering
+    const seenSkus = new Set<string>();
+    return filtered.map((row) => {
+      const isFirst = !seenSkus.has(row.sku);
+      seenSkus.add(row.sku);
+      return isFirst !== row.isFirstInGroup ? { ...row, isFirstInGroup: isFirst } : row;
+    });
+  }, [groupedRows, visibleInventoryCols]);
+
+  // ── Forecast burn-down chart data ──────────────────────
+  const forecastChartData = useMemo(() => {
+    // Filter items by SKU toggle
+    const items = forecastSkuFilter === "all"
+      ? inventoryItems
+      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === forecastSkuFilter);
+
+    if (items.length === 0) return { data: [], skus: [] };
+
+    // For each item, compute starting inventory + daily run rate based on channel
+    const skuInfo = items.map((item) => {
+      let inventory: number;
+      let sold: number;
+
+      if (forecastChannelFilter === "amazon") {
+        inventory = item.amazonQty ?? 0;
+        sold = amazonUnits[item.sku] ?? 0;
+      } else if (forecastChannelFilter === "shopify") {
+        inventory = item.shopifyQty ?? 0;
+        sold = shopifyUnits[item.sku] ?? 0;
+      } else {
+        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+        sold = (amazonUnits[item.sku] ?? 0) + (shopifyUnits[item.sku] ?? 0);
+      }
+
+      const runRate = sold > 0 ? sold / forecastDays : 0;
+      return { sku: item.sku, name: item.productName || item.sku, inventory, runRate };
+    });
+
+    // Generate data points for day 0 to FORECAST_HORIZON
+    const data: Record<string, number | string>[] = [];
+    for (let d = 0; d <= FORECAST_HORIZON; d++) {
+      const point: Record<string, number | string> = { day: d };
+      for (const s of skuInfo) {
+        point[s.sku] = Math.max(0, Math.round(s.inventory - s.runRate * d));
+      }
+      data.push(point);
+    }
+
+    return {
+      data,
+      skus: skuInfo.map((s) => ({ sku: s.sku, name: s.name })),
+    };
+  }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays]);
+
+  // ── Unit Sales fetch ──────────────────────────────────
+  const fetchUnitSales = useCallback(async () => {
+    if (!currentOrg || !unitSalesDateRange?.from || !unitSalesDateRange?.to) return;
+    setUnitSalesLoading(true);
+    try {
+      const from = format(unitSalesDateRange.from, "yyyy-MM-dd");
+      const to = format(unitSalesDateRange.to, "yyyy-MM-dd");
+      const res = await apiFetch(
+        `/api/inventory/unit-sales?from=${from}&to=${to}&groupBy=${unitSalesGroupBy}&channel=${unitSalesChannel}&skuFilter=${unitSalesSkuFilter}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        setUnitSalesData({ data: json.data ?? [], skus: json.skus ?? [] });
+      }
+    } catch (e) {
+      console.error("Failed to fetch unit sales:", e);
+    } finally {
+      setUnitSalesLoading(false);
+    }
+  }, [apiFetch, currentOrg, unitSalesDateRange, unitSalesGroupBy, unitSalesChannel, unitSalesSkuFilter]);
+
+  useEffect(() => {
+    if (activeTab === "unit-sales") {
+      fetchUnitSales();
+    }
+  }, [activeTab, fetchUnitSales]);
+
+  // Auto-suggest groupBy when date range changes
+  useEffect(() => {
+    setUnitSalesGroupBy(suggestGroupBy(unitSalesDateRange));
+  }, [unitSalesDateRange]);
+
+  // Unit sales scorecards
+  const unitSalesStats = useMemo(() => {
+    let total = 0;
+    for (const row of unitSalesData.data) {
+      for (const sku of unitSalesData.skus) {
+        total += (Number(row[sku]) || 0);
+      }
+    }
+
+    // Last 30 days run rate (units/day)
+    const cutoff = format(subDays(new Date(), 30), "yyyy-MM-dd");
+    let last30Units = 0;
+    for (const row of unitSalesData.data) {
+      if (String(row.date) >= cutoff) {
+        for (const sku of unitSalesData.skus) {
+          last30Units += (Number(row[sku]) || 0);
+        }
+      }
+    }
+    const dailyRunRate = last30Units / 30;
+
+    // Inventory held — total across all channels, filtered by active SKU filter
+    let inventoryHeld = 0;
+    const filteredItems = unitSalesSkuFilter === "all"
+      ? inventoryItems
+      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === unitSalesSkuFilter);
+    for (const item of filteredItems) {
+      if (unitSalesChannel === "amazon") {
+        inventoryHeld += item.amazonQty ?? 0;
+      } else if (unitSalesChannel === "shopify") {
+        inventoryHeld += item.shopifyQty ?? 0;
+      } else {
+        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+      }
+    }
+
+    const daysRemaining = dailyRunRate > 0 ? Math.floor(inventoryHeld / dailyRunRate) : null;
+
+    return { total, dailyRunRate, inventoryHeld, daysRemaining };
+  }, [unitSalesData, inventoryItems, unitSalesSkuFilter, unitSalesChannel]);
 
   // ── Filter helpers ───────────────────────────────────────
   function getDisplayValue(val: unknown): string {
@@ -1366,52 +1724,237 @@ export default function InventoryPage() {
             )}
           </div>
         ) : activeTab === "inventory" ? (
-          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
+          <div className="pt-4 flex flex-col overflow-auto">
             <div className="flex items-center gap-3 mb-3">
               <span className="text-sm text-muted">
-                {filteredInventory.length} SKUs
+                {inventoryItems.length} SKUs
                 {inventoryDate && (
                   <span className="ml-2 text-zinc-400">as of {inventoryDate}</span>
                 )}
               </span>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
-              />
-              {inventoryItems.length === 0 && products.length > 0 && (
+              <div className="flex items-center gap-3 ml-auto">
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {(["7d", "14d", "30d"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handleForecastPeriodChange(p)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastPeriod === p
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                    </button>
+                  ))}
+                </div>
                 <button
-                  onClick={initInventoryFromProducts}
+                  onClick={syncShopifyInventory}
+                  disabled={syncing}
                   className="btn btn-secondary btn-sm"
                 >
-                  Add All Products
+                  {syncing ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {syncing ? "Syncing..." : "Sync"}
                 </button>
-              )}
+                {inventoryItems.length === 0 && products.length > 0 && (
+                  <button
+                    onClick={initInventoryFromProducts}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Add All Products
+                  </button>
+                )}
+                <div className="relative" ref={inventoryColPickerRef}>
+                  <button
+                    onClick={() => setShowInventoryColPicker(!showInventoryColPicker)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    Columns
+                  </button>
+                  {showInventoryColPicker && (
+                    <div className="dropdown right-0 mt-2 w-56 max-h-[70vh] overflow-y-auto">
+                      <div className="p-2">
+                        {ALL_INVENTORY_COLUMNS.map((col) => (
+                          <label
+                            key={col.key}
+                            className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={visibleInventoryCols.has(col.key)}
+                              onChange={() => toggleInventoryCol(col.key)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{col.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </div>
             </div>
             {inventoryLoading ? (
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  {[48, 160, 64, 72, 64, 80, 56, 24].map((w, i) => (
+                  {[48, 160, 80, 64, 64, 64, 80, 24].map((w, i) => (
                     <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
                   ))}
                 </div>
-                {[...Array(8)].map((_, row) => (
+                {[...Array(9)].map((_, row) => (
                   <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
-                    {[48, 160, 64, 72, 64, 80, 56, 24].map((w, col) => (
+                    {[48, 160, 80, 64, 64, 64, 80, 24].map((w, col) => (
                       <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
                     ))}
                   </div>
                 ))}
               </div>
+            ) : groupedRows.length === 0 ? (
+              <div className="table-empty">No inventory data yet. Click &apos;Add All Products&apos; to start tracking.</div>
             ) : (
-              <Table<InventoryItem>
-                columns={inventoryColumns}
-                data={filteredInventory}
-                rowKey="sku"
-                emptyMessage="No inventory data yet. Click 'Add All Products' to start tracking."
-              />
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr className="table-header-row">
+                      <th className="table-header-cell table-header-cell-sticky">SKU</th>
+                      <th className="table-header-cell min-w-[180px]">Product</th>
+                      {visibleInventoryCols.has("brand") && <th className="table-header-cell">Brand</th>}
+                      {visibleInventoryCols.has("asin") && <th className="table-header-cell">ASIN</th>}
+                      <th className="table-header-cell">Channel</th>
+                      <th className="table-header-cell">Inventory</th>
+                      {visibleInventoryCols.has("valueCost") && <th className="table-header-cell">Value (Cost)</th>}
+                      {visibleInventoryCols.has("valueRrp") && <th className="table-header-cell">Value (RRP)</th>}
+                      {visibleInventoryCols.has("runRate") && <th className="table-header-cell">Run Rate</th>}
+                      {visibleInventoryCols.has("daysLeft") && <th className="table-header-cell">Days Left</th>}
+                      {visibleInventoryCols.has("oosDate") && <th className="table-header-cell">OOS Forecast</th>}
+                      <th className="table-header-cell"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {filteredGroupedRows.map((row) => {
+                      const isTotal = row.channel === "Total";
+                      return (
+                        <tr
+                          key={`${row.sku}-${row.channel}`}
+                          className={`table-body-row ${row.isFirstInGroup ? "border-t-2 border-zinc-300 dark:border-zinc-600" : ""}`}
+                        >
+                          <td className={`table-cell table-cell-sticky table-cell-primary ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            {row.sku}
+                          </td>
+                          <td className={`table-cell min-w-[180px] ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            {row.productName ?? "-"}
+                          </td>
+                          {visibleInventoryCols.has("brand") && (
+                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                              {row.sourceItem.brand ?? "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("asin") && (
+                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                              {row.sourceItem.asin ?? "-"}
+                            </td>
+                          )}
+                          <td className={`table-cell ${isTotal ? "font-semibold" : "text-zinc-500 dark:text-zinc-400 pl-6"}`}>
+                            {row.channel}
+                          </td>
+                          <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>
+                            {row.inventory === 0 ? (
+                              <span className="text-red-500 font-medium">0</span>
+                            ) : (
+                              row.inventory
+                            )}
+                          </td>
+                          {visibleInventoryCols.has("valueCost") && (
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueCost)}</td>
+                          )}
+                          {visibleInventoryCols.has("valueRrp") && (
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp)}</td>
+                          )}
+                          {visibleInventoryCols.has("runRate") && (
+                            <td className="table-cell">
+                              {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("daysLeft") && (
+                            <td className={`table-cell ${
+                              row.daysLeft !== null
+                                ? row.channel === "Amazon"
+                                  ? row.daysLeft < 7
+                                    ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                    : row.daysLeft < 30
+                                      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                      : ""
+                                  : (row.channel === "Total" || row.channel === "Shopify")
+                                    ? row.daysLeft < 90
+                                      ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                      : row.daysLeft <= 150
+                                        ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                        : ""
+                                    : ""
+                                : ""
+                            }`}>
+                              {row.daysLeft !== null ? row.daysLeft : "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("oosDate") && (
+                            <td className="table-cell">
+                              {row.oosDate ?? "-"}
+                            </td>
+                          )}
+                          <td className="table-cell">
+                            {row.isFirstInGroup && (
+                              <button
+                                onClick={() => openInventoryModal(row.sourceItem)}
+                                className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                                title="Edit stock"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                    {(() => {
+                      const totalRows = groupedRows.filter((r) => r.channel === "Total");
+                      return (
+                        <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
+                          <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
+                          <td className="table-cell min-w-[180px]"></td>
+                          {visibleInventoryCols.has("brand") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("asin") && <td className="table-cell"></td>}
+                          <td className="table-cell"></td>
+                          <td className="table-cell">{totalRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
+                          {visibleInventoryCols.has("valueCost") && (
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueCost, 0))}</td>
+                          )}
+                          {visibleInventoryCols.has("valueRrp") && (
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                          )}
+                          {visibleInventoryCols.has("runRate") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("daysLeft") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("oosDate") && <td className="table-cell"></td>}
+                          <td className="table-cell"></td>
+                        </tr>
+                      );
+                    })()}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* Edit inventory modal */}
@@ -1439,6 +1982,16 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm font-medium mb-1">Shopify Qty</label>
+                      <input
+                        type="number"
+                        value={editShopifyQty}
+                        onChange={(e) => setEditShopifyQty(e.target.value)}
+                        className="input w-full"
+                        min={0}
+                      />
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium mb-1">Warehouse Qty</label>
                       <input
                         type="number"
@@ -1449,7 +2002,7 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div className="text-sm text-zinc-500">
-                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editWarehouseQty) || 0)}</span>
+                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0)}</span>
                     </div>
                   </div>
                   <div className="filter-modal-footer">
@@ -1466,11 +2019,291 @@ export default function InventoryPage() {
               </div>
             )}
           </div>
-        ) : (
-          <div className="pt-4 text-zinc-500 dark:text-zinc-400">
-            Forecast — coming soon
+        ) : activeTab === "forecast" ? (
+          <div className="pt-4 flex flex-col gap-4">
+            {/* Forecast toolbar */}
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* SKU filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setForecastSkuFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastSkuFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Channel filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setForecastChannelFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastChannelFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Run rate period */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Run Rate</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {(["7d", "14d", "30d"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handleForecastPeriodChange(p)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastPeriod === p
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            {forecastChartData.skus.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-zinc-400 dark:text-zinc-500 text-sm">
+                No inventory data available. Switch to the Inventory tab to add stock levels.
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <ResponsiveContainer width="100%" height={420}>
+                  <LineChart data={forecastChartData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                    <XAxis
+                      dataKey="day"
+                      type="number"
+                      domain={[0, FORECAST_HORIZON]}
+                      ticks={[0, 30, 60, 90, 120, 150, 180]}
+                      tickFormatter={(d) => `Day ${d}`}
+                      fontSize={12}
+                    />
+                    <YAxis fontSize={12} />
+                    <Tooltip
+                      labelFormatter={(d) => `Day ${d}`}
+                      formatter={(value, name) => {
+                        const match = forecastChartData.skus.find((s) => s.sku === name);
+                        return [Number(value).toLocaleString() + " units", match?.name || String(name)];
+                      }}
+                      contentStyle={{
+                        backgroundColor: "var(--color-zinc-50, #fafafa)",
+                        border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend
+                      formatter={(value) => {
+                        const match = forecastChartData.skus.find((s) => s.sku === value);
+                        return match?.name || value;
+                      }}
+                    />
+                    <ReferenceLine
+                      y={REORDER_THRESHOLD}
+                      stroke="#ef4444"
+                      strokeDasharray="8 4"
+                      label={{ value: "Reorder", position: "right", fill: "#ef4444", fontSize: 12 }}
+                    />
+                    {forecastChartData.skus.map((s, i) => (
+                      <Line
+                        key={s.sku}
+                        type="monotone"
+                        dataKey={s.sku}
+                        stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        name={s.sku}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
-        )}
+        ) : activeTab === "unit-sales" ? (
+          <div className="pt-4 flex flex-col gap-4">
+            {/* Unit Sales toolbar */}
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Channel toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["total", "Total"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesChannel(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesChannel === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SKU filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesSkuFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesSkuFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* GroupBy toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Group</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["day", "Day"], ["week", "Week"], ["month", "Month"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesGroupBy(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesGroupBy === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date range picker */}
+              <div className="ml-auto">
+                <DateRangePicker
+                  dateRange={unitSalesDateRange}
+                  onDateRangeChange={setUnitSalesDateRange}
+                />
+              </div>
+            </div>
+
+            {/* Scorecards */}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Units Sold</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.total.toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Day (30d avg)</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.dailyRunRate.toFixed(1)}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Month (30d avg)</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : Math.round(unitSalesStats.dailyRunRate * 30).toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Inventory Held</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.inventoryHeld.toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Days Remaining</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.daysRemaining !== null ? unitSalesStats.daysRemaining.toLocaleString() : "-"}</div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            {unitSalesLoading ? (
+              <div className="flex items-center justify-center h-[420px] text-zinc-400 dark:text-zinc-500 text-sm">
+                <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Loading unit sales...
+              </div>
+            ) : unitSalesData.skus.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-zinc-400 dark:text-zinc-500 text-sm">
+                No unit sales data for the selected period.
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <ResponsiveContainer width="100%" height={420}>
+                  <BarChart data={unitSalesData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                    <XAxis
+                      dataKey="date"
+                      fontSize={12}
+                      tickFormatter={(d) => {
+                        const date = new Date(String(d));
+                        return unitSalesGroupBy === "month"
+                          ? format(date, "MMM yyyy")
+                          : format(date, "dd MMM");
+                      }}
+                    />
+                    <YAxis fontSize={12} />
+                    <Tooltip
+                      labelFormatter={(d) => {
+                        const date = new Date(String(d));
+                        return unitSalesGroupBy === "month"
+                          ? format(date, "MMM yyyy")
+                          : format(date, "dd MMM yyyy");
+                      }}
+                      formatter={(value, name) => [
+                        Number(value).toLocaleString() + " units",
+                        String(name),
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "var(--color-zinc-50, #fafafa)",
+                        border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} formatter={(value) => <span className="text-zinc-900 dark:text-zinc-100">{value}</span>} />
+                    {unitSalesData.skus.map((group) => (
+                      <Bar
+                        key={group}
+                        dataKey={group}
+                        stackId="units"
+                        fill={UNIT_SALES_COLORS[group] ?? "#a1a1aa"}
+                        name={group}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
