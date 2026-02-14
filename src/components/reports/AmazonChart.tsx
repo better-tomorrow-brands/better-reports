@@ -247,6 +247,8 @@ export function AmazonChart() {
     sku: string;
     productName: string | null;
     inventory: number;
+    valueCost: number;
+    valueRrp: number;
     runRate: number | null;
     daysLeft: number | null;
     oosDate: string | null;
@@ -284,14 +286,17 @@ export function AmazonChart() {
 
           setInventoryDate(invData.date ?? null);
 
-          const rows: InventoryRow[] = (invData.items ?? []).map((item: { sku: string; productName: string | null; amazonQty: number }) => {
+          const rows: InventoryRow[] = (invData.items ?? []).map((item: { sku: string; productName: string | null; amazonQty: number; landedCost?: number; amazonRrp?: number }) => {
             const sold = amazonUnits[item.sku] ?? 0;
             const rate = sold > 0 ? sold / days : null;
-            const daysLeft = rate ? Math.floor((item.amazonQty ?? 0) / rate) : null;
+            const qty = item.amazonQty ?? 0;
+            const daysLeft = rate ? Math.floor(qty / rate) : null;
             return {
               sku: item.sku,
               productName: item.productName,
-              inventory: item.amazonQty ?? 0,
+              inventory: qty,
+              valueCost: qty * (item.landedCost ?? 0),
+              valueRrp: qty * (item.amazonRrp ?? 0),
               runRate: rate,
               daysLeft,
               oosDate: daysLeft !== null ? format(addDays(new Date(), daysLeft), "dd MMM yyyy") : null,
@@ -575,6 +580,8 @@ export function AmazonChart() {
                   <th className="table-header-cell table-header-cell-sticky">SKU</th>
                   <th className="table-header-cell min-w-[180px]">Product</th>
                   <th className="table-header-cell">Inventory</th>
+                  <th className="table-header-cell">Value (Cost)</th>
+                  <th className="table-header-cell">Value (RRP)</th>
                   <th className="table-header-cell">Run Rate</th>
                   <th className="table-header-cell">Days Left</th>
                   <th className="table-header-cell">OOS Forecast</th>
@@ -592,6 +599,8 @@ export function AmazonChart() {
                         row.inventory
                       )}
                     </td>
+                    <td className="table-cell">{formatCurrency(row.valueCost)}</td>
+                    <td className="table-cell">{formatCurrency(row.valueRrp)}</td>
                     <td className="table-cell">
                       {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
                     </td>
@@ -609,6 +618,16 @@ export function AmazonChart() {
                     <td className="table-cell">{row.oosDate ?? "-"}</td>
                   </tr>
                 ))}
+                <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
+                  <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
+                  <td className="table-cell min-w-[180px]"></td>
+                  <td className="table-cell">{inventoryRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
+                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueCost, 0))}</td>
+                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                  <td className="table-cell"></td>
+                  <td className="table-cell"></td>
+                  <td className="table-cell"></td>
+                </tr>
               </tbody>
             </table>
           </div>

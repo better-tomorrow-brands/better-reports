@@ -24,6 +24,9 @@ export async function GET(request: Request) {
         productName: products.productName,
         brand: products.brand,
         asin: products.asin,
+        landedCost: products.landedCost,
+        amazonRrp: products.amazonRrp,
+        dtcRrp: products.dtcRrp,
       })
       .from(inventorySnapshots)
       .leftJoin(
@@ -50,6 +53,9 @@ export async function GET(request: Request) {
       warehouseQty: r.warehouseQty ?? 0,
       shopifyQty: r.shopifyQty ?? 0,
       totalQty: (r.amazonQty ?? 0) + (r.warehouseQty ?? 0) + (r.shopifyQty ?? 0),
+      landedCost: r.landedCost ? Number(r.landedCost) : 0,
+      amazonRrp: r.amazonRrp ? Number(r.amazonRrp) : 0,
+      dtcRrp: r.dtcRrp ? Number(r.dtcRrp) : 0,
     }));
 
     return NextResponse.json({ date, items: result });

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays, subDays, addDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
@@ -71,6 +71,15 @@ function formatCurrency(value: number): string {
     style: "currency",
     currency: "GBP",
     minimumFractionDigits: 2,
+  }).format(value);
+}
+
+function formatCurrencyInt(value: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -206,10 +215,83 @@ export function ShopifyChart() {
     );
   }, [data]);
 
+  // ── Inventory data (Shopify only) ─────────────────────
+  interface InventoryRow {
+    sku: string;
+    productName: string | null;
+    inventory: number;
+    valueCost: number;
+    valueRrp: number;
+    runRate: number | null;
+    daysLeft: number | null;
+    oosDate: string | null;
+  }
+
+  type ForecastPeriod = "7d" | "14d" | "30d";
+  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("30d");
+  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryDate, setInventoryDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    let cancelled = false;
+
+    (async () => {
+      setInventoryLoading(true);
+      try {
+        const periodDays = forecastPeriod === "7d" ? 7 : forecastPeriod === "14d" ? 14 : 30;
+        const fromDate = format(subDays(new Date(), periodDays), "yyyy-MM-dd");
+        const toYesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+
+        const [invRes, rrRes] = await Promise.all([
+          apiFetch("/api/inventory"),
+          apiFetch(`/api/inventory/run-rate?from=${fromDate}&to=${toYesterday}`),
+        ]);
+
+        if (cancelled) return;
+
+        if (invRes.ok && rrRes.ok) {
+          const invData = await invRes.json();
+          const rrData = await rrRes.json();
+          const shopifyUnitsMap: Record<string, number> = rrData.shopifyUnits ?? {};
+          const days = periodDays;
+
+          setInventoryDate(invData.date ?? null);
+
+          const rows: InventoryRow[] = (invData.items ?? []).map((item: { sku: string; productName: string | null; shopifyQty: number; landedCost?: number; dtcRrp?: number }) => {
+            const sold = shopifyUnitsMap[item.sku] ?? 0;
+            const rate = sold > 0 ? sold / days : null;
+            const qty = item.shopifyQty ?? 0;
+            const daysLeft = rate ? Math.floor(qty / rate) : null;
+            return {
+              sku: item.sku,
+              productName: item.productName,
+              inventory: qty,
+              valueCost: qty * (item.landedCost ?? 0),
+              valueRrp: qty * (item.dtcRrp ?? 0),
+              runRate: rate,
+              daysLeft,
+              oosDate: daysLeft !== null ? format(addDays(new Date(), daysLeft), "dd MMM yyyy") : null,
+            };
+          });
+
+          setInventoryRows(rows);
+        }
+      } catch (err) {
+        console.error("Failed to fetch inventory:", err);
+      } finally {
+        if (!cancelled) setInventoryLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [apiFetch, currentOrg, forecastPeriod]);
+
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 justify-end">
+      {/* Sticky Controls */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 pb-4 -mt-4 pt-4 flex items-center gap-3 justify-end">
         <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
           {groupByOrder.map((g) => (
             <button
@@ -231,7 +313,8 @@ export function ShopifyChart() {
         <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
       </div>
 
-      {/* Chart + Scorecards */}
+      {/* Summary */}
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Summary</h2>
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
           {loading ? (
@@ -329,6 +412,110 @@ export function ShopifyChart() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Shopify Inventory */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Shopify Inventory</h2>
+            {inventoryDate && (
+              <span className="text-sm text-zinc-400 block">as of {inventoryDate}</span>
+            )}
+          </div>
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {(["7d", "14d", "30d"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setForecastPeriod(p)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  forecastPeriod === p
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {inventoryLoading ? (
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+            <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+              {[80, 180, 80, 80, 80, 80, 80, 120].map((w, i) => (
+                <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+              ))}
+            </div>
+            {[...Array(5)].map((_, row) => (
+              <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                {[80, 180, 80, 80, 80, 80, 80, 120].map((w, col) => (
+                  <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : inventoryRows.length === 0 ? (
+          <div className="table-empty">No inventory data available.</div>
+        ) : (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr className="table-header-row">
+                  <th className="table-header-cell table-header-cell-sticky">SKU</th>
+                  <th className="table-header-cell min-w-[180px]">Product</th>
+                  <th className="table-header-cell">Inventory</th>
+                  <th className="table-header-cell">Value (Cost)</th>
+                  <th className="table-header-cell">Value (RRP)</th>
+                  <th className="table-header-cell">Run Rate</th>
+                  <th className="table-header-cell">Days Left</th>
+                  <th className="table-header-cell">OOS Forecast</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryRows.map((row) => (
+                  <tr key={row.sku} className="table-body-row">
+                    <td className="table-cell table-cell-sticky table-cell-primary">{row.sku}</td>
+                    <td className="table-cell min-w-[180px]">{row.productName ?? "-"}</td>
+                    <td className="table-cell">
+                      {row.inventory === 0 ? (
+                        <span className="text-red-500 font-medium">0</span>
+                      ) : (
+                        row.inventory
+                      )}
+                    </td>
+                    <td className="table-cell">{formatCurrencyInt(row.valueCost)}</td>
+                    <td className="table-cell">{formatCurrencyInt(row.valueRrp)}</td>
+                    <td className="table-cell">
+                      {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                    </td>
+                    <td className={`table-cell ${
+                      row.daysLeft !== null
+                        ? row.daysLeft < 90
+                          ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                          : row.daysLeft <= 150
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                            : ""
+                        : ""
+                    }`}>
+                      {row.daysLeft !== null ? row.daysLeft : "-"}
+                    </td>
+                    <td className="table-cell">{row.oosDate ?? "-"}</td>
+                  </tr>
+                ))}
+                <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
+                  <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
+                  <td className="table-cell min-w-[180px]"></td>
+                  <td className="table-cell">{inventoryRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
+                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueCost, 0))}</td>
+                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                  <td className="table-cell"></td>
+                  <td className="table-cell"></td>
+                  <td className="table-cell"></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );

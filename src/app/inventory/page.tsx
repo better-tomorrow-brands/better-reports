@@ -61,6 +61,9 @@ interface InventoryItem {
   warehouseQty: number;
   shopifyQty: number;
   totalQty: number;
+  landedCost: number;
+  amazonRrp: number;
+  dtcRrp: number;
 }
 
 // ── Tabs ───────────────────────────────────────────────────
@@ -112,6 +115,15 @@ function fmt(val: number | null | undefined): string {
 function pct(val: number | null | undefined): string {
   if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return "-";
   return (val * 100).toFixed(1) + "%";
+}
+
+function formatCurrency(value: number): string {
+  return new Intl.NumberFormat("en-GB", {
+    style: "currency",
+    currency: "GBP",
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
 }
 
 // ── Column definitions per tab ─────────────────────────────
@@ -195,6 +207,8 @@ const ALL_INVENTORY_COLUMNS: ColDef[] = [
   { key: "shopifyQty", label: "Shopify Qty", defaultVisible: true },
   { key: "warehouseQty", label: "Warehouse Qty", defaultVisible: true },
   { key: "totalQty", label: "Total Qty", defaultVisible: true },
+  { key: "valueCost", label: "Value (Cost)", defaultVisible: true },
+  { key: "valueRrp", label: "Value (RRP)", defaultVisible: true },
   { key: "runRate", label: "Run Rate", defaultVisible: true },
   { key: "daysLeft", label: "Days Left", defaultVisible: true },
   { key: "oosDate", label: "Out of Stock Forecast", defaultVisible: true },
@@ -203,7 +217,7 @@ const ALL_INVENTORY_COLUMNS: ColDef[] = [
 const COLUMN_STORAGE_KEY = "inventory-products-columns";
 const AMAZON_COLUMN_STORAGE_KEY = "inventory-amazon-columns";
 const DTC_COLUMN_STORAGE_KEY = "inventory-dtc-columns";
-const INVENTORY_COLUMN_STORAGE_KEY = "inventory-overall-columns";
+const INVENTORY_COLUMN_STORAGE_KEY = "inventory-overall-columns-v2";
 
 function loadVisibleCols(storageKey: string, allCols: ColDef[]): Set<string> {
   if (typeof window === "undefined") return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
@@ -880,6 +894,8 @@ export default function InventoryPage() {
     productName: string | null;
     channel: "Total" | "Amazon" | "Shopify";
     inventory: number;
+    valueCost: number;
+    valueRrp: number;
     runRate: number | null; // units/day, null = no data
     daysLeft: number | null;
     oosDate: string | null;
@@ -897,14 +913,19 @@ export default function InventoryPage() {
       const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
       const totalSold = shopifySold + amazonSold;
       const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
+      const lc = item.landedCost ?? 0;
 
       // Total row
       const totalDaysLeft = totalRate ? Math.floor(totalQty / totalRate) : null;
+      const amazonValRrp = (item.amazonQty ?? 0) * (item.amazonRrp ?? 0);
+      const shopifyValRrp = (item.shopifyQty ?? 0) * (item.dtcRrp ?? 0);
       rows.push({
         sku: item.sku,
         productName: item.productName,
         channel: "Total",
         inventory: totalQty,
+        valueCost: totalQty * lc,
+        valueRrp: amazonValRrp + shopifyValRrp,
         runRate: totalRate,
         daysLeft: totalDaysLeft,
         oosDate: totalDaysLeft !== null ? format(addDays(new Date(), totalDaysLeft), "dd MMM yyyy") : null,
@@ -913,12 +934,15 @@ export default function InventoryPage() {
       });
 
       // Amazon row
-      const amazonDaysLeft = amazonRate ? Math.floor((item.amazonQty ?? 0) / amazonRate) : null;
+      const amzQty = item.amazonQty ?? 0;
+      const amazonDaysLeft = amazonRate ? Math.floor(amzQty / amazonRate) : null;
       rows.push({
         sku: item.sku,
         productName: item.productName,
         channel: "Amazon",
-        inventory: item.amazonQty ?? 0,
+        inventory: amzQty,
+        valueCost: amzQty * lc,
+        valueRrp: amzQty * (item.amazonRrp ?? 0),
         runRate: amazonRate,
         daysLeft: amazonDaysLeft,
         oosDate: amazonDaysLeft !== null ? format(addDays(new Date(), amazonDaysLeft), "dd MMM yyyy") : null,
@@ -927,12 +951,15 @@ export default function InventoryPage() {
       });
 
       // Shopify row
-      const shopifyDaysLeft = shopifyRate ? Math.floor((item.shopifyQty ?? 0) / shopifyRate) : null;
+      const shpQty = item.shopifyQty ?? 0;
+      const shopifyDaysLeft = shopifyRate ? Math.floor(shpQty / shopifyRate) : null;
       rows.push({
         sku: item.sku,
         productName: item.productName,
         channel: "Shopify",
-        inventory: item.shopifyQty ?? 0,
+        inventory: shpQty,
+        valueCost: shpQty * lc,
+        valueRrp: shpQty * (item.dtcRrp ?? 0),
         runRate: shopifyRate,
         daysLeft: shopifyDaysLeft,
         oosDate: shopifyDaysLeft !== null ? format(addDays(new Date(), shopifyDaysLeft), "dd MMM yyyy") : null,
@@ -1611,6 +1638,37 @@ export default function InventoryPage() {
                     Add All Products
                   </button>
                 )}
+                <div className="relative" ref={inventoryColPickerRef}>
+                  <button
+                    onClick={() => setShowInventoryColPicker(!showInventoryColPicker)}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    </svg>
+                    Columns
+                  </button>
+                  {showInventoryColPicker && (
+                    <div className="dropdown right-0 mt-2 w-56 max-h-[70vh] overflow-y-auto">
+                      <div className="p-2">
+                        {ALL_INVENTORY_COLUMNS.map((col) => (
+                          <label
+                            key={col.key}
+                            className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
+                          >
+                            <input
+                              type="checkbox"
+                              checked={visibleInventoryCols.has(col.key)}
+                              onChange={() => toggleInventoryCol(col.key)}
+                              className="rounded"
+                            />
+                            <span className="text-sm">{col.label}</span>
+                          </label>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
             {inventoryLoading ? (
@@ -1639,6 +1697,8 @@ export default function InventoryPage() {
                       <th className="table-header-cell min-w-[180px]">Product</th>
                       <th className="table-header-cell">Channel</th>
                       <th className="table-header-cell">Inventory</th>
+                      {visibleInventoryCols.has("valueCost") && <th className="table-header-cell">Value (Cost)</th>}
+                      {visibleInventoryCols.has("valueRrp") && <th className="table-header-cell">Value (RRP)</th>}
                       <th className="table-header-cell">Run Rate</th>
                       <th className="table-header-cell">Days Left</th>
                       <th className="table-header-cell">OOS Forecast</th>
@@ -1669,6 +1729,12 @@ export default function InventoryPage() {
                               row.inventory
                             )}
                           </td>
+                          {visibleInventoryCols.has("valueCost") && (
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueCost)}</td>
+                          )}
+                          {visibleInventoryCols.has("valueRrp") && (
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp)}</td>
+                          )}
                           <td className="table-cell">
                             {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
                           </td>
@@ -1710,6 +1776,27 @@ export default function InventoryPage() {
                         </tr>
                       );
                     })}
+                    {(() => {
+                      const totalRows = groupedRows.filter((r) => r.channel === "Total");
+                      return (
+                        <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
+                          <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
+                          <td className="table-cell min-w-[180px]"></td>
+                          <td className="table-cell"></td>
+                          <td className="table-cell">{totalRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
+                          {visibleInventoryCols.has("valueCost") && (
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueCost, 0))}</td>
+                          )}
+                          {visibleInventoryCols.has("valueRrp") && (
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                          )}
+                          <td className="table-cell"></td>
+                          <td className="table-cell"></td>
+                          <td className="table-cell"></td>
+                          <td className="table-cell"></td>
+                        </tr>
+                      );
+                    })()}
                   </tbody>
                 </table>
               </div>
