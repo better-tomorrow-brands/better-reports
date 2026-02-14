@@ -690,6 +690,31 @@ export default function InventoryPage() {
     }
   }, [apiFetch]);
 
+  // ── Inventory sync ─────────────────────────────────────
+  const [syncing, setSyncing] = useState(false);
+
+  const syncShopifyInventory = useCallback(async () => {
+    if (!currentOrg) return;
+    setSyncing(true);
+    try {
+      const res = await apiFetch("/api/inventory", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "sync-shopify" }),
+      });
+      if (res.ok) {
+        fetchInventoryData();
+      } else {
+        const err = await res.json();
+        alert(`Sync failed: ${err.error}`);
+      }
+    } catch (e) {
+      alert(`Sync failed: ${e instanceof Error ? e.message : "Unknown error"}`);
+    } finally {
+      setSyncing(false);
+    }
+  }, [apiFetch, currentOrg, fetchInventoryData]);
+
   // ── Inventory edit modal state ──────────────────────────
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [editAmazonQty, setEditAmazonQty] = useState("");
@@ -1386,6 +1411,13 @@ export default function InventoryPage() {
                 onChange={(e) => setSearch(e.target.value)}
                 className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
               />
+              <button
+                onClick={syncShopifyInventory}
+                disabled={syncing}
+                className="btn btn-secondary btn-sm"
+              >
+                {syncing ? "Syncing..." : "Sync Shopify"}
+              </button>
               {inventoryItems.length === 0 && products.length > 0 && (
                 <button
                   onClick={initInventoryFromProducts}

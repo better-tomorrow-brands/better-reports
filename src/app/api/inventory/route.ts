@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { inventorySnapshots, products } from "@/lib/db/schema";
+import { inventorySnapshots, products, syncLogs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
+import { getShopifySettings } from "@/lib/settings";
+import { fetchShopifyInventory, upsertShopifyInventory } from "@/lib/shopify";
 
 function today(): string {
   return new Date().toISOString().split("T")[0];
@@ -105,5 +107,47 @@ export async function PUT(request: Request) {
     }
     console.error("Inventory PUT error:", error);
     return NextResponse.json({ error: "Failed to update inventory" }, { status: 500 });
+  }
+}
+
+export async function POST(request: Request) {
+  try {
+    const { orgId } = await requireOrgFromRequest(request);
+
+    const body = await request.json();
+    const { action } = body as { action: string };
+
+    if (action !== "sync-shopify") {
+      return NextResponse.json({ error: "Unknown action" }, { status: 400 });
+    }
+
+    const settings = await getShopifySettings(orgId);
+    if (!settings) {
+      return NextResponse.json({ error: "Shopify settings not configured" }, { status: 400 });
+    }
+
+    const timestamp = new Date();
+    const items = await fetchShopifyInventory(settings);
+    const snapshotDate = today();
+    const upserted = await upsertShopifyInventory(items, snapshotDate, orgId);
+
+    await db.insert(syncLogs).values({
+      orgId,
+      source: "shopify-inventory",
+      status: "success",
+      syncedAt: timestamp,
+      details: JSON.stringify({ items: items.length, upserted, snapshotDate, manual: true }),
+    });
+
+    return NextResponse.json({ success: true, items: items.length, upserted, snapshotDate });
+  } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error("Inventory sync error:", error);
+    return NextResponse.json(
+      { error: error instanceof Error ? error.message : "Failed to sync inventory" },
+      { status: 500 }
+    );
   }
 }
