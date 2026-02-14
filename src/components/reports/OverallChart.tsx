@@ -1,11 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
-import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { chartColors } from "@/lib/chart-colors";
 import {
@@ -122,8 +121,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 export function OverallChart() {
   const { apiFetch, currentOrg } = useOrg();
-  const [dateRange, setDateRange] = usePersistedDateRange(
-    "dr-overall",
+  const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
   const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
@@ -131,7 +129,6 @@ export function OverallChart() {
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
-  const fetchIdRef = useRef(0);
 
   if (dateRange !== prevDateRange) {
     setPrevDateRange(dateRange);
@@ -149,22 +146,19 @@ export function OverallChart() {
 
   const fetchData = useCallback(async () => {
     if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
-    const id = ++fetchIdRef.current;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
       const res = await apiFetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
-      if (id !== fetchIdRef.current) return;
       const json = await res.json();
       setData(json.data);
     } catch (err) {
-      if (id !== fetchIdRef.current) return;
       console.error("Failed to fetch overall report:", err);
       setData([]);
     } finally {
-      if (id === fetchIdRef.current) setLoading(false);
+      setLoading(false);
     }
   }, [dateRange, groupBy, apiFetch, currentOrg]);
 
@@ -202,11 +196,10 @@ export function OverallChart() {
       }
 
       if (isCurrentPeriod && daysElapsed > 0) {
-        const remainingDays = totalDays - daysElapsed;
-        const shopifyRemaining = (d.shopifyRevenue / daysElapsed) * remainingDays;
-        shopifyForecast = Math.max(0, Math.round((shopifyRemaining - d.shopifyRevenue) * 100) / 100);
-        const amazonRemaining = (d.amazonRevenue / daysElapsed) * remainingDays;
-        amazonForecast = Math.max(0, Math.round((amazonRemaining - d.amazonRevenue) * 100) / 100);
+        const shopifyProjected = (d.shopifyRevenue / daysElapsed) * totalDays;
+        shopifyForecast = Math.max(0, Math.round((shopifyProjected - d.shopifyRevenue) * 100) / 100);
+        const amazonProjected = (d.amazonRevenue / daysElapsed) * totalDays;
+        amazonForecast = Math.max(0, Math.round((amazonProjected - d.amazonRevenue) * 100) / 100);
       }
     }
 

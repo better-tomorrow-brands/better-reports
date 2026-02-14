@@ -180,8 +180,8 @@ export function AmazonChart() {
 
       if (isCurrentPeriod && daysElapsed > 0) {
         const actual = d.revenue;
-        const remaining = (actual / daysElapsed) * (totalDays - daysElapsed);
-        forecast = Math.max(0, Math.round((remaining - actual) * 100) / 100);
+        const projected = (actual / daysElapsed) * totalDays;
+        forecast = Math.max(0, Math.round((projected - actual) * 100) / 100);
       }
     }
 
