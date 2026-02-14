@@ -22,6 +22,13 @@ export interface AmazonSettings {
   marketplace_id: string; // A1F83G8C2ARO7P for UK
 }
 
+export interface AmazonAdsSettings {
+  client_id: string;
+  client_secret: string;
+  refresh_token: string;
+  profile_id: string; // Amazon Advertising profile ID
+}
+
 export interface LifecycleSettings {
   newMaxDays: number;      // New: ≤ this many days (default 30)
   reorderMaxDays: number;  // Due Reorder: newMaxDays+1 to this (default 60)
@@ -77,6 +84,16 @@ export async function getAmazonSettings(orgId: number): Promise<AmazonSettings |
 
 export async function saveAmazonSettings(orgId: number, amazon: AmazonSettings): Promise<void> {
   await setSetting(orgId, "amazon", JSON.stringify(amazon));
+}
+
+export async function getAmazonAdsSettings(orgId: number): Promise<AmazonAdsSettings | null> {
+  const raw = await getSetting(orgId, "amazon_ads");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function saveAmazonAdsSettings(orgId: number, amazonAds: AmazonAdsSettings): Promise<void> {
+  await setSetting(orgId, "amazon_ads", JSON.stringify(amazonAds));
 }
 
 export const DEFAULT_LIFECYCLE_SETTINGS: LifecycleSettings = {

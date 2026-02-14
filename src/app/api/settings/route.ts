@@ -3,6 +3,7 @@ import {
   getMetaSettings, saveMetaSettings,
   getShopifySettings, saveShopifySettings,
   getAmazonSettings, saveAmazonSettings,
+  getAmazonAdsSettings, saveAmazonAdsSettings,
 } from "@/lib/settings";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -10,10 +11,11 @@ export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
 
-    const [meta, shopify, amazon] = await Promise.all([
+    const [meta, shopify, amazon, amazonAds] = await Promise.all([
       getMetaSettings(orgId),
       getShopifySettings(orgId),
       getAmazonSettings(orgId),
+      getAmazonAdsSettings(orgId),
     ]);
 
     // Mask tokens for display
@@ -50,7 +52,19 @@ export async function GET(request: Request) {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon });
+    const maskedAmazonAds = amazonAds
+      ? {
+          ...amazonAds,
+          client_secret: amazonAds.client_secret
+            ? `${amazonAds.client_secret.slice(0, 6)}...`
+            : "",
+          refresh_token: amazonAds.refresh_token
+            ? `${amazonAds.refresh_token.slice(0, 10)}...${amazonAds.refresh_token.slice(-4)}`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -99,6 +113,18 @@ export async function POST(request: Request) {
         if (existing) body.amazon.refresh_token = existing.refresh_token;
       }
       await saveAmazonSettings(orgId, body.amazon);
+    }
+
+    if (body.amazon_ads) {
+      if (body.amazon_ads.client_secret?.includes("...")) {
+        const existing = await getAmazonAdsSettings(orgId);
+        if (existing) body.amazon_ads.client_secret = existing.client_secret;
+      }
+      if (body.amazon_ads.refresh_token?.includes("...")) {
+        const existing = await getAmazonAdsSettings(orgId);
+        if (existing) body.amazon_ads.refresh_token = existing.refresh_token;
+      }
+      await saveAmazonAdsSettings(orgId, body.amazon_ads);
     }
 
     return NextResponse.json({ success: true });

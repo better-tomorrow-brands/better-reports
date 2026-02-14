@@ -32,6 +32,13 @@ interface AmazonForm {
   marketplace_id: string;
 }
 
+interface AmazonAdsForm {
+  client_id: string;
+  client_secret: string;
+  refresh_token: string;
+  profile_id: string;
+}
+
 export default function SettingsPage() {
   const { apiFetch, currentOrg } = useOrg();
   const { theme, setTheme } = useTheme();
@@ -57,20 +64,30 @@ export default function SettingsPage() {
     refresh_token: "",
     marketplace_id: "A1F83G8C2ARO7P",
   });
+  const [amazonAds, setAmazonAds] = useState<AmazonAdsForm>({
+    client_id: "",
+    client_secret: "",
+    refresh_token: "",
+    profile_id: "",
+  });
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
   const [savingAmazon, setSavingAmazon] = useState(false);
+  const [savingAmazonAds, setSavingAmazonAds] = useState(false);
   const [testingAmazon, setTestingAmazon] = useState(false);
+  const [testingAmazonAds, setTestingAmazonAds] = useState(false);
   const [amazonTestResult, setAmazonTestResult] = useState<{ success: boolean; message: string } | null>(null);
+  const [amazonAdsTestResult, setAmazonAdsTestResult] = useState<{ success: boolean; message: string } | null>(null);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
 
   // Saved snapshots — track what's persisted so we can detect changes & lock fields
   const [savedMeta, setSavedMeta] = useState<MetaForm>({ phone_number_id: "", waba_id: "", access_token: "" });
   const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ store_domain: "", access_token: "", webhook_secret: "" });
   const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
+  const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
 
   // Which locked fields are currently unlocked for editing / have their value revealed
   const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
@@ -139,6 +156,11 @@ export default function SettingsPage() {
           const merged = { ...amazon, ...settingsData.amazon };
           setAmazon(merged);
           setSavedAmazon(merged);
+        }
+        if (settingsData.amazon_ads) {
+          const merged = { ...amazonAds, ...settingsData.amazon_ads };
+          setAmazonAds(merged);
+          setSavedAmazonAds(merged);
         }
         if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
         if (userData.role) setUserRole(userData.role);
@@ -279,10 +301,57 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveAmazonAds() {
+    setSavingAmazonAds(true);
+    setMessage(null);
+
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ amazon_ads: amazonAds }),
+      });
+
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "Amazon Ads settings saved" });
+        const reload = await apiFetch("/api/settings");
+        const reloaded = await reload.json();
+        if (reloaded.amazon_ads) {
+          setAmazonAds(reloaded.amazon_ads);
+          setSavedAmazonAds(reloaded.amazon_ads);
+        }
+        resetFieldStates("amazonAds.");
+      } else {
+        setMessage({ type: "error", text: data.details || data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingAmazonAds(false);
+    }
+  }
+
+  async function handleTestAmazonAds() {
+    setTestingAmazonAds(true);
+    setAmazonAdsTestResult(null);
+
+    try {
+      const res = await apiFetch("/api/test/amazon-ads");
+      const data = await res.json();
+      setAmazonAdsTestResult(data);
+    } catch {
+      setAmazonAdsTestResult({ success: false, message: "Request failed" });
+    } finally {
+      setTestingAmazonAds(false);
+    }
+  }
+
   // Detect unsaved changes per section
   const hasShopifyChanges = (Object.keys(shopify) as (keyof ShopifyForm)[]).some((k) => shopify[k] !== savedShopify[k]);
   const hasMetaChanges = (Object.keys(meta) as (keyof MetaForm)[]).some((k) => meta[k] !== savedMeta[k]);
   const hasAmazonChanges = (Object.keys(amazon) as (keyof AmazonForm)[]).some((k) => amazon[k] !== savedAmazon[k]);
+  const hasAmazonAdsChanges = (Object.keys(amazonAds) as (keyof AmazonAdsForm)[]).some((k) => amazonAds[k] !== savedAmazonAds[k]);
 
   // Reusable locked-input component
   function LockedInput({
@@ -700,6 +769,88 @@ export default function SettingsPage() {
                 }`}
               >
                 {amazonTestResult.message}
+              </div>
+            )}
+          </section>
+
+          {/* ── Amazon Ads API ──────────────────────── */}
+          <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+            <h2 className="text-lg font-semibold mb-1">Amazon Ads API</h2>
+            <p className="text-sm text-zinc-500 mb-4">
+              Connect your Amazon Advertising account for Sponsored Products campaign data.
+            </p>
+
+            <div className="flex flex-col gap-4">
+              <LockedInput
+                fieldKey="amazonAds.client_id"
+                label="Client ID"
+                value={amazonAds.client_id}
+                savedValue={savedAmazonAds.client_id}
+                onChange={(v) => setAmazonAds({ ...amazonAds, client_id: v })}
+                placeholder="amzn1.application-oa2-client.xxxxx"
+                helpText="From the Amazon Ads developer console — this is a separate app from the SP-API."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.client_secret"
+                label="Client Secret"
+                value={amazonAds.client_secret}
+                savedValue={savedAmazonAds.client_secret}
+                onChange={(v) => setAmazonAds({ ...amazonAds, client_secret: v })}
+                placeholder="Client secret from Amazon Ads app"
+                helpText="LWA client secret for your Amazon Ads application."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.refresh_token"
+                label="Refresh Token"
+                value={amazonAds.refresh_token}
+                savedValue={savedAmazonAds.refresh_token}
+                onChange={(v) => setAmazonAds({ ...amazonAds, refresh_token: v })}
+                placeholder="Atzr|xxxxx"
+                helpText="Generated via the Amazon Ads OAuth flow. Separate from the SP-API refresh token."
+                mono
+              />
+
+              <LockedInput
+                fieldKey="amazonAds.profile_id"
+                label="Profile ID"
+                value={amazonAds.profile_id}
+                savedValue={savedAmazonAds.profile_id}
+                onChange={(v) => setAmazonAds({ ...amazonAds, profile_id: v })}
+                placeholder="e.g. 366822873177837"
+                helpText="Your Amazon Advertising profile ID. Found via the Profiles API or in the Ads console URL."
+              />
+            </div>
+
+            <div className="mt-5 flex items-center gap-3">
+              <button
+                onClick={handleSaveAmazonAds}
+                disabled={savingAmazonAds || !hasAmazonAdsChanges}
+                className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {savingAmazonAds ? "Saving..." : "Save"}
+              </button>
+              <button
+                onClick={handleTestAmazonAds}
+                disabled={testingAmazonAds}
+                className="px-4 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+              >
+                {testingAmazonAds ? "Testing..." : "Test Connection"}
+              </button>
+            </div>
+
+            {amazonAdsTestResult && (
+              <div
+                className={`mt-3 p-3 rounded-md text-sm ${
+                  amazonAdsTestResult.success
+                    ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
+                    : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
+                }`}
+              >
+                {amazonAdsTestResult.message}
               </div>
             )}
           </section>

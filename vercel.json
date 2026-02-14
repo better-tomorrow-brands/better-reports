@@ -31,6 +31,14 @@
     {
       "path": "/api/cron/shopify-inventory?orgId=1",
       "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-ads-request?orgId=1",
+      "schedule": "0 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon-ads-collect?orgId=1",
+      "schedule": "30 9 * * *"
     }
   ]
 }
