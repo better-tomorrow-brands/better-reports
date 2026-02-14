@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { amazonSalesTraffic, amazonSpAds } from "@/lib/db/schema";
+import { amazonSalesTraffic, amazonSpAds, products } from "@/lib/db/schema";
 import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -25,14 +25,24 @@ export async function GET(request: Request) {
 
     const dateTrunc = sql`date_trunc(${unit}, ${amazonSalesTraffic.date}::timestamp)::date`;
 
+    // 1. Revenue / traffic + calculated fees (JOIN with products on ASIN)
     const rows = await db
       .select({
         date: sql<string>`${dateTrunc}`.as("date"),
         revenue: sum(amazonSalesTraffic.orderedProductSales).as("revenue"),
         unitsOrdered: sum(amazonSalesTraffic.unitsOrdered).as("units_ordered"),
         sessions: sum(amazonSalesTraffic.sessions).as("sessions"),
+        fbaFees: sql<string>`SUM(${amazonSalesTraffic.unitsOrdered} * COALESCE(${products.fbaFee}, 0))`.as("fba_fees"),
+        referralFees: sql<string>`SUM(${amazonSalesTraffic.orderedProductSales} * COALESCE(${products.referralPercent}, 0) / 100)`.as("referral_fees"),
       })
       .from(amazonSalesTraffic)
+      .leftJoin(
+        products,
+        and(
+          eq(products.orgId, amazonSalesTraffic.orgId),
+          eq(products.asin, amazonSalesTraffic.childAsin),
+        ),
+      )
       .where(
         and(
           eq(amazonSalesTraffic.orgId, orgId),
@@ -43,12 +53,13 @@ export async function GET(request: Request) {
       .groupBy(dateTrunc)
       .orderBy(dateTrunc);
 
-    // Ad spend from amazon_sp_ads (separate query to avoid join inflation)
+    // 2. Ad spend from amazon_sp_ads
     const adsTrunc = sql`date_trunc(${unit}, ${amazonSpAds.date}::timestamp)::date`;
     const adsRows = await db
       .select({
         date: sql<string>`${adsTrunc}`.as("date"),
         adSpend: sum(amazonSpAds.cost).as("ad_spend"),
+        adRevenue: sum(amazonSpAds.sales14d).as("ad_revenue"),
       })
       .from(amazonSpAds)
       .where(
@@ -61,15 +72,29 @@ export async function GET(request: Request) {
       .groupBy(adsTrunc)
       .orderBy(adsTrunc);
 
-    const adSpendMap = new Map(adsRows.map((r) => [r.date, Math.round((Number(r.adSpend) || 0) * 100) / 100]));
+    const adSpendMap = new Map(adsRows.map((r) => [r.date, {
+      adSpend: Math.round((Number(r.adSpend) || 0) * 100) / 100,
+      adRevenue: Math.round((Number(r.adRevenue) || 0) * 100) / 100,
+    }]));
 
-    const data = rows.map((row) => ({
-      date: row.date,
-      revenue: Math.round((Number(row.revenue) || 0) * 100) / 100,
-      unitsOrdered: Number(row.unitsOrdered) || 0,
-      sessions: Number(row.sessions) || 0,
-      adSpend: adSpendMap.get(row.date) || 0,
-    }));
+    const data = rows.map((row) => {
+      const ads = adSpendMap.get(row.date) || { adSpend: 0, adRevenue: 0 };
+      const revenue = Math.round((Number(row.revenue) || 0) * 100) / 100;
+      const fbaFees = Math.round((Number(row.fbaFees) || 0) * 100) / 100;
+      const referralFees = Math.round((Number(row.referralFees) || 0) * 100) / 100;
+      const estimatedPayout = Math.round((revenue - ads.adSpend - fbaFees - referralFees) * 100) / 100;
+      return {
+        date: row.date,
+        revenue,
+        unitsOrdered: Number(row.unitsOrdered) || 0,
+        sessions: Number(row.sessions) || 0,
+        adSpend: ads.adSpend,
+        adRevenue: ads.adRevenue,
+        fbaFees,
+        referralFees,
+        estimatedPayout,
+      };
+    });
 
     return NextResponse.json({ data });
   } catch (error) {

@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
+import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays, subDays, addDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
@@ -23,12 +23,13 @@ type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
   { key: "revenue", label: "Revenue", color: chartColors.amazon, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "estimatedPayout", label: "Est. Payout", color: chartColors.netCash, visible: true, type: "line", yAxisId: "left", showDots: true },
   { key: "adSpend", label: "Ad Spend", color: chartColors.adSpend, visible: true, type: "line", yAxisId: "left", showDots: true },
   { key: "unitsOrdered", label: "Units Ordered", color: chartColors.facebook, visible: false, type: "line", yAxisId: "left", showDots: false },
   { key: "sessions", label: "Sessions", color: chartColors.sessions, visible: false, type: "line", yAxisId: "left", showDots: false },
 ];
 
-const STORAGE_KEY = "amazon-chart-settings-v2";
+const STORAGE_KEY = "amazon-chart-settings-v4";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -51,6 +52,34 @@ interface DataPoint {
   unitsOrdered: number;
   sessions: number;
   adSpend: number;
+  adRevenue: number;
+  fbaFees: number;
+  referralFees: number;
+  estimatedPayout: number;
+}
+
+const EXPENSE_COLORS = {
+  adSpend: "#2d2d2d",
+  fbaFees: "#f59e0b",
+  referralFees: "#6366f1",
+} as const;
+
+function ExpensesTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
+      <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
+      {payload.map((entry) => (
+        <div key={entry.name} className="flex items-center gap-2 py-0.5">
+          <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
+          <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
+          <span className="font-medium text-zinc-900 dark:text-zinc-100">
+            {formatCurrency(entry.value)}
+          </span>
+        </div>
+      ))}
+    </div>
+  );
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -70,7 +99,8 @@ function formatCurrency(value: number): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
     currency: "GBP",
-    minimumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   }).format(value);
 }
 
@@ -203,37 +233,112 @@ export function AmazonChart() {
         unitsOrdered: acc.unitsOrdered + d.unitsOrdered,
         sessions: acc.sessions + d.sessions,
         adSpend: acc.adSpend + d.adSpend,
+        adRevenue: acc.adRevenue + d.adRevenue,
+        fbaFees: acc.fbaFees + d.fbaFees,
+        referralFees: acc.referralFees + d.referralFees,
+        estimatedPayout: acc.estimatedPayout + d.estimatedPayout,
       }),
-      { revenue: 0, unitsOrdered: 0, sessions: 0, adSpend: 0 }
+      { revenue: 0, unitsOrdered: 0, sessions: 0, adSpend: 0, adRevenue: 0, fbaFees: 0, referralFees: 0, estimatedPayout: 0 }
     );
   }, [data]);
 
+  // ── Inventory data (Amazon only) ─────────────────────
+  interface InventoryRow {
+    sku: string;
+    productName: string | null;
+    inventory: number;
+    runRate: number | null;
+    daysLeft: number | null;
+    oosDate: string | null;
+  }
+
+  type ForecastPeriod = "7d" | "14d" | "30d";
+  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("30d");
+  const [inventoryRows, setInventoryRows] = useState<InventoryRow[]>([]);
+  const [inventoryLoading, setInventoryLoading] = useState(true);
+  const [inventoryDate, setInventoryDate] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!currentOrg) return;
+    let cancelled = false;
+
+    (async () => {
+      setInventoryLoading(true);
+      try {
+        const periodDays = forecastPeriod === "7d" ? 7 : forecastPeriod === "14d" ? 14 : 30;
+        const fromDate = format(subDays(new Date(), periodDays), "yyyy-MM-dd");
+        const toYesterday = format(subDays(new Date(), 1), "yyyy-MM-dd");
+
+        const [invRes, rrRes] = await Promise.all([
+          apiFetch("/api/inventory"),
+          apiFetch(`/api/inventory/run-rate?from=${fromDate}&to=${toYesterday}`),
+        ]);
+
+        if (cancelled) return;
+
+        if (invRes.ok && rrRes.ok) {
+          const invData = await invRes.json();
+          const rrData = await rrRes.json();
+          const amazonUnits: Record<string, number> = rrData.amazonUnits ?? {};
+          const days = periodDays;
+
+          setInventoryDate(invData.date ?? null);
+
+          const rows: InventoryRow[] = (invData.items ?? []).map((item: { sku: string; productName: string | null; amazonQty: number }) => {
+            const sold = amazonUnits[item.sku] ?? 0;
+            const rate = sold > 0 ? sold / days : null;
+            const daysLeft = rate ? Math.floor((item.amazonQty ?? 0) / rate) : null;
+            return {
+              sku: item.sku,
+              productName: item.productName,
+              inventory: item.amazonQty ?? 0,
+              runRate: rate,
+              daysLeft,
+              oosDate: daysLeft !== null ? format(addDays(new Date(), daysLeft), "dd MMM yyyy") : null,
+            };
+          });
+
+          setInventoryRows(rows);
+        }
+      } catch (err) {
+        console.error("Failed to fetch inventory:", err);
+      } finally {
+        if (!cancelled) setInventoryLoading(false);
+      }
+    })();
+
+    return () => { cancelled = true; };
+  }, [apiFetch, currentOrg, forecastPeriod]);
+
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 justify-end">
-        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-          {groupByOrder.map((g) => (
-            <button
-              key={g}
-              onClick={() => setGroupBy(g)}
-              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-                groupBy === g
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              {groupByLabels[g]}
-            </button>
-          ))}
+      {/* Sticky Controls */}
+      <div className="sticky top-0 z-10 bg-white dark:bg-zinc-950 pb-4 -mt-4 pt-4">
+        <div className="flex items-center gap-3 justify-end">
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {groupByOrder.map((g) => (
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  groupBy === g
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {groupByLabels[g]}
+              </button>
+            ))}
+          </div>
+
+          <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+
+          <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
         </div>
-
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-        <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
       </div>
 
-      {/* Chart + Scorecards */}
+      {/* Summary */}
+      <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Summary</h2>
       <div className="flex gap-4">
         <div className="flex-1 min-w-0">
           {loading ? (
@@ -337,6 +442,177 @@ export function AmazonChart() {
             </p>
           </div>
         </div>
+      </div>
+
+      {/* Revenue vs Expenses */}
+      {!loading && chartData.length > 0 && (
+        <div className="mt-8">
+          <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Revenue vs Expenses</h2>
+          <div className="flex gap-4">
+            <div className="flex-1 min-w-0">
+              <ResponsiveContainer width="100%" height={420}>
+                <ComposedChart data={chartData} margin={{ top: 8, right: 16, left: 8, bottom: 0 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--color-zinc-200)" />
+                  <XAxis
+                    dataKey="dateLabel"
+                    tick={{ fontSize: 12, fill: "var(--color-zinc-500)" }}
+                    tickLine={false}
+                    axisLine={{ stroke: "var(--color-zinc-200)" }}
+                  />
+                  <YAxis
+                    yAxisId="left"
+                    tickFormatter={formatAxisValue}
+                    tick={{ fontSize: 12, fill: "var(--color-zinc-500)" }}
+                    tickLine={false}
+                    axisLine={false}
+                    width={50}
+                  />
+                  <Tooltip content={<ExpensesTooltip />} />
+                  <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="revenue"
+                    name="Revenue"
+                    stroke={chartColors.amazon}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: chartColors.amazon }}
+                  />
+                  <Line
+                    yAxisId="left"
+                    type="monotone"
+                    dataKey="estimatedPayout"
+                    name="Est. Payout"
+                    stroke={chartColors.netCash}
+                    strokeWidth={2}
+                    dot={{ r: 3, fill: chartColors.netCash }}
+                  />
+                  <Bar yAxisId="left" dataKey="adSpend" name="Ad Spend" fill={EXPENSE_COLORS.adSpend} stackId="expenses" maxBarSize={40} />
+                  <Bar yAxisId="left" dataKey="fbaFees" name="FBA Fees" fill={EXPENSE_COLORS.fbaFees} stackId="expenses" maxBarSize={40} />
+                  <Bar yAxisId="left" dataKey="referralFees" name="Referral Fees" fill={EXPENSE_COLORS.referralFees} stackId="expenses" radius={[2, 2, 0, 0]} maxBarSize={40} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
+
+            {/* Expense Scorecards */}
+            <div className="flex flex-col gap-3 w-44 shrink-0 pt-11">
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Revenue</p>
+                <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+                  {formatCurrency(totals.adRevenue)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
+                <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+                  {formatCurrency(totals.adSpend)}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">ROAS</p>
+                <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+                  {totals.adSpend > 0 ? (totals.adRevenue / totals.adSpend).toFixed(2) + "x" : "—"}
+                </p>
+              </div>
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+                <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Est. Payout</p>
+                <p className={`text-xl font-semibold ${totals.estimatedPayout >= 0 ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400"}`}>
+                  {formatCurrency(totals.estimatedPayout)}
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Amazon Inventory */}
+      <div className="mt-8">
+        <div className="flex items-center justify-between mb-3">
+          <div>
+            <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">Amazon Inventory</h2>
+            {inventoryDate && (
+              <span className="text-sm text-zinc-400 block">as of {inventoryDate}</span>
+            )}
+          </div>
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {(["7d", "14d", "30d"] as const).map((p) => (
+              <button
+                key={p}
+                onClick={() => setForecastPeriod(p)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  forecastPeriod === p
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+              </button>
+            ))}
+          </div>
+        </div>
+        {inventoryLoading ? (
+          <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+            <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+              {[80, 180, 80, 80, 80, 120].map((w, i) => (
+                <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+              ))}
+            </div>
+            {[...Array(5)].map((_, row) => (
+              <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                {[80, 180, 80, 80, 80, 120].map((w, col) => (
+                  <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                ))}
+              </div>
+            ))}
+          </div>
+        ) : inventoryRows.length === 0 ? (
+          <div className="table-empty">No inventory data available.</div>
+        ) : (
+          <div className="table-container">
+            <table className="table">
+              <thead>
+                <tr className="table-header-row">
+                  <th className="table-header-cell table-header-cell-sticky">SKU</th>
+                  <th className="table-header-cell min-w-[180px]">Product</th>
+                  <th className="table-header-cell">Inventory</th>
+                  <th className="table-header-cell">Run Rate</th>
+                  <th className="table-header-cell">Days Left</th>
+                  <th className="table-header-cell">OOS Forecast</th>
+                </tr>
+              </thead>
+              <tbody>
+                {inventoryRows.map((row) => (
+                  <tr key={row.sku} className="table-body-row">
+                    <td className="table-cell table-cell-sticky table-cell-primary">{row.sku}</td>
+                    <td className="table-cell min-w-[180px]">{row.productName ?? "-"}</td>
+                    <td className="table-cell">
+                      {row.inventory === 0 ? (
+                        <span className="text-red-500 font-medium">0</span>
+                      ) : (
+                        row.inventory
+                      )}
+                    </td>
+                    <td className="table-cell">
+                      {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                    </td>
+                    <td className={`table-cell ${
+                      row.daysLeft !== null
+                        ? row.daysLeft < 7
+                          ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                          : row.daysLeft < 30
+                            ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                            : ""
+                        : ""
+                    }`}>
+                      {row.daysLeft !== null ? row.daysLeft : "-"}
+                    </td>
+                    <td className="table-cell">{row.oosDate ?? "-"}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
       </div>
     </div>
   );
