@@ -156,6 +156,7 @@ export const inventorySnapshots = pgTable("inventory_snapshots", {
   date: date("date").notNull(),
   amazonQty: integer("amazon_qty").default(0),
   warehouseQty: integer("warehouse_qty").default(0),
+  shopifyQty: integer("shopify_qty").default(0),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   uniqueIndex("inventory_snapshots_org_sku_date_idx").on(table.orgId, table.sku, table.date),

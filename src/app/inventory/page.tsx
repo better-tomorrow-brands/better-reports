@@ -54,6 +54,7 @@ interface InventoryItem {
   asin: string | null;
   amazonQty: number;
   warehouseQty: number;
+  shopifyQty: number;
   totalQty: number;
 }
 
@@ -692,12 +693,14 @@ export default function InventoryPage() {
   // ── Inventory edit modal state ──────────────────────────
   const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
   const [editAmazonQty, setEditAmazonQty] = useState("");
+  const [editShopifyQty, setEditShopifyQty] = useState("");
   const [editWarehouseQty, setEditWarehouseQty] = useState("");
   const [savingInventory, setSavingInventory] = useState(false);
 
   const openInventoryModal = useCallback((item: InventoryItem) => {
     setEditingInventory(item);
     setEditAmazonQty(String(item.amazonQty));
+    setEditShopifyQty(String(item.shopifyQty));
     setEditWarehouseQty(String(item.warehouseQty));
   }, []);
 
@@ -705,18 +708,19 @@ export default function InventoryPage() {
     if (!editingInventory) return;
     setSavingInventory(true);
     const amazonQty = Number(editAmazonQty) || 0;
+    const shopifyQty = Number(editShopifyQty) || 0;
     const warehouseQty = Number(editWarehouseQty) || 0;
     try {
       const res = await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, warehouseQty }),
+        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, shopifyQty, warehouseQty }),
       });
       if (res.ok) {
         setInventoryItems((prev) =>
           prev.map((item) =>
             item.sku === editingInventory.sku
-              ? { ...item, amazonQty, warehouseQty, totalQty: amazonQty + warehouseQty }
+              ? { ...item, amazonQty, shopifyQty, warehouseQty, totalQty: amazonQty + shopifyQty + warehouseQty }
               : item
           )
         );
@@ -725,7 +729,7 @@ export default function InventoryPage() {
     } finally {
       setSavingInventory(false);
     }
-  }, [editingInventory, editAmazonQty, editWarehouseQty, apiFetch]);
+  }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, apiFetch]);
 
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
@@ -736,7 +740,7 @@ export default function InventoryPage() {
       await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: p.sku, amazonQty: 0, warehouseQty: 0 }),
+        body: JSON.stringify({ sku: p.sku, amazonQty: 0, shopifyQty: 0, warehouseQty: 0 }),
       });
     }
     fetchInventoryData();
@@ -749,6 +753,7 @@ export default function InventoryPage() {
     { key: "brand", label: "Brand" },
     { key: "asin", label: "ASIN" },
     { key: "amazonQty", label: "Amazon Qty", render: (v) => String(v ?? 0) },
+    { key: "shopifyQty", label: "Shopify Qty", render: (v) => String(v ?? 0) },
     { key: "warehouseQty", label: "Warehouse Qty", render: (v) => String(v ?? 0) },
     {
       key: "totalQty",
@@ -1439,6 +1444,16 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div>
+                      <label className="block text-sm font-medium mb-1">Shopify Qty</label>
+                      <input
+                        type="number"
+                        value={editShopifyQty}
+                        onChange={(e) => setEditShopifyQty(e.target.value)}
+                        className="input w-full"
+                        min={0}
+                      />
+                    </div>
+                    <div>
                       <label className="block text-sm font-medium mb-1">Warehouse Qty</label>
                       <input
                         type="number"
@@ -1449,7 +1464,7 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div className="text-sm text-zinc-500">
-                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editWarehouseQty) || 0)}</span>
+                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0)}</span>
                     </div>
                   </div>
                   <div className="filter-modal-footer">

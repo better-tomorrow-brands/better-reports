@@ -18,6 +18,7 @@ export async function GET(request: Request) {
         sku: inventorySnapshots.sku,
         amazonQty: inventorySnapshots.amazonQty,
         warehouseQty: inventorySnapshots.warehouseQty,
+        shopifyQty: inventorySnapshots.shopifyQty,
         productName: products.productName,
         brand: products.brand,
         asin: products.asin,
@@ -45,7 +46,8 @@ export async function GET(request: Request) {
       asin: r.asin,
       amazonQty: r.amazonQty ?? 0,
       warehouseQty: r.warehouseQty ?? 0,
-      totalQty: (r.amazonQty ?? 0) + (r.warehouseQty ?? 0),
+      shopifyQty: r.shopifyQty ?? 0,
+      totalQty: (r.amazonQty ?? 0) + (r.warehouseQty ?? 0) + (r.shopifyQty ?? 0),
     }));
 
     return NextResponse.json({ date, items: result });
@@ -63,10 +65,11 @@ export async function PUT(request: Request) {
     const { orgId } = await requireOrgFromRequest(request);
 
     const body = await request.json();
-    const { sku, amazonQty, warehouseQty } = body as {
+    const { sku, amazonQty, warehouseQty, shopifyQty } = body as {
       sku: string;
       amazonQty?: number;
       warehouseQty?: number;
+      shopifyQty?: number;
     };
 
     if (!sku) {
@@ -78,6 +81,7 @@ export async function PUT(request: Request) {
     const set: Record<string, unknown> = { updatedAt: new Date() };
     if (amazonQty !== undefined) set.amazonQty = amazonQty;
     if (warehouseQty !== undefined) set.warehouseQty = warehouseQty;
+    if (shopifyQty !== undefined) set.shopifyQty = shopifyQty;
 
     await db
       .insert(inventorySnapshots)
@@ -87,13 +91,14 @@ export async function PUT(request: Request) {
         date,
         amazonQty: amazonQty ?? 0,
         warehouseQty: warehouseQty ?? 0,
+        shopifyQty: shopifyQty ?? 0,
       })
       .onConflictDoUpdate({
         target: [inventorySnapshots.orgId, inventorySnapshots.sku, inventorySnapshots.date],
         set,
       });
 
-    return NextResponse.json({ success: true, sku, date, amazonQty, warehouseQty });
+    return NextResponse.json({ success: true, sku, date, amazonQty, warehouseQty, shopifyQty });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
