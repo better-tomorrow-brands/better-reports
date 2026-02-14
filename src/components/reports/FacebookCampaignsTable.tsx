@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
@@ -58,22 +59,17 @@ interface Totals {
   adSpend: number;
 }
 
-interface OverallSources {
-  shopify: boolean;
-  amazon: boolean;
-}
+type OverallFilter = "total" | "amazon" | "shopify";
+const SOURCES_STORAGE_KEY = "dashboard-overall-filter";
 
-const DEFAULT_SOURCES: OverallSources = { shopify: true, amazon: true };
-const SOURCES_STORAGE_KEY = "dashboard-overall-sources";
-
-function loadOverallSources(): OverallSources {
-  if (typeof window === "undefined") return DEFAULT_SOURCES;
+function loadOverallFilter(): OverallFilter {
+  if (typeof window === "undefined") return "total";
   try {
     const stored = localStorage.getItem(SOURCES_STORAGE_KEY);
-    if (!stored) return DEFAULT_SOURCES;
-    return { ...DEFAULT_SOURCES, ...JSON.parse(stored) };
+    if (stored === "total" || stored === "amazon" || stored === "shopify") return stored;
+    return "total";
   } catch {
-    return DEFAULT_SOURCES;
+    return "total";
   }
 }
 
@@ -117,13 +113,9 @@ function SortIcon({ direction }: { direction: SortDir | null }) {
 function DashboardSettingsPopover({
   columns,
   onColumnsChange,
-  sources,
-  onSourcesChange,
 }: {
   columns: ColumnConfig[];
   onColumnsChange: (updated: ColumnConfig[]) => void;
-  sources: OverallSources;
-  onSourcesChange: (updated: OverallSources) => void;
 }) {
   const [open, setOpen] = useState(false);
   const popoverRef = useRef<HTMLDivElement>(null);
@@ -153,48 +145,25 @@ function DashboardSettingsPopover({
 
       {open && (
         <div className="absolute right-0 top-full mt-1 z-50 bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 w-48">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Overall</p>
-          <div className="flex flex-col gap-2 mb-3">
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sources.shopify}
-                onChange={(e) => onSourcesChange({ ...sources, shopify: e.target.checked })}
-                className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-              />
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">Shopify</span>
-            </label>
-            <label className="flex items-center gap-2 cursor-pointer">
-              <input
-                type="checkbox"
-                checked={sources.amazon}
-                onChange={(e) => onSourcesChange({ ...sources, amazon: e.target.checked })}
-                className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-              />
-              <span className="text-sm text-zinc-700 dark:text-zinc-300">Amazon</span>
-            </label>
-          </div>
-          <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
-            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Facebook Table</p>
-            <div className="flex flex-col gap-2">
-              {columns.map((col) => (
-                <label key={col.key} className="flex items-center gap-2 cursor-pointer">
-                  <input
-                    type="checkbox"
-                    checked={col.visible}
-                    onChange={(e) =>
-                      onColumnsChange(
-                        columns.map((c) =>
-                          c.key === col.key ? { ...c, visible: e.target.checked } : c
-                        )
+          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-2">Facebook Table</p>
+          <div className="flex flex-col gap-2">
+            {columns.map((col) => (
+              <label key={col.key} className="flex items-center gap-2 cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={col.visible}
+                  onChange={(e) =>
+                    onColumnsChange(
+                      columns.map((c) =>
+                        c.key === col.key ? { ...c, visible: e.target.checked } : c
                       )
-                    }
-                    className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
-                  />
-                  <span className="text-sm text-zinc-700 dark:text-zinc-300">{col.label}</span>
-                </label>
-              ))}
-            </div>
+                    )
+                  }
+                  className="rounded border-zinc-300 dark:border-zinc-600 text-indigo-600 focus:ring-indigo-500 h-3.5 w-3.5"
+                />
+                <span className="text-sm text-zinc-700 dark:text-zinc-300">{col.label}</span>
+              </label>
+            ))}
           </div>
         </div>
       )}
@@ -202,7 +171,7 @@ function DashboardSettingsPopover({
   );
 }
 
-export function FacebookCampaignsTable() {
+export function FacebookCampaignsTable({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
   const { apiFetch, currentOrg } = useOrg();
   const [dateRange, setDateRange] = usePersistedDateRange(
     "dr-campaigns",
@@ -212,13 +181,13 @@ export function FacebookCampaignsTable() {
   const [overallTotals, setOverallTotals] = useState<Totals>({ shopifyRevenue: 0, shopifyOrders: 0, amazonRevenue: 0, amazonOrders: 0, sessions: 0, adSpend: 0 });
   const [loading, setLoading] = useState(true);
   const [columns, setColumns] = useState<ColumnConfig[]>(DEFAULT_COLUMNS);
-  const [sources, setSources] = useState<OverallSources>(DEFAULT_SOURCES);
+  const [filter, setFilter] = useState<OverallFilter>("total");
   const [sortKey, setSortKey] = useState<SortKey>("roas");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
   useEffect(() => {
     setColumns(loadColumnConfig());
-    setSources(loadOverallSources());
+    setFilter(loadOverallFilter());
   }, []);
 
   const handleColumnsChange = (updated: ColumnConfig[]) => {
@@ -226,9 +195,9 @@ export function FacebookCampaignsTable() {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(updated));
   };
 
-  const handleSourcesChange = (updated: OverallSources) => {
-    setSources(updated);
-    localStorage.setItem(SOURCES_STORAGE_KEY, JSON.stringify(updated));
+  const handleFilterChange = (value: OverallFilter) => {
+    setFilter(value);
+    localStorage.setItem(SOURCES_STORAGE_KEY, value);
   };
 
   const handleSort = (key: SortKey) => {
@@ -306,11 +275,13 @@ export function FacebookCampaignsTable() {
 
   const combinedTotals = useMemo(() => {
     const revenue =
-      (sources.shopify ? overallTotals.shopifyRevenue : 0) +
-      (sources.amazon ? overallTotals.amazonRevenue : 0);
+      filter === "shopify" ? overallTotals.shopifyRevenue :
+      filter === "amazon" ? overallTotals.amazonRevenue :
+      overallTotals.shopifyRevenue + overallTotals.amazonRevenue;
     const totalOrders =
-      (sources.shopify ? overallTotals.shopifyOrders : 0) +
-      (sources.amazon ? overallTotals.amazonOrders : 0);
+      filter === "shopify" ? overallTotals.shopifyOrders :
+      filter === "amazon" ? overallTotals.amazonOrders :
+      overallTotals.shopifyOrders + overallTotals.amazonOrders;
     const conversionRate = overallTotals.sessions > 0
       ? Math.round((totalOrders / overallTotals.sessions) * 10000) / 100
       : 0;
@@ -318,10 +289,19 @@ export function FacebookCampaignsTable() {
       ? Math.round((revenue / overallTotals.adSpend) * 100) / 100
       : 0;
     return { revenue, orders: totalOrders, sessions: overallTotals.sessions, conversionRate, adSpend: overallTotals.adSpend, roas };
-  }, [overallTotals, sources]);
+  }, [overallTotals, filter]);
 
   const isVisible = (key: string) =>
     columns.find((c) => c.key === key)?.visible ?? true;
+
+  // Show sessions/CR unless the date range includes today and filter includes Amazon data
+  const showSessions = useMemo(() => {
+    if (filter === "shopify") return true;
+    if (!dateRange?.to) return true;
+    const today = format(new Date(), "yyyy-MM-dd");
+    const toStr = format(dateRange.to, "yyyy-MM-dd");
+    return toStr < today; // hide when range includes today
+  }, [filter, dateRange]);
 
   const sortDirFor = (key: SortKey) => (sortKey === key ? sortDir : null);
 
@@ -332,39 +312,60 @@ export function FacebookCampaignsTable() {
 
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 justify-end">
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-        <DashboardSettingsPopover columns={columns} onColumnsChange={handleColumnsChange} sources={sources} onSourcesChange={handleSourcesChange} />
-      </div>
+      {controlsContainer && createPortal(
+        <>
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {(["total", "amazon", "shopify"] as const).map((value) => (
+              <button
+                key={value}
+                onClick={() => handleFilterChange(value)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  filter === value
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {value.charAt(0).toUpperCase() + value.slice(1)}
+              </button>
+            ))}
+          </div>
+          <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+          <DashboardSettingsPopover columns={columns} onColumnsChange={handleColumnsChange} />
+        </>,
+        controlsContainer,
+      )}
 
       {/* Overall */}
       <h2 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 mb-3">Overall</h2>
-      <div className="grid grid-cols-6 gap-3 mb-6">
+      <div className={`grid gap-3 mb-6 ${showSessions ? "grid-cols-6" : "grid-cols-4"}`}>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
             {loading ? "—" : formatCurrency(combinedTotals.revenue)}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
-          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : combinedTotals.sessions.toLocaleString()}
-          </p>
-        </div>
+        {showSessions && (
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Sessions</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : combinedTotals.sessions.toLocaleString()}
+            </p>
+          </div>
+        )}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Orders</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
             {loading ? "—" : combinedTotals.orders.toLocaleString()}
           </p>
         </div>
-        <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
-          <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Conversion Rate</p>
-          <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : `${combinedTotals.conversionRate.toFixed(2)}%`}
-          </p>
-        </div>
+        {showSessions && (
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Conversion Rate</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : `${combinedTotals.conversionRate.toFixed(2)}%`}
+            </p>
+          </div>
+        )}
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">

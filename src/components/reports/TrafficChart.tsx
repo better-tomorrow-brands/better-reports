@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useMemo } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
@@ -87,7 +88,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
   );
 }
 
-export function TrafficChart() {
+export function TrafficChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
   const { apiFetch, currentOrg } = useOrg();
   const [dateRange, setDateRange] = usePersistedDateRange(
     "dr-traffic",
@@ -157,28 +158,28 @@ export function TrafficChart() {
 
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-4 justify-end">
-        <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-          {groupByOrder.map((g) => (
-            <button
-              key={g}
-              onClick={() => setGroupBy(g)}
-              className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-                groupBy === g
-                  ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                  : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-              }`}
-            >
-              {groupByLabels[g]}
-            </button>
-          ))}
-        </div>
-
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-
-        <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
-      </div>
+      {controlsContainer && createPortal(
+        <>
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {groupByOrder.map((g) => (
+              <button
+                key={g}
+                onClick={() => setGroupBy(g)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                  groupBy === g
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {groupByLabels[g]}
+              </button>
+            ))}
+          </div>
+          <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+          <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
+        </>,
+        controlsContainer,
+      )}
 
       {/* Chart + Scorecards */}
       <div className="flex gap-4">

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
@@ -49,7 +50,7 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-export function EcommerceChart() {
+export function EcommerceChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
   const { apiFetch, currentOrg } = useOrg();
   const [dateRange, setDateRange] = usePersistedDateRange(
     "dr-ecommerce",
@@ -93,10 +94,10 @@ export function EcommerceChart() {
 
   return (
     <div className="pt-4">
-      {/* Controls */}
-      <div className="flex items-center gap-3 mb-6 justify-end">
-        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-      </div>
+      {controlsContainer && createPortal(
+        <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />,
+        controlsContainer,
+      )}
 
       {loading ? (
         <div className="flex items-center justify-center h-80 text-zinc-400">

@@ -114,7 +114,7 @@ export async function GET(request: Request) {
     }
 
     // Supplement with orders data for dates NOT covered by reports
-    const orderDateTrunc = sql`date_trunc('day', ${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`;
+    const orderDateTrunc = sql`date_trunc(${unit}, ${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`;
 
     const orderConditions = [
       eq(amazonOrders.orgId, orgId),
@@ -127,7 +127,7 @@ export async function GET(request: Request) {
       const reportDatesArr = Array.from(reportDates);
       orderConditions.push(
         notInArray(
-          sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`,
+          sql`date_trunc(${unit}, ${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`,
           reportDatesArr.map((d) => sql`${d}::date`)
         )
       );
@@ -153,24 +153,40 @@ export async function GET(request: Request) {
       .groupBy(orderDateTrunc)
       .orderBy(orderDateTrunc);
 
+    // Merge orders data into existing date buckets, or create new ones
+    const dataMap = new Map(data.map((d) => [d.date, d]));
+
     for (const row of orderRows) {
       const ads = adSpendMap.get(row.date) || { adSpend: 0, adRevenue: 0 };
       const revenue = Math.round((Number(row.revenue) || 0) * 100) / 100;
       const fbaFees = Math.round((Number(row.fbaFees) || 0) * 100) / 100;
       const referralFees = Math.round((Number(row.referralFees) || 0) * 100) / 100;
-      const estimatedPayout = Math.round((revenue - ads.adSpend - fbaFees - referralFees) * 100) / 100;
-      data.push({
-        date: row.date,
-        revenue,
-        unitsOrdered: Number(row.unitsOrdered) || 0,
-        sessions: 0,
-        adSpend: ads.adSpend,
-        adRevenue: ads.adRevenue,
-        fbaFees,
-        referralFees,
-        estimatedPayout,
-        source: "orders",
-      });
+
+      const existing = dataMap.get(row.date);
+      if (existing) {
+        // Merge into existing report-sourced bucket
+        existing.revenue = Math.round((existing.revenue + revenue) * 100) / 100;
+        existing.unitsOrdered += Number(row.unitsOrdered) || 0;
+        existing.fbaFees = Math.round((existing.fbaFees + fbaFees) * 100) / 100;
+        existing.referralFees = Math.round((existing.referralFees + referralFees) * 100) / 100;
+        existing.estimatedPayout = Math.round((existing.revenue - existing.adSpend - existing.fbaFees - existing.referralFees) * 100) / 100;
+      } else {
+        const estimatedPayout = Math.round((revenue - ads.adSpend - fbaFees - referralFees) * 100) / 100;
+        const entry = {
+          date: row.date,
+          revenue,
+          unitsOrdered: Number(row.unitsOrdered) || 0,
+          sessions: 0,
+          adSpend: ads.adSpend,
+          adRevenue: ads.adRevenue,
+          fbaFees,
+          referralFees,
+          estimatedPayout,
+          source: "orders" as const,
+        };
+        data.push(entry);
+        dataMap.set(row.date, entry);
+      }
     }
 
     // Sort by date

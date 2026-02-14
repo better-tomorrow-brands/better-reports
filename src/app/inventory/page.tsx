@@ -5,9 +5,11 @@ import { Table, Column } from "@/components/Table";
 import { useOrg } from "@/contexts/OrgContext";
 import { subDays, startOfDay, endOfYesterday, format, differenceInDays, addDays } from "date-fns";
 import {
-  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
   ReferenceLine, ResponsiveContainer,
 } from "recharts";
+import { DateRangePicker, suggestGroupBy } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 
 // ── Types ──────────────────────────────────────────────────
 interface Product {
@@ -73,6 +75,7 @@ const tabs = [
   { key: "dtc", label: "DTC" },
   { key: "inventory", label: "Inventory" },
   { key: "forecast", label: "Forecast" },
+  { key: "unit-sales", label: "Unit Sales" },
 ] as const;
 
 type TabKey = (typeof tabs)[number]["key"];
@@ -94,10 +97,22 @@ const LINE_COLORS = [
   "#8b5cf6", // violet
 ];
 
+const UNIT_SALES_COLORS: Record<string, string> = {
+  "8 Rolls": "#e4edaa",  // shopify light
+  "24 Rolls": "#c4d34f", // shopify
+  "48 Rolls": "#9aab2f", // shopify dark
+};
+
+const SKU_FILTER_PATTERNS: [string, ForecastSkuFilter][] = [
+  ["14641003", "48-rolls"],
+  ["14641002", "24-rolls"],
+  ["14641001", "8-rolls"],
+];
+
 function skuToFilterKey(sku: string): ForecastSkuFilter | null {
-  if (sku.includes("48")) return "48-rolls";
-  if (sku.includes("24")) return "24-rolls";
-  if (sku.includes("8")) return "8-rolls";
+  for (const [pattern, group] of SKU_FILTER_PATTERNS) {
+    if (sku.includes(pattern)) return group;
+  }
   return null;
 }
 
@@ -718,7 +733,7 @@ export default function InventoryPage() {
   }, [apiFetch, currentOrg]);
 
   useEffect(() => {
-    if (activeTab === "inventory" || activeTab === "forecast") {
+    if (activeTab === "inventory" || activeTab === "forecast" || activeTab === "unit-sales") {
       fetchInventoryData();
     }
   }, [activeTab, fetchInventoryData]);
@@ -873,6 +888,19 @@ export default function InventoryPage() {
   const [forecastSkuFilter, setForecastSkuFilter] = useState<ForecastSkuFilter>("all");
   const [forecastChannelFilter, setForecastChannelFilter] = useState<ForecastChannelFilter>("all");
 
+  // ── Unit Sales tab state ──────────────────────────────
+  type UnitSalesChannel = "total" | "amazon" | "shopify";
+  type UnitSalesGroupBy = "day" | "week" | "month";
+  const [unitSalesData, setUnitSalesData] = useState<{ data: Record<string, number | string>[]; skus: string[] }>({ data: [], skus: [] });
+  const [unitSalesLoading, setUnitSalesLoading] = useState(false);
+  const [unitSalesDateRange, setUnitSalesDateRange] = usePersistedDateRange(
+    "dr-unit-sales",
+    () => ({ from: startOfDay(subDays(new Date(), 365)), to: endOfYesterday() })
+  );
+  const [unitSalesGroupBy, setUnitSalesGroupBy] = useState<UnitSalesGroupBy>("month");
+  const [unitSalesChannel, setUnitSalesChannel] = useState<UnitSalesChannel>("total");
+  const [unitSalesSkuFilter, setUnitSalesSkuFilter] = useState<ForecastSkuFilter>("all");
+
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
     const existingSkus = new Set(inventoryItems.map((i) => i.sku));
@@ -892,7 +920,7 @@ export default function InventoryPage() {
   type ChannelRow = {
     sku: string;
     productName: string | null;
-    channel: "Total" | "Amazon" | "Shopify";
+    channel: "Total" | "Amazon" | "Shopify" | "Warehouse";
     inventory: number;
     valueCost: number;
     valueRrp: number;
@@ -910,7 +938,8 @@ export default function InventoryPage() {
       const amazonSold = amazonUnits[item.sku] ?? 0;
       const shopifyRate = shopifySold > 0 ? shopifySold / forecastDays : null;
       const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
-      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+      const whQty = item.warehouseQty ?? 0;
+      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty;
       const totalSold = shopifySold + amazonSold;
       const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
       const lc = item.landedCost ?? 0;
@@ -966,9 +995,42 @@ export default function InventoryPage() {
         isFirstInGroup: false,
         sourceItem: item,
       });
+
+      // Warehouse row
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Warehouse",
+        inventory: whQty,
+        valueCost: whQty * lc,
+        valueRrp: 0,
+        runRate: null,
+        daysLeft: null,
+        oosDate: null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
     }
     return rows;
   }, [inventoryItems, shopifyUnits, amazonUnits, forecastDays]);
+
+  // ── Filter grouped rows by column visibility ────────────
+  const filteredGroupedRows = useMemo(() => {
+    const filtered = groupedRows.filter((row) => {
+      if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty")) return false;
+      if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty")) return false;
+      if (row.channel === "Warehouse" && !visibleInventoryCols.has("warehouseQty")) return false;
+      if (row.channel === "Total" && !visibleInventoryCols.has("totalQty")) return false;
+      return true;
+    });
+    // Recalculate isFirstInGroup after filtering
+    const seenSkus = new Set<string>();
+    return filtered.map((row) => {
+      const isFirst = !seenSkus.has(row.sku);
+      seenSkus.add(row.sku);
+      return isFirst !== row.isFirstInGroup ? { ...row, isFirstInGroup: isFirst } : row;
+    });
+  }, [groupedRows, visibleInventoryCols]);
 
   // ── Forecast burn-down chart data ──────────────────────
   const forecastChartData = useMemo(() => {
@@ -1014,6 +1076,79 @@ export default function InventoryPage() {
       skus: skuInfo.map((s) => ({ sku: s.sku, name: s.name })),
     };
   }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays]);
+
+  // ── Unit Sales fetch ──────────────────────────────────
+  const fetchUnitSales = useCallback(async () => {
+    if (!currentOrg || !unitSalesDateRange?.from || !unitSalesDateRange?.to) return;
+    setUnitSalesLoading(true);
+    try {
+      const from = format(unitSalesDateRange.from, "yyyy-MM-dd");
+      const to = format(unitSalesDateRange.to, "yyyy-MM-dd");
+      const res = await apiFetch(
+        `/api/inventory/unit-sales?from=${from}&to=${to}&groupBy=${unitSalesGroupBy}&channel=${unitSalesChannel}&skuFilter=${unitSalesSkuFilter}`
+      );
+      if (res.ok) {
+        const json = await res.json();
+        setUnitSalesData({ data: json.data ?? [], skus: json.skus ?? [] });
+      }
+    } catch (e) {
+      console.error("Failed to fetch unit sales:", e);
+    } finally {
+      setUnitSalesLoading(false);
+    }
+  }, [apiFetch, currentOrg, unitSalesDateRange, unitSalesGroupBy, unitSalesChannel, unitSalesSkuFilter]);
+
+  useEffect(() => {
+    if (activeTab === "unit-sales") {
+      fetchUnitSales();
+    }
+  }, [activeTab, fetchUnitSales]);
+
+  // Auto-suggest groupBy when date range changes
+  useEffect(() => {
+    setUnitSalesGroupBy(suggestGroupBy(unitSalesDateRange));
+  }, [unitSalesDateRange]);
+
+  // Unit sales scorecards
+  const unitSalesStats = useMemo(() => {
+    let total = 0;
+    for (const row of unitSalesData.data) {
+      for (const sku of unitSalesData.skus) {
+        total += (Number(row[sku]) || 0);
+      }
+    }
+
+    // Last 30 days run rate (units/day)
+    const cutoff = format(subDays(new Date(), 30), "yyyy-MM-dd");
+    let last30Units = 0;
+    for (const row of unitSalesData.data) {
+      if (String(row.date) >= cutoff) {
+        for (const sku of unitSalesData.skus) {
+          last30Units += (Number(row[sku]) || 0);
+        }
+      }
+    }
+    const dailyRunRate = last30Units / 30;
+
+    // Inventory held — total across all channels, filtered by active SKU filter
+    let inventoryHeld = 0;
+    const filteredItems = unitSalesSkuFilter === "all"
+      ? inventoryItems
+      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === unitSalesSkuFilter);
+    for (const item of filteredItems) {
+      if (unitSalesChannel === "amazon") {
+        inventoryHeld += item.amazonQty ?? 0;
+      } else if (unitSalesChannel === "shopify") {
+        inventoryHeld += item.shopifyQty ?? 0;
+      } else {
+        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+      }
+    }
+
+    const daysRemaining = dailyRunRate > 0 ? Math.floor(inventoryHeld / dailyRunRate) : null;
+
+    return { total, dailyRunRate, inventoryHeld, daysRemaining };
+  }, [unitSalesData, inventoryItems, unitSalesSkuFilter, unitSalesChannel]);
 
   // ── Filter helpers ───────────────────────────────────────
   function getDisplayValue(val: unknown): string {
@@ -1695,23 +1830,25 @@ export default function InventoryPage() {
                     <tr className="table-header-row">
                       <th className="table-header-cell table-header-cell-sticky">SKU</th>
                       <th className="table-header-cell min-w-[180px]">Product</th>
+                      {visibleInventoryCols.has("brand") && <th className="table-header-cell">Brand</th>}
+                      {visibleInventoryCols.has("asin") && <th className="table-header-cell">ASIN</th>}
                       <th className="table-header-cell">Channel</th>
                       <th className="table-header-cell">Inventory</th>
                       {visibleInventoryCols.has("valueCost") && <th className="table-header-cell">Value (Cost)</th>}
                       {visibleInventoryCols.has("valueRrp") && <th className="table-header-cell">Value (RRP)</th>}
-                      <th className="table-header-cell">Run Rate</th>
-                      <th className="table-header-cell">Days Left</th>
-                      <th className="table-header-cell">OOS Forecast</th>
+                      {visibleInventoryCols.has("runRate") && <th className="table-header-cell">Run Rate</th>}
+                      {visibleInventoryCols.has("daysLeft") && <th className="table-header-cell">Days Left</th>}
+                      {visibleInventoryCols.has("oosDate") && <th className="table-header-cell">OOS Forecast</th>}
                       <th className="table-header-cell"></th>
                     </tr>
                   </thead>
                   <tbody>
-                    {groupedRows.map((row) => {
+                    {filteredGroupedRows.map((row) => {
                       const isTotal = row.channel === "Total";
                       return (
                         <tr
                           key={`${row.sku}-${row.channel}`}
-                          className={`table-body-row ${isTotal ? "border-t-2 border-zinc-300 dark:border-zinc-600" : ""}`}
+                          className={`table-body-row ${row.isFirstInGroup ? "border-t-2 border-zinc-300 dark:border-zinc-600" : ""}`}
                         >
                           <td className={`table-cell table-cell-sticky table-cell-primary ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
                             {row.sku}
@@ -1719,6 +1856,16 @@ export default function InventoryPage() {
                           <td className={`table-cell min-w-[180px] ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
                             {row.productName ?? "-"}
                           </td>
+                          {visibleInventoryCols.has("brand") && (
+                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                              {row.sourceItem.brand ?? "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("asin") && (
+                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                              {row.sourceItem.asin ?? "-"}
+                            </td>
+                          )}
                           <td className={`table-cell ${isTotal ? "font-semibold" : "text-zinc-500 dark:text-zinc-400 pl-6"}`}>
                             {row.channel}
                           </td>
@@ -1735,31 +1882,37 @@ export default function InventoryPage() {
                           {visibleInventoryCols.has("valueRrp") && (
                             <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp)}</td>
                           )}
-                          <td className="table-cell">
-                            {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
-                          </td>
-                          <td className={`table-cell ${
-                            row.daysLeft !== null
-                              ? row.channel === "Amazon"
-                                ? row.daysLeft < 7
-                                  ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
-                                  : row.daysLeft < 30
-                                    ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
-                                    : ""
-                                : (row.channel === "Total" || row.channel === "Shopify")
-                                  ? row.daysLeft < 90
+                          {visibleInventoryCols.has("runRate") && (
+                            <td className="table-cell">
+                              {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("daysLeft") && (
+                            <td className={`table-cell ${
+                              row.daysLeft !== null
+                                ? row.channel === "Amazon"
+                                  ? row.daysLeft < 7
                                     ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
-                                    : row.daysLeft <= 150
+                                    : row.daysLeft < 30
                                       ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
                                       : ""
-                                  : ""
-                              : ""
-                          }`}>
-                            {row.daysLeft !== null ? row.daysLeft : "-"}
-                          </td>
-                          <td className="table-cell">
-                            {row.oosDate ?? "-"}
-                          </td>
+                                  : (row.channel === "Total" || row.channel === "Shopify")
+                                    ? row.daysLeft < 90
+                                      ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                      : row.daysLeft <= 150
+                                        ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                        : ""
+                                    : ""
+                                : ""
+                            }`}>
+                              {row.daysLeft !== null ? row.daysLeft : "-"}
+                            </td>
+                          )}
+                          {visibleInventoryCols.has("oosDate") && (
+                            <td className="table-cell">
+                              {row.oosDate ?? "-"}
+                            </td>
+                          )}
                           <td className="table-cell">
                             {row.isFirstInGroup && (
                               <button
@@ -1782,6 +1935,8 @@ export default function InventoryPage() {
                         <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
                           <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
                           <td className="table-cell min-w-[180px]"></td>
+                          {visibleInventoryCols.has("brand") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("asin") && <td className="table-cell"></td>}
                           <td className="table-cell"></td>
                           <td className="table-cell">{totalRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
                           {visibleInventoryCols.has("valueCost") && (
@@ -1790,9 +1945,9 @@ export default function InventoryPage() {
                           {visibleInventoryCols.has("valueRrp") && (
                             <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
                           )}
-                          <td className="table-cell"></td>
-                          <td className="table-cell"></td>
-                          <td className="table-cell"></td>
+                          {visibleInventoryCols.has("runRate") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("daysLeft") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("oosDate") && <td className="table-cell"></td>}
                           <td className="table-cell"></td>
                         </tr>
                       );
@@ -1864,7 +2019,7 @@ export default function InventoryPage() {
               </div>
             )}
           </div>
-        ) : (
+        ) : activeTab === "forecast" ? (
           <div className="pt-4 flex flex-col gap-4">
             {/* Forecast toolbar */}
             <div className="flex items-center gap-4 flex-wrap">
@@ -1989,7 +2144,166 @@ export default function InventoryPage() {
               </div>
             )}
           </div>
-        )}
+        ) : activeTab === "unit-sales" ? (
+          <div className="pt-4 flex flex-col gap-4">
+            {/* Unit Sales toolbar */}
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* Channel toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["total", "Total"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesChannel(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesChannel === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* SKU filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesSkuFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesSkuFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* GroupBy toggle */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Group</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["day", "Day"], ["week", "Week"], ["month", "Month"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setUnitSalesGroupBy(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        unitSalesGroupBy === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Date range picker */}
+              <div className="ml-auto">
+                <DateRangePicker
+                  dateRange={unitSalesDateRange}
+                  onDateRangeChange={setUnitSalesDateRange}
+                />
+              </div>
+            </div>
+
+            {/* Scorecards */}
+            <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Units Sold</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.total.toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Day (30d avg)</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.dailyRunRate.toFixed(1)}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Month (30d avg)</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : Math.round(unitSalesStats.dailyRunRate * 30).toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Inventory Held</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.inventoryHeld.toLocaleString()}</div>
+              </div>
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Days Remaining</div>
+                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.daysRemaining !== null ? unitSalesStats.daysRemaining.toLocaleString() : "-"}</div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            {unitSalesLoading ? (
+              <div className="flex items-center justify-center h-[420px] text-zinc-400 dark:text-zinc-500 text-sm">
+                <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+                Loading unit sales...
+              </div>
+            ) : unitSalesData.skus.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-zinc-400 dark:text-zinc-500 text-sm">
+                No unit sales data for the selected period.
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <ResponsiveContainer width="100%" height={420}>
+                  <BarChart data={unitSalesData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                    <XAxis
+                      dataKey="date"
+                      fontSize={12}
+                      tickFormatter={(d) => {
+                        const date = new Date(String(d));
+                        return unitSalesGroupBy === "month"
+                          ? format(date, "MMM yyyy")
+                          : format(date, "dd MMM");
+                      }}
+                    />
+                    <YAxis fontSize={12} />
+                    <Tooltip
+                      labelFormatter={(d) => {
+                        const date = new Date(String(d));
+                        return unitSalesGroupBy === "month"
+                          ? format(date, "MMM yyyy")
+                          : format(date, "dd MMM yyyy");
+                      }}
+                      formatter={(value, name) => [
+                        Number(value).toLocaleString() + " units",
+                        String(name),
+                      ]}
+                      contentStyle={{
+                        backgroundColor: "var(--color-zinc-50, #fafafa)",
+                        border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} formatter={(value) => <span className="text-zinc-900 dark:text-zinc-100">{value}</span>} />
+                    {unitSalesData.skus.map((group) => (
+                      <Bar
+                        key={group}
+                        dataKey={group}
+                        stackId="units"
+                        fill={UNIT_SALES_COLORS[group] ?? "#a1a1aa"}
+                        name={group}
+                      />
+                    ))}
+                  </BarChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+          </div>
+        ) : null}
       </div>
     </div>
   );
