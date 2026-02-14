@@ -3,6 +3,7 @@ import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { organizations, userOrganizations, users } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { ensureUser } from "@/lib/org-auth";
 
 // GET /api/organizations — list orgs the current user belongs to
 // super_admin sees all orgs
@@ -24,18 +25,7 @@ export async function GET() {
       const clerkUser = await currentUser();
       const email = clerkUser?.primaryEmailAddress?.emailAddress ?? "";
       const name = clerkUser?.fullName ?? null;
-      await db
-        .insert(users)
-        .values({ id: userId, email, name, role: "user" })
-        .onConflictDoNothing();
-
-      const defaultOrgId = process.env.DEFAULT_ORG_ID ? Number(process.env.DEFAULT_ORG_ID) : null;
-      if (defaultOrgId && !isNaN(defaultOrgId)) {
-        await db
-          .insert(userOrganizations)
-          .values({ userId, orgId: defaultOrgId, role: "user" })
-          .onConflictDoNothing();
-      }
+      await ensureUser(userId, email, name);
 
       userRows = await db
         .select({ role: users.role })

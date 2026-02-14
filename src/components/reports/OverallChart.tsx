@@ -1,10 +1,10 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
-import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
 import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { chartColors } from "@/lib/chart-colors";
@@ -126,10 +126,17 @@ export function OverallChart() {
     "dr-overall",
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
-  const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
+  const [prevDateRange, setPrevDateRange] = useState(dateRange);
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+  const fetchIdRef = useRef(0);
+
+  if (dateRange !== prevDateRange) {
+    setPrevDateRange(dateRange);
+    setGroupBy(suggestGroupBy(dateRange));
+  }
 
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
@@ -142,19 +149,22 @@ export function OverallChart() {
 
   const fetchData = useCallback(async () => {
     if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
+    const id = ++fetchIdRef.current;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
       const res = await apiFetch(`/api/reports/overall?from=${from}&to=${to}&groupBy=${groupBy}`);
       if (!res.ok) throw new Error("Failed to fetch");
+      if (id !== fetchIdRef.current) return;
       const json = await res.json();
       setData(json.data);
     } catch (err) {
+      if (id !== fetchIdRef.current) return;
       console.error("Failed to fetch overall report:", err);
       setData([]);
     } finally {
-      setLoading(false);
+      if (id === fetchIdRef.current) setLoading(false);
     }
   }, [dateRange, groupBy, apiFetch, currentOrg]);
 

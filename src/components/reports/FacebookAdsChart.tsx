@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
-import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
 import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { CampaignFilterPopover } from "@/components/reports/CampaignFilterPopover";
@@ -105,12 +105,18 @@ export function FacebookAdsChart() {
     "dr-facebook-ads",
     () => presets.find((p) => p.label === "Last 90 days")!.getValue()
   );
-  const [groupBy, setGroupBy] = useState<GroupBy>("week");
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
+  const [prevDateRange, setPrevDateRange] = useState(dateRange);
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const [availableCampaigns, setAvailableCampaigns] = useState<{ utmCampaign: string; label: string }[]>([]);
+
+  if (dateRange !== prevDateRange) {
+    setPrevDateRange(dateRange);
+    setGroupBy(suggestGroupBy(dateRange));
+  }
 
   // Load persisted config on mount
   useEffect(() => {

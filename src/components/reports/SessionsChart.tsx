@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
-import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
 import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { chartColors } from "@/lib/chart-colors";
@@ -106,10 +106,16 @@ export function SessionsChart() {
     "dr-sessions",
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
-  const [groupBy, setGroupBy] = useState<GroupBy>("month");
+  const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
+  const [prevDateRange, setPrevDateRange] = useState(dateRange);
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+
+  if (dateRange !== prevDateRange) {
+    setPrevDateRange(dateRange);
+    setGroupBy(suggestGroupBy(dateRange));
+  }
 
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());

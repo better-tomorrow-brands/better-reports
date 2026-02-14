@@ -1,7 +1,7 @@
 "use client";
 
 import * as React from "react";
-import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday, isSameDay } from "date-fns";
+import { format, subDays, startOfDay, endOfDay, startOfYesterday, endOfYesterday, isSameDay, differenceInDays } from "date-fns";
 import { DayPicker, DateRange } from "react-day-picker";
 
 // Preset options
@@ -14,6 +14,14 @@ export const presets = [
   { label: "Last 90 days", getValue: () => ({ from: startOfDay(subDays(new Date(), 90)), to: endOfYesterday() }) },
   { label: "Last 12 months", getValue: () => ({ from: startOfDay(subDays(new Date(), 365)), to: endOfYesterday() }) },
 ];
+
+export function suggestGroupBy(range: DateRange | undefined): "day" | "week" | "month" {
+  if (!range?.from || !range?.to) return "day";
+  const days = differenceInDays(range.to, range.from);
+  if (days >= 364) return "month";
+  if (days >= 89) return "week";
+  return "day";
+}
 
 interface DateRangePickerProps {
   dateRange: DateRange | undefined;

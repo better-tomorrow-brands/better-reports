@@ -3,6 +3,7 @@ import { auth, currentUser } from "@clerk/nextjs/server";
 import { db } from "@/lib/db";
 import { users, userOrganizations, organizations } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { ensureUser } from "@/lib/org-auth";
 
 export async function GET() {
   try {
@@ -22,19 +23,7 @@ export async function GET() {
       const clerkUser = await currentUser();
       const email = clerkUser?.primaryEmailAddress?.emailAddress ?? "";
       const name = clerkUser?.fullName ?? null;
-      await db
-        .insert(users)
-        .values({ id: userId, email, name, role: "user" })
-        .onConflictDoNothing();
-
-      // Assign to default org if configured
-      const defaultOrgId = process.env.DEFAULT_ORG_ID ? Number(process.env.DEFAULT_ORG_ID) : null;
-      if (defaultOrgId && !isNaN(defaultOrgId)) {
-        await db
-          .insert(userOrganizations)
-          .values({ userId, orgId: defaultOrgId, role: "user" })
-          .onConflictDoNothing();
-      }
+      await ensureUser(userId, email, name);
 
       userRows = await db
         .select({ id: users.id, email: users.email, name: users.name, role: users.role })
