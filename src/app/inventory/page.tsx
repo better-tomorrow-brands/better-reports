@@ -3,6 +3,11 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
 import { useOrg } from "@/contexts/OrgContext";
+import { subDays, startOfDay, endOfYesterday, format, differenceInDays, addDays } from "date-fns";
+import {
+  LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
+  ReferenceLine, ResponsiveContainer,
+} from "recharts";
 
 // ── Types ──────────────────────────────────────────────────
 interface Product {
@@ -71,6 +76,27 @@ type TabKey = (typeof tabs)[number]["key"];
 
 // ── Helpers ────────────────────────────────────────────────
 const BRAND_OPTIONS = ["Teevo", "Doogood"];
+const REORDER_THRESHOLD = 100;
+const FORECAST_HORIZON = 180;
+
+type ForecastSkuFilter = "all" | "8-rolls" | "24-rolls" | "48-rolls";
+type ForecastChannelFilter = "all" | "amazon" | "shopify";
+
+const LINE_COLORS = [
+  "#6366f1", // indigo
+  "#f59e0b", // amber
+  "#10b981", // emerald
+  "#ec4899", // pink
+  "#3b82f6", // blue
+  "#8b5cf6", // violet
+];
+
+function skuToFilterKey(sku: string): ForecastSkuFilter | null {
+  if (sku.includes("48")) return "48-rolls";
+  if (sku.includes("24")) return "24-rolls";
+  if (sku.includes("8")) return "8-rolls";
+  return null;
+}
 
 function n(val: string | null | undefined): number {
   if (!val) return 0;
@@ -160,9 +186,24 @@ const ALL_DTC_COLUMNS: ColDef[] = [
   { key: "dtcContribMargin", label: "Contribution Margin", defaultVisible: true },
 ];
 
+const ALL_INVENTORY_COLUMNS: ColDef[] = [
+  { key: "sku", label: "SKU", defaultVisible: true },
+  { key: "productName", label: "Product", defaultVisible: true },
+  { key: "brand", label: "Brand", defaultVisible: false },
+  { key: "asin", label: "ASIN", defaultVisible: false },
+  { key: "amazonQty", label: "Amazon Qty", defaultVisible: true },
+  { key: "shopifyQty", label: "Shopify Qty", defaultVisible: true },
+  { key: "warehouseQty", label: "Warehouse Qty", defaultVisible: true },
+  { key: "totalQty", label: "Total Qty", defaultVisible: true },
+  { key: "runRate", label: "Run Rate", defaultVisible: true },
+  { key: "daysLeft", label: "Days Left", defaultVisible: true },
+  { key: "oosDate", label: "Out of Stock Forecast", defaultVisible: true },
+];
+
 const COLUMN_STORAGE_KEY = "inventory-products-columns";
 const AMAZON_COLUMN_STORAGE_KEY = "inventory-amazon-columns";
 const DTC_COLUMN_STORAGE_KEY = "inventory-dtc-columns";
+const INVENTORY_COLUMN_STORAGE_KEY = "inventory-overall-columns";
 
 function loadVisibleCols(storageKey: string, allCols: ColDef[]): Set<string> {
   if (typeof window === "undefined") return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
@@ -557,8 +598,11 @@ export default function InventoryPage() {
   const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleCols(COLUMN_STORAGE_KEY, ALL_COLUMNS));
   const [visibleAmazonCols, setVisibleAmazonCols] = useState<Set<string>>(() => loadVisibleCols(AMAZON_COLUMN_STORAGE_KEY, ALL_AMAZON_COLUMNS));
   const [visibleDtcCols, setVisibleDtcCols] = useState<Set<string>>(() => loadVisibleCols(DTC_COLUMN_STORAGE_KEY, ALL_DTC_COLUMNS));
+  const [visibleInventoryCols, setVisibleInventoryCols] = useState<Set<string>>(() => loadVisibleCols(INVENTORY_COLUMN_STORAGE_KEY, ALL_INVENTORY_COLUMNS));
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
+  const [showInventoryColPicker, setShowInventoryColPicker] = useState(false);
+  const inventoryColPickerRef = useRef<HTMLDivElement>(null);
 
   // DTC default filter — auto-apply Doogood brand on first visit
   const dtcFilterApplied = useRef(false);
@@ -574,6 +618,9 @@ export default function InventoryPage() {
       }
       if (colPickerRef.current && !colPickerRef.current.contains(event.target as Node)) {
         setShowColPicker(false);
+      }
+      if (inventoryColPickerRef.current && !inventoryColPickerRef.current.contains(event.target as Node)) {
+        setShowInventoryColPicker(false);
       }
     }
     document.addEventListener("mousedown", handleClickOutside);
@@ -604,6 +651,13 @@ export default function InventoryPage() {
     const { setCols, storageKey } = getActiveColState();
     setCols(new Set());
     localStorage.setItem(storageKey, JSON.stringify([]));
+  }
+
+  function toggleInventoryCol(key: string) {
+    const newSet = new Set(visibleInventoryCols);
+    if (newSet.has(key)) newSet.delete(key); else newSet.add(key);
+    setVisibleInventoryCols(newSet);
+    localStorage.setItem(INVENTORY_COLUMN_STORAGE_KEY, JSON.stringify([...newSet]));
   }
 
   // ── DTC default filter ──────────────────────────────────
@@ -650,7 +704,7 @@ export default function InventoryPage() {
   }, [apiFetch, currentOrg]);
 
   useEffect(() => {
-    if (activeTab === "inventory") {
+    if (activeTab === "inventory" || activeTab === "forecast") {
       fetchInventoryData();
     }
   }, [activeTab, fetchInventoryData]);
@@ -689,6 +743,51 @@ export default function InventoryPage() {
       setProducts((prev) => prev.filter((p) => p.id !== id));
     }
   }, [apiFetch]);
+
+  // ── Shopify forecast period ────────────────────────────
+  type ForecastPeriod = "7d" | "14d" | "30d";
+  const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("30d");
+  const [forecastDateRange, setForecastDateRange] = useState<{ from: Date; to: Date } | undefined>(
+    () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfYesterday() })
+  );
+
+  // Sync toggle with date picker
+  const handleForecastPeriodChange = useCallback((period: ForecastPeriod) => {
+    setForecastPeriod(period);
+    const days = period === "7d" ? 7 : period === "14d" ? 14 : 30;
+    setForecastDateRange({ from: startOfDay(subDays(new Date(), days)), to: endOfYesterday() });
+  }, []);
+
+  // ── Run rate data ──────────────────────────────────────
+  const [shopifyUnits, setShopifyUnits] = useState<Record<string, number>>({});
+  const [amazonUnits, setAmazonUnits] = useState<Record<string, number>>({});
+
+  const fetchRunRate = useCallback(async () => {
+    if (!currentOrg || !forecastDateRange?.from || !forecastDateRange?.to) return;
+    try {
+      const from = format(forecastDateRange.from, "yyyy-MM-dd");
+      const to = format(forecastDateRange.to, "yyyy-MM-dd");
+      const res = await apiFetch(`/api/inventory/run-rate?from=${from}&to=${to}`);
+      if (res.ok) {
+        const data = await res.json();
+        setShopifyUnits(data.shopifyUnits ?? {});
+        setAmazonUnits(data.amazonUnits ?? {});
+      }
+    } catch (e) {
+      console.error("Failed to fetch run rate:", e);
+    }
+  }, [apiFetch, currentOrg, forecastDateRange]);
+
+  useEffect(() => {
+    if (activeTab === "inventory" || activeTab === "forecast") {
+      fetchRunRate();
+    }
+  }, [activeTab, fetchRunRate]);
+
+  const forecastDays = useMemo(() => {
+    if (!forecastDateRange?.from || !forecastDateRange?.to) return 30;
+    return differenceInDays(forecastDateRange.to, forecastDateRange.from) || 1;
+  }, [forecastDateRange]);
 
   // ── Inventory sync ─────────────────────────────────────
   const [syncing, setSyncing] = useState(false);
@@ -756,6 +855,10 @@ export default function InventoryPage() {
     }
   }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, apiFetch]);
 
+  // ── Forecast tab state ──────────────────────────────────
+  const [forecastSkuFilter, setForecastSkuFilter] = useState<ForecastSkuFilter>("all");
+  const [forecastChannelFilter, setForecastChannelFilter] = useState<ForecastChannelFilter>("all");
+
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
     const existingSkus = new Set(inventoryItems.map((i) => i.sku));
@@ -771,56 +874,119 @@ export default function InventoryPage() {
     fetchInventoryData();
   }, [inventoryItems, products, fetchInventoryData, apiFetch]);
 
-  // ── Inventory columns ─────────────────────────────────
-  const inventoryColumns: Column<InventoryItem>[] = useMemo(() => [
-    { key: "sku", label: "SKU", sticky: true, primary: true },
-    { key: "productName", label: "Product", className: "min-w-[180px]" },
-    { key: "brand", label: "Brand" },
-    { key: "asin", label: "ASIN" },
-    { key: "amazonQty", label: "Amazon Qty", render: (v) => String(v ?? 0) },
-    { key: "shopifyQty", label: "Shopify Qty", render: (v) => String(v ?? 0) },
-    { key: "warehouseQty", label: "Warehouse Qty", render: (v) => String(v ?? 0) },
-    {
-      key: "totalQty",
-      label: "Total Qty",
-      render: (v) => {
-        const total = Number(v) || 0;
-        return (
-          <span className={`font-medium ${total === 0 ? "text-red-500" : ""}`}>
-            {total}
-          </span>
-        );
-      },
-    },
-    {
-      key: "actions" as keyof InventoryItem,
-      label: "",
-      render: (_: unknown, row: InventoryItem) => (
-        <button
-          onClick={() => openInventoryModal(row)}
-          className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
-          title="Edit stock"
-        >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
-          </svg>
-        </button>
-      ),
-    },
-  ], [openInventoryModal]);
+  // ── Grouped inventory rows (Total / Amazon / Shopify per SKU) ──
+  type ChannelRow = {
+    sku: string;
+    productName: string | null;
+    channel: "Total" | "Amazon" | "Shopify";
+    inventory: number;
+    runRate: number | null; // units/day, null = no data
+    daysLeft: number | null;
+    oosDate: string | null;
+    isFirstInGroup: boolean;
+    sourceItem: InventoryItem;
+  };
 
-  // ── Filter inventory by search ─────────────────────────
-  const filteredInventory = useMemo(() => {
-    if (!search.trim()) return inventoryItems;
-    const q = search.toLowerCase();
-    return inventoryItems.filter(
-      (item) =>
-        item.sku.toLowerCase().includes(q) ||
-        (item.productName || "").toLowerCase().includes(q) ||
-        (item.brand || "").toLowerCase().includes(q) ||
-        (item.asin || "").toLowerCase().includes(q)
-    );
-  }, [inventoryItems, search]);
+  const groupedRows = useMemo((): ChannelRow[] => {
+    const rows: ChannelRow[] = [];
+    for (const item of inventoryItems) {
+      const shopifySold = shopifyUnits[item.sku] ?? 0;
+      const amazonSold = amazonUnits[item.sku] ?? 0;
+      const shopifyRate = shopifySold > 0 ? shopifySold / forecastDays : null;
+      const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
+      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+      const totalSold = shopifySold + amazonSold;
+      const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
+
+      // Total row
+      const totalDaysLeft = totalRate ? Math.floor(totalQty / totalRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Total",
+        inventory: totalQty,
+        runRate: totalRate,
+        daysLeft: totalDaysLeft,
+        oosDate: totalDaysLeft !== null ? format(addDays(new Date(), totalDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: true,
+        sourceItem: item,
+      });
+
+      // Amazon row
+      const amazonDaysLeft = amazonRate ? Math.floor((item.amazonQty ?? 0) / amazonRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Amazon",
+        inventory: item.amazonQty ?? 0,
+        runRate: amazonRate,
+        daysLeft: amazonDaysLeft,
+        oosDate: amazonDaysLeft !== null ? format(addDays(new Date(), amazonDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+
+      // Shopify row
+      const shopifyDaysLeft = shopifyRate ? Math.floor((item.shopifyQty ?? 0) / shopifyRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "Shopify",
+        inventory: item.shopifyQty ?? 0,
+        runRate: shopifyRate,
+        daysLeft: shopifyDaysLeft,
+        oosDate: shopifyDaysLeft !== null ? format(addDays(new Date(), shopifyDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+    }
+    return rows;
+  }, [inventoryItems, shopifyUnits, amazonUnits, forecastDays]);
+
+  // ── Forecast burn-down chart data ──────────────────────
+  const forecastChartData = useMemo(() => {
+    // Filter items by SKU toggle
+    const items = forecastSkuFilter === "all"
+      ? inventoryItems
+      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === forecastSkuFilter);
+
+    if (items.length === 0) return { data: [], skus: [] };
+
+    // For each item, compute starting inventory + daily run rate based on channel
+    const skuInfo = items.map((item) => {
+      let inventory: number;
+      let sold: number;
+
+      if (forecastChannelFilter === "amazon") {
+        inventory = item.amazonQty ?? 0;
+        sold = amazonUnits[item.sku] ?? 0;
+      } else if (forecastChannelFilter === "shopify") {
+        inventory = item.shopifyQty ?? 0;
+        sold = shopifyUnits[item.sku] ?? 0;
+      } else {
+        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+        sold = (amazonUnits[item.sku] ?? 0) + (shopifyUnits[item.sku] ?? 0);
+      }
+
+      const runRate = sold > 0 ? sold / forecastDays : 0;
+      return { sku: item.sku, name: item.productName || item.sku, inventory, runRate };
+    });
+
+    // Generate data points for day 0 to FORECAST_HORIZON
+    const data: Record<string, number | string>[] = [];
+    for (let d = 0; d <= FORECAST_HORIZON; d++) {
+      const point: Record<string, number | string> = { day: d };
+      for (const s of skuInfo) {
+        point[s.sku] = Math.max(0, Math.round(s.inventory - s.runRate * d));
+      }
+      data.push(point);
+    }
+
+    return {
+      data,
+      skus: skuInfo.map((s) => ({ sku: s.sku, name: s.name })),
+    };
+  }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays]);
 
   // ── Filter helpers ───────────────────────────────────────
   function getDisplayValue(val: unknown): string {
@@ -1396,59 +1562,157 @@ export default function InventoryPage() {
             )}
           </div>
         ) : activeTab === "inventory" ? (
-          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
+          <div className="pt-4 flex flex-col overflow-auto">
             <div className="flex items-center gap-3 mb-3">
               <span className="text-sm text-muted">
-                {filteredInventory.length} SKUs
+                {inventoryItems.length} SKUs
                 {inventoryDate && (
                   <span className="ml-2 text-zinc-400">as of {inventoryDate}</span>
                 )}
               </span>
-              <input
-                type="text"
-                placeholder="Search..."
-                value={search}
-                onChange={(e) => setSearch(e.target.value)}
-                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
-              />
-              <button
-                onClick={syncShopifyInventory}
-                disabled={syncing}
-                className="btn btn-secondary btn-sm"
-              >
-                {syncing ? "Syncing..." : "Sync Shopify"}
-              </button>
-              {inventoryItems.length === 0 && products.length > 0 && (
+              <div className="flex items-center gap-3 ml-auto">
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {(["7d", "14d", "30d"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handleForecastPeriodChange(p)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastPeriod === p
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                    </button>
+                  ))}
+                </div>
                 <button
-                  onClick={initInventoryFromProducts}
+                  onClick={syncShopifyInventory}
+                  disabled={syncing}
                   className="btn btn-secondary btn-sm"
                 >
-                  Add All Products
+                  {syncing ? (
+                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    </svg>
+                  ) : (
+                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    </svg>
+                  )}
+                  {syncing ? "Syncing..." : "Sync"}
                 </button>
-              )}
+                {inventoryItems.length === 0 && products.length > 0 && (
+                  <button
+                    onClick={initInventoryFromProducts}
+                    className="btn btn-secondary btn-sm"
+                  >
+                    Add All Products
+                  </button>
+                )}
+              </div>
             </div>
             {inventoryLoading ? (
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  {[48, 160, 64, 72, 64, 80, 56, 24].map((w, i) => (
+                  {[48, 160, 80, 64, 64, 64, 80, 24].map((w, i) => (
                     <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
                   ))}
                 </div>
-                {[...Array(8)].map((_, row) => (
+                {[...Array(9)].map((_, row) => (
                   <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
-                    {[48, 160, 64, 72, 64, 80, 56, 24].map((w, col) => (
+                    {[48, 160, 80, 64, 64, 64, 80, 24].map((w, col) => (
                       <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
                     ))}
                   </div>
                 ))}
               </div>
+            ) : groupedRows.length === 0 ? (
+              <div className="table-empty">No inventory data yet. Click &apos;Add All Products&apos; to start tracking.</div>
             ) : (
-              <Table<InventoryItem>
-                columns={inventoryColumns}
-                data={filteredInventory}
-                rowKey="sku"
-                emptyMessage="No inventory data yet. Click 'Add All Products' to start tracking."
-              />
+              <div className="table-container">
+                <table className="table">
+                  <thead>
+                    <tr className="table-header-row">
+                      <th className="table-header-cell table-header-cell-sticky">SKU</th>
+                      <th className="table-header-cell min-w-[180px]">Product</th>
+                      <th className="table-header-cell">Channel</th>
+                      <th className="table-header-cell">Inventory</th>
+                      <th className="table-header-cell">Run Rate</th>
+                      <th className="table-header-cell">Days Left</th>
+                      <th className="table-header-cell">OOS Forecast</th>
+                      <th className="table-header-cell"></th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {groupedRows.map((row) => {
+                      const isTotal = row.channel === "Total";
+                      return (
+                        <tr
+                          key={`${row.sku}-${row.channel}`}
+                          className={`table-body-row ${isTotal ? "border-t-2 border-zinc-300 dark:border-zinc-600" : ""}`}
+                        >
+                          <td className={`table-cell table-cell-sticky table-cell-primary ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            {row.sku}
+                          </td>
+                          <td className={`table-cell min-w-[180px] ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            {row.productName ?? "-"}
+                          </td>
+                          <td className={`table-cell ${isTotal ? "font-semibold" : "text-zinc-500 dark:text-zinc-400 pl-6"}`}>
+                            {row.channel}
+                          </td>
+                          <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>
+                            {row.inventory === 0 ? (
+                              <span className="text-red-500 font-medium">0</span>
+                            ) : (
+                              row.inventory
+                            )}
+                          </td>
+                          <td className="table-cell">
+                            {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                          </td>
+                          <td className={`table-cell ${
+                            row.daysLeft !== null
+                              ? row.channel === "Amazon"
+                                ? row.daysLeft < 7
+                                  ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                  : row.daysLeft < 30
+                                    ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                    : ""
+                                : (row.channel === "Total" || row.channel === "Shopify")
+                                  ? row.daysLeft < 90
+                                    ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                    : row.daysLeft <= 150
+                                      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                      : ""
+                                  : ""
+                              : ""
+                          }`}>
+                            {row.daysLeft !== null ? row.daysLeft : "-"}
+                          </td>
+                          <td className="table-cell">
+                            {row.oosDate ?? "-"}
+                          </td>
+                          <td className="table-cell">
+                            {row.isFirstInGroup && (
+                              <button
+                                onClick={() => openInventoryModal(row.sourceItem)}
+                                className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
+                                title="Edit stock"
+                              >
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                </svg>
+                              </button>
+                            )}
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
             )}
 
             {/* Edit inventory modal */}
@@ -1514,8 +1778,129 @@ export default function InventoryPage() {
             )}
           </div>
         ) : (
-          <div className="pt-4 text-zinc-500 dark:text-zinc-400">
-            Forecast — coming soon
+          <div className="pt-4 flex flex-col gap-4">
+            {/* Forecast toolbar */}
+            <div className="flex items-center gap-4 flex-wrap">
+              {/* SKU filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setForecastSkuFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastSkuFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Channel filter */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {([["all", "All"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                    <button
+                      key={val}
+                      onClick={() => setForecastChannelFilter(val)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastChannelFilter === val
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Run rate period */}
+              <div className="flex items-center gap-2">
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Run Rate</span>
+                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                  {(["7d", "14d", "30d"] as const).map((p) => (
+                    <button
+                      key={p}
+                      onClick={() => handleForecastPeriodChange(p)}
+                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                        forecastPeriod === p
+                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                      }`}
+                    >
+                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </div>
+
+            {/* Chart */}
+            {forecastChartData.skus.length === 0 ? (
+              <div className="flex items-center justify-center h-64 text-zinc-400 dark:text-zinc-500 text-sm">
+                No inventory data available. Switch to the Inventory tab to add stock levels.
+              </div>
+            ) : (
+              <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
+                <ResponsiveContainer width="100%" height={420}>
+                  <LineChart data={forecastChartData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                    <XAxis
+                      dataKey="day"
+                      type="number"
+                      domain={[0, FORECAST_HORIZON]}
+                      ticks={[0, 30, 60, 90, 120, 150, 180]}
+                      tickFormatter={(d) => `Day ${d}`}
+                      fontSize={12}
+                    />
+                    <YAxis fontSize={12} />
+                    <Tooltip
+                      labelFormatter={(d) => `Day ${d}`}
+                      formatter={(value, name) => {
+                        const match = forecastChartData.skus.find((s) => s.sku === name);
+                        return [Number(value).toLocaleString() + " units", match?.name || String(name)];
+                      }}
+                      contentStyle={{
+                        backgroundColor: "var(--color-zinc-50, #fafafa)",
+                        border: "1px solid var(--color-zinc-200, #e4e4e7)",
+                        borderRadius: "8px",
+                        fontSize: "12px",
+                      }}
+                    />
+                    <Legend
+                      formatter={(value) => {
+                        const match = forecastChartData.skus.find((s) => s.sku === value);
+                        return match?.name || value;
+                      }}
+                    />
+                    <ReferenceLine
+                      y={REORDER_THRESHOLD}
+                      stroke="#ef4444"
+                      strokeDasharray="8 4"
+                      label={{ value: "Reorder", position: "right", fill: "#ef4444", fontSize: 12 }}
+                    />
+                    {forecastChartData.skus.map((s, i) => (
+                      <Line
+                        key={s.sku}
+                        type="monotone"
+                        dataKey={s.sku}
+                        stroke={LINE_COLORS[i % LINE_COLORS.length]}
+                        strokeWidth={2}
+                        dot={false}
+                        name={s.sku}
+                      />
+                    ))}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
           </div>
         )}
       </div>
