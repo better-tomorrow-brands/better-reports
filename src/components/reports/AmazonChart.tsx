@@ -23,11 +23,12 @@ type GroupBy = "day" | "week" | "month";
 
 const DEFAULT_SERIES: SeriesConfig[] = [
   { key: "revenue", label: "Revenue", color: chartColors.amazon, visible: true, type: "bar", yAxisId: "left", showDots: false },
+  { key: "adSpend", label: "Ad Spend", color: chartColors.adSpend, visible: true, type: "line", yAxisId: "left", showDots: true },
   { key: "unitsOrdered", label: "Units Ordered", color: chartColors.facebook, visible: false, type: "line", yAxisId: "left", showDots: false },
   { key: "sessions", label: "Sessions", color: chartColors.sessions, visible: false, type: "line", yAxisId: "left", showDots: false },
 ];
 
-const STORAGE_KEY = "amazon-chart-settings";
+const STORAGE_KEY = "amazon-chart-settings-v2";
 
 function loadSeriesConfig(): SeriesConfig[] {
   if (typeof window === "undefined") return DEFAULT_SERIES;
@@ -49,6 +50,7 @@ interface DataPoint {
   revenue: number;
   unitsOrdered: number;
   sessions: number;
+  adSpend: number;
 }
 
 const groupByLabels: Record<GroupBy, string> = {
@@ -200,8 +202,9 @@ export function AmazonChart() {
         revenue: acc.revenue + d.revenue,
         unitsOrdered: acc.unitsOrdered + d.unitsOrdered,
         sessions: acc.sessions + d.sessions,
+        adSpend: acc.adSpend + d.adSpend,
       }),
-      { revenue: 0, unitsOrdered: 0, sessions: 0 }
+      { revenue: 0, unitsOrdered: 0, sessions: 0, adSpend: 0 }
     );
   }, [data]);
 
@@ -313,6 +316,12 @@ export function AmazonChart() {
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
               {loading ? "—" : formatCurrency(totals.revenue)}
+            </p>
+          </div>
+          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
+            <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
+            <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
+              {loading ? "—" : formatCurrency(totals.adSpend)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">

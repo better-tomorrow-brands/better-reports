@@ -3,13 +3,21 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { amazonSalesTraffic, facebookAds, posthogAnalytics } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { getAmazonSettings } from "@/lib/settings";
+import { getAmazonSettings, getAmazonAdsSettings } from "@/lib/settings";
 import {
   fetchSalesTrafficReport,
   upsertSalesTraffic,
   fetchFinancialEvents,
   upsertFinancialEvents,
 } from "@/lib/amazon";
+import {
+  getAmazonAdsAccessToken,
+  createSpCampaignReport,
+  getReportStatus,
+  downloadReport,
+  upsertSpAdsRows,
+  getLookbackDates,
+} from "@/lib/amazon-ads";
 import {
   getDailyFacebookAds,
   upsertFacebookAds,
@@ -228,6 +236,95 @@ async function syncPosthog(orgId: number): Promise<SourceResult> {
   };
 }
 
+async function syncAmazonAds(orgId: number): Promise<SourceResult> {
+  const errors: string[] = [];
+
+  let settings;
+  try {
+    settings = await getAmazonAdsSettings(orgId);
+  } catch (err) {
+    return { status: "error", latestBefore: null, latestAfter: null, datesSynced: 0, errors: [`Settings failed: ${err instanceof Error ? err.message : "Unknown"}`] };
+  }
+  if (!settings) {
+    return { status: "skipped", latestBefore: null, latestAfter: null, datesSynced: 0, errors: ["No Amazon Ads settings configured"] };
+  }
+
+  let accessToken: string;
+  try {
+    const token = await getAmazonAdsAccessToken(settings);
+    accessToken = token.access_token;
+  } catch (err) {
+    return { status: "error", latestBefore: null, latestAfter: null, datesSynced: 0, errors: [`Token exchange failed: ${err instanceof Error ? err.message : "Unknown"}`] };
+  }
+
+  const dates = getLookbackDates();
+
+  // Create all report requests in parallel
+  const requests = await Promise.allSettled(
+    dates.map(async (reportDate) => {
+      const report = await createSpCampaignReport(accessToken, settings, reportDate);
+      return { reportDate, reportId: report.reportId };
+    }),
+  );
+
+  // Collect created reports
+  const pending: { reportDate: string; reportId: string }[] = [];
+  for (let i = 0; i < requests.length; i++) {
+    const r = requests[i];
+    if (r.status === "fulfilled") {
+      pending.push(r.value);
+    } else {
+      errors.push(`${dates[i]} request: ${r.reason?.message || "Unknown"}`);
+    }
+  }
+
+  if (pending.length === 0) {
+    return { status: "error", latestBefore: null, latestAfter: null, datesSynced: 0, errors };
+  }
+
+  // Poll and collect — wait up to 3 minutes total
+  const deadline = Date.now() + 180_000;
+  let totalRows = 0;
+  const remaining = [...pending];
+
+  while (remaining.length > 0 && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 15_000)); // wait 15s between polls
+
+    for (let i = remaining.length - 1; i >= 0; i--) {
+      const { reportDate, reportId } = remaining[i];
+      try {
+        const status = await getReportStatus(accessToken, settings, reportId);
+        if (status.status === "COMPLETED" && status.url) {
+          const rows = await downloadReport(status.url);
+          const upserted = await upsertSpAdsRows(rows, orgId);
+          totalRows += upserted;
+          remaining.splice(i, 1);
+        } else if (status.status === "FAILURE") {
+          errors.push(`${reportDate}: report failed — ${status.failureReason || "Unknown"}`);
+          remaining.splice(i, 1);
+        }
+        // else still PROCESSING — leave in remaining
+      } catch (err) {
+        if (err instanceof Error && err.message === "RATE_LIMITED") break;
+        errors.push(`${reportDate} poll: ${err instanceof Error ? err.message : "Unknown"}`);
+        remaining.splice(i, 1);
+      }
+    }
+  }
+
+  if (remaining.length > 0) {
+    errors.push(`${remaining.length} report(s) still processing after timeout`);
+  }
+
+  return {
+    status: errors.length === 0 ? "ok" : totalRows > 0 ? "partial" : "error",
+    latestBefore: null,
+    latestAfter: null,
+    datesSynced: totalRows,
+    errors,
+  };
+}
+
 // ── Main handler ─────────────────────────────────────────
 
 export async function POST(request: Request) {
@@ -235,23 +332,25 @@ export async function POST(request: Request) {
     const { orgId } = await requireOrgFromRequest(request);
 
     // Run all sources in parallel — each handles its own gap detection
-    const [amazon, facebook, posthog] = await Promise.all([
+    const [amazon, amazonAds, facebook, posthog] = await Promise.all([
       syncAmazonSales(orgId),
+      syncAmazonAds(orgId),
       syncFacebook(orgId),
       syncPosthog(orgId),
     ]);
 
-    const sources = { amazon, facebook, posthog };
-    const totalSynced = amazon.datesSynced + facebook.datesSynced + posthog.datesSynced;
+    const sources = { amazon, amazonAds, facebook, posthog };
+    const totalSynced = amazon.datesSynced + amazonAds.datesSynced + facebook.datesSynced + posthog.datesSynced;
     const allOk = Object.values(sources).every((s) => s.status === "ok" || s.status === "skipped");
 
     // Build human-readable summary
-    const labels: Record<string, string> = { amazon: "Amazon", facebook: "Facebook", posthog: "PostHog" };
+    const labels: Record<string, string> = { amazon: "Amazon", amazonAds: "Amazon Ads", facebook: "Facebook", posthog: "PostHog" };
     const parts: string[] = [];
     for (const [name, result] of Object.entries(sources)) {
       if (result.status === "skipped") continue;
       if (result.datesSynced > 0) {
-        parts.push(`${labels[name] || name}: ${result.datesSynced} day${result.datesSynced === 1 ? "" : "s"}`);
+        const unit = name === "amazonAds" ? "row" : "day";
+        parts.push(`${labels[name] || name}: ${result.datesSynced} ${unit}${result.datesSynced === 1 ? "" : "s"}`);
       }
     }
     const summary = parts.length > 0

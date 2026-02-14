@@ -10,6 +10,7 @@ export const chartColors = {
   fbSpend: "#6366f1",
   netCash: "#f97316",
   roas: "#10b981",
+  adSpend: "#2d2d2d",
   sessions: "#8b5cf6",
   bounce: "#ef4444",
   visitors: "#2d2d2d",

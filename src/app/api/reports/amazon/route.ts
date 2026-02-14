@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { amazonSalesTraffic } from "@/lib/db/schema";
+import { amazonSalesTraffic, amazonSpAds } from "@/lib/db/schema";
 import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -43,11 +43,32 @@ export async function GET(request: Request) {
       .groupBy(dateTrunc)
       .orderBy(dateTrunc);
 
+    // Ad spend from amazon_sp_ads (separate query to avoid join inflation)
+    const adsTrunc = sql`date_trunc(${unit}, ${amazonSpAds.date}::timestamp)::date`;
+    const adsRows = await db
+      .select({
+        date: sql<string>`${adsTrunc}`.as("date"),
+        adSpend: sum(amazonSpAds.cost).as("ad_spend"),
+      })
+      .from(amazonSpAds)
+      .where(
+        and(
+          eq(amazonSpAds.orgId, orgId),
+          gte(amazonSpAds.date, from),
+          lte(amazonSpAds.date, to)
+        )
+      )
+      .groupBy(adsTrunc)
+      .orderBy(adsTrunc);
+
+    const adSpendMap = new Map(adsRows.map((r) => [r.date, Math.round((Number(r.adSpend) || 0) * 100) / 100]));
+
     const data = rows.map((row) => ({
       date: row.date,
       revenue: Math.round((Number(row.revenue) || 0) * 100) / 100,
       unitsOrdered: Number(row.unitsOrdered) || 0,
       sessions: Number(row.sessions) || 0,
+      adSpend: adSpendMap.get(row.date) || 0,
     }));
 
     return NextResponse.json({ data });
