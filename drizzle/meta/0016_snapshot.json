@@ -481,20 +481,20 @@
           "primaryKey": false,
           "notNull": false
         },
-        "portfolio_id": {
-          "name": "portfolio_id",
+        "campaign_bidding_strategy": {
+          "name": "campaign_bidding_strategy",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "start_date": {
-          "name": "start_date",
+        "campaign_applicable_budget_rule_id": {
+          "name": "campaign_applicable_budget_rule_id",
           "type": "text",
           "primaryKey": false,
           "notNull": false
         },
-        "end_date": {
-          "name": "end_date",
+        "campaign_applicable_budget_rule_name": {
+          "name": "campaign_applicable_budget_rule_name",
           "type": "text",
           "primaryKey": false,
           "notNull": false
@@ -520,6 +520,12 @@
           "notNull": false,
           "default": 0
         },
+        "spend": {
+          "name": "spend",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "cost_per_click": {
           "name": "cost_per_click",
           "type": "real",
@@ -528,6 +534,12 @@
         },
         "click_through_rate": {
           "name": "click_through_rate",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "top_of_search_impression_share": {
+          "name": "top_of_search_impression_share",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -556,6 +568,30 @@
           "primaryKey": false,
           "notNull": false
         },
+        "attributed_sales_same_sku_1d": {
+          "name": "attributed_sales_same_sku_1d",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attributed_sales_same_sku_7d": {
+          "name": "attributed_sales_same_sku_7d",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attributed_sales_same_sku_14d": {
+          "name": "attributed_sales_same_sku_14d",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "attributed_sales_same_sku_30d": {
+          "name": "attributed_sales_same_sku_30d",
+          "type": "real",
+          "primaryKey": false,
+          "notNull": false
+        },
         "purchases_1d": {
           "name": "purchases_1d",
           "type": "integer",
@@ -576,6 +612,30 @@
         },
         "purchases_30d": {
           "name": "purchases_30d",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchases_same_sku_1d": {
+          "name": "purchases_same_sku_1d",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchases_same_sku_7d": {
+          "name": "purchases_same_sku_7d",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchases_same_sku_14d": {
+          "name": "purchases_same_sku_14d",
+          "type": "integer",
+          "primaryKey": false,
+          "notNull": false
+        },
+        "purchases_same_sku_30d": {
+          "name": "purchases_same_sku_30d",
           "type": "integer",
           "primaryKey": false,
           "notNull": false
@@ -604,44 +664,32 @@
           "primaryKey": false,
           "notNull": false
         },
-        "purchase_click_rate_1d": {
-          "name": "purchase_click_rate_1d",
-          "type": "real",
+        "units_sold_same_sku_1d": {
+          "name": "units_sold_same_sku_1d",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
-        "purchase_click_rate_7d": {
-          "name": "purchase_click_rate_7d",
-          "type": "real",
+        "units_sold_same_sku_7d": {
+          "name": "units_sold_same_sku_7d",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
-        "purchase_click_rate_14d": {
-          "name": "purchase_click_rate_14d",
-          "type": "real",
+        "units_sold_same_sku_14d": {
+          "name": "units_sold_same_sku_14d",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
-        "purchase_click_rate_30d": {
-          "name": "purchase_click_rate_30d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "acos_clicks_7d": {
-          "name": "acos_clicks_7d",
-          "type": "real",
+        "units_sold_same_sku_30d": {
+          "name": "units_sold_same_sku_30d",
+          "type": "integer",
           "primaryKey": false,
           "notNull": false
         },
         "acos_clicks_14d": {
           "name": "acos_clicks_14d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "roas_clicks_7d": {
-          "name": "roas_clicks_7d",
           "type": "real",
           "primaryKey": false,
           "notNull": false
@@ -652,81 +700,9 @@
           "primaryKey": false,
           "notNull": false
         },
-        "new_to_brand_purchases_14d": {
-          "name": "new_to_brand_purchases_14d",
+        "add_to_list": {
+          "name": "add_to_list",
           "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_to_brand_sales_14d": {
-          "name": "new_to_brand_sales_14d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_to_brand_units_sold_14d": {
-          "name": "new_to_brand_units_sold_14d",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_to_brand_purchases_percentage_14d": {
-          "name": "new_to_brand_purchases_percentage_14d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_to_brand_sales_percentage_14d": {
-          "name": "new_to_brand_sales_percentage_14d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "new_to_brand_units_sold_percentage_14d": {
-          "name": "new_to_brand_units_sold_percentage_14d",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "add_to_cart": {
-          "name": "add_to_cart",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "add_to_cart_rate": {
-          "name": "add_to_cart_rate",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "ecp_add_to_cart": {
-          "name": "ecp_add_to_cart",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "impressions_1y": {
-          "name": "impressions_1y",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "clicks_1y": {
-          "name": "clicks_1y",
-          "type": "integer",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "spend_1y": {
-          "name": "spend_1y",
-          "type": "real",
-          "primaryKey": false,
-          "notNull": false
-        },
-        "cost_per_click_1y": {
-          "name": "cost_per_click_1y",
-          "type": "real",
           "primaryKey": false,
           "notNull": false
         },
