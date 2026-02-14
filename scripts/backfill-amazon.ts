@@ -24,6 +24,7 @@ const args = process.argv.slice(2).reduce((acc, arg) => {
 const START_DATE = args.start || "2025-01-01";
 const END_DATE = args.end || new Date().toISOString().split("T")[0];
 const DELAY_MS = parseInt(args.delay || "65000"); // 65s default
+const ORG_ID = parseInt(args.org || "1"); // default to org 1
 
 // ── DB Setup ─────────────────────────────────────────────
 const sql = neon(process.env.DATABASE_URL!);
@@ -98,7 +99,7 @@ function sleep(ms: number) {
 }
 
 // ── Fetch one day's report ───────────────────────────────
-async function fetchDay(settings: Awaited<ReturnType<typeof getSettings>>, date: string) {
+async function fetchDay(settings: Awaited<ReturnType<typeof getSettings>>, date: string, orgId: number) {
   // Create report
   const createRes = await spApi("/reports/2021-06-30/reports", settings, {
     method: "POST",
@@ -155,6 +156,7 @@ async function fetchDay(settings: Awaited<ReturnType<typeof getSettings>>, date:
     const opsB2b = sales.orderedProductSalesB2B as Record<string, unknown> | undefined;
 
     return {
+      orgId,
       date,
       parentAsin: String(entry.parentAsin ?? ""),
       childAsin: String(entry.childAsin ?? ""),
@@ -188,7 +190,7 @@ async function fetchDay(settings: Awaited<ReturnType<typeof getSettings>>, date:
       .insert(schema.amazonSalesTraffic)
       .values(row)
       .onConflictDoUpdate({
-        target: [schema.amazonSalesTraffic.date, schema.amazonSalesTraffic.childAsin],
+        target: [schema.amazonSalesTraffic.orgId, schema.amazonSalesTraffic.date, schema.amazonSalesTraffic.childAsin],
         set: { ...row },
       });
   }
@@ -204,7 +206,7 @@ async function main() {
   console.log(`   Delay: ${DELAY_MS / 1000}s between reports\n`);
 
   // Get existing dates
-  const existingRows = await sql`SELECT DISTINCT date FROM amazon_sales_traffic`;
+  const existingRows = await sql`SELECT DISTINCT date FROM amazon_sales_traffic WHERE org_id = ${ORG_ID}`;
   const existingDates = new Set(existingRows.map((r) => {
     const d = r.date as string | Date;
     return typeof d === "string" ? d.split("T")[0] : new Date(d).toISOString().split("T")[0];
@@ -232,7 +234,7 @@ async function main() {
     const eta = Math.round(((toProcess.length - i) * DELAY_MS) / 60000);
 
     try {
-      const rows = await fetchDay(settings, date);
+      const rows = await fetchDay(settings, date, ORG_ID);
       success++;
       console.log(`✅ ${date} — ${rows} ASINs  [${i + 1}/${toProcess.length} ${pct}% | ETA: ${eta}min | ✅${success} ❌${errors}]`);
     } catch (err) {

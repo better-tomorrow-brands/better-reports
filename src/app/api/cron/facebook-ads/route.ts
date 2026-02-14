@@ -18,6 +18,12 @@ export async function GET(request: Request) {
     const dateParam = url.searchParams.get('date');
     const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
 
+    const orgIdParam = url.searchParams.get('orgId');
+    if (!orgIdParam) {
+      return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
+    }
+    const orgId = parseInt(orgIdParam);
+
     // Fetch from Facebook Marketing API
     const ads = await getDailyFacebookAds(date);
 
@@ -30,7 +36,7 @@ export async function GET(request: Request) {
       ...ad,
       utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
     }));
-    const dbInserted = await upsertFacebookAds(adsWithUtm);
+    const dbInserted = await upsertFacebookAds(adsWithUtm, orgId);
 
     return NextResponse.json({
       success: true,

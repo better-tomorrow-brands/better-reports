@@ -1,9 +1,9 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { campaignsWa, campaignsWaCustomers, customers } from "@/lib/db/schema";
 import { getMetaSettings, getShopifySettings } from "@/lib/settings";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 function formatPhone(phone: string): string {
   let cleaned = phone.replace(/[\s\-()]/g, "");
@@ -128,17 +128,13 @@ export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
     const { id } = await params;
     const campaignId = parseInt(id);
 
     // Get Meta settings
-    const metaSettings = await getMetaSettings();
+    const metaSettings = await getMetaSettings(orgId);
     if (!metaSettings?.access_token || !metaSettings?.phone_number_id) {
       return NextResponse.json(
         { error: "WhatsApp not configured" },
@@ -147,11 +143,11 @@ export async function POST(
     }
 
     // Get Shopify settings for timeline updates
-    const shopifySettings = await getShopifySettings();
+    const shopifySettings = await getShopifySettings(orgId);
 
     // Fetch campaign with customers
     const campaign = await db.query.campaignsWa.findFirst({
-      where: eq(campaignsWa.id, campaignId),
+      where: and(eq(campaignsWa.id, campaignId), eq(campaignsWa.orgId, orgId)),
       with: {
         campaignsWaCustomers: {
           with: {
@@ -176,7 +172,7 @@ export async function POST(
     await db
       .update(campaignsWa)
       .set({ status: "sending" })
-      .where(eq(campaignsWa.id, campaignId));
+      .where(and(eq(campaignsWa.id, campaignId), eq(campaignsWa.orgId, orgId)));
 
     const results = {
       total: campaign.campaignsWaCustomers.length,
@@ -263,13 +259,16 @@ export async function POST(
         status: "completed",
         sentAt: new Date(),
       })
-      .where(eq(campaignsWa.id, campaignId));
+      .where(and(eq(campaignsWa.id, campaignId), eq(campaignsWa.orgId, orgId)));
 
     return NextResponse.json({
       success: true,
       results,
     });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Campaign send error:", error);
     return NextResponse.json(
       { error: "Failed to send campaign", details: error instanceof Error ? error.message : String(error) },

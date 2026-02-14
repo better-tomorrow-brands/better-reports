@@ -1,9 +1,9 @@
 import { NextResponse } from "next/server";
-import { auth } from "@clerk/nextjs/server";
 import { getShopifySettings } from "@/lib/settings";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, and } from "drizzle-orm";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 interface ShopifyCustomerEdge {
   node: {
@@ -64,18 +64,15 @@ const CUSTOMERS_QUERY = `{
   }
 }`;
 
-export async function POST() {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const settings = await getShopifySettings();
-  if (!settings?.store_domain || !settings?.access_token) {
-    return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
-  }
-
+export async function POST(request: Request) {
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
+    const settings = await getShopifySettings(orgId);
+    if (!settings?.store_domain || !settings?.access_token) {
+      return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
+    }
+
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -105,6 +102,7 @@ export async function POST() {
       const node = edge.node;
       try {
         const customerData = {
+          orgId,
           shopifyCustomerId: node.legacyResourceId,
           firstName: node.firstName || undefined,
           lastName: node.lastName || undefined,
@@ -122,14 +120,14 @@ export async function POST() {
           const existing = await db
             .select()
             .from(customers)
-            .where(eq(customers.email, customerData.email))
+            .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)))
             .limit(1);
 
           if (existing.length > 0) {
             await db
               .update(customers)
               .set(customerData)
-              .where(eq(customers.email, customerData.email));
+              .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)));
           } else {
             await db.insert(customers).values(customerData);
           }
@@ -137,14 +135,14 @@ export async function POST() {
           const existing = await db
             .select()
             .from(customers)
-            .where(eq(customers.shopifyCustomerId, node.legacyResourceId))
+            .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, node.legacyResourceId)))
             .limit(1);
 
           if (existing.length > 0) {
             await db
               .update(customers)
               .set(customerData)
-              .where(eq(customers.shopifyCustomerId, node.legacyResourceId));
+              .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, node.legacyResourceId)));
           } else {
             await db.insert(customers).values(customerData);
           }
@@ -164,6 +162,9 @@ export async function POST() {
       failed,
     });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Customer sync error:", error);
     return NextResponse.json(
       { error: "Sync failed", details: error instanceof Error ? error.message : String(error) },

@@ -1,16 +1,13 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { orders, facebookAds, campaignsFcb, posthogAnalytics, amazonSalesTraffic } from "@/lib/db/schema";
 import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
+    const { orgId } = await requireOrgFromRequest(request);
+
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
@@ -23,15 +20,14 @@ export async function GET(request: Request) {
     }
 
     const [campaignRows, fbRows, orderRows, allOrdersRow, sessionsRow, amazonRow] = await Promise.all([
-      // Campaign name lookup from campaigns_fcb
       db
         .select({
           utmCampaign: campaignsFcb.utmCampaign,
           adGroup: campaignsFcb.adGroup,
         })
-        .from(campaignsFcb),
+        .from(campaignsFcb)
+        .where(eq(campaignsFcb.orgId, orgId)),
 
-      // Facebook ads spend grouped by utm_campaign
       db
         .select({
           utmCampaign: facebookAds.utmCampaign,
@@ -39,10 +35,15 @@ export async function GET(request: Request) {
           adSpend: sum(facebookAds.spend).as("ad_spend"),
         })
         .from(facebookAds)
-        .where(and(gte(facebookAds.date, from), lte(facebookAds.date, to)))
+        .where(
+          and(
+            eq(facebookAds.orgId, orgId),
+            gte(facebookAds.date, from),
+            lte(facebookAds.date, to)
+          )
+        )
         .groupBy(facebookAds.utmCampaign),
 
-      // Orders grouped by utm_campaign (facebook only)
       db
         .select({
           utmCampaign: orders.utmCampaign,
@@ -52,6 +53,7 @@ export async function GET(request: Request) {
         .from(orders)
         .where(
           and(
+            eq(orders.orgId, orgId),
             eq(orders.utmSource, "facebook"),
             gte(orders.createdAt, new Date(from)),
             lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
@@ -59,7 +61,6 @@ export async function GET(request: Request) {
         )
         .groupBy(orders.utmCampaign),
 
-      // Total orders + revenue (all sources, unfiltered)
       db
         .select({
           orderCount: count().as("order_count"),
@@ -68,12 +69,12 @@ export async function GET(request: Request) {
         .from(orders)
         .where(
           and(
+            eq(orders.orgId, orgId),
             gte(orders.createdAt, new Date(from)),
             lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
           )
         ),
 
-      // Total sessions from PostHog
       db
         .select({
           sessions: sum(posthogAnalytics.totalSessions).as("sessions"),
@@ -81,12 +82,12 @@ export async function GET(request: Request) {
         .from(posthogAnalytics)
         .where(
           and(
+            eq(posthogAnalytics.orgId, orgId),
             gte(posthogAnalytics.date, from),
             lte(posthogAnalytics.date, to)
           )
         ),
 
-      // Amazon revenue + orders
       db
         .select({
           revenue: sum(amazonSalesTraffic.orderedProductSales).as("revenue"),
@@ -95,13 +96,13 @@ export async function GET(request: Request) {
         .from(amazonSalesTraffic)
         .where(
           and(
+            eq(amazonSalesTraffic.orgId, orgId),
             gte(amazonSalesTraffic.date, from),
             lte(amazonSalesTraffic.date, to)
           )
         ),
     ]);
 
-    // Build lookup maps
     const campaignNameMap = new Map(
       campaignRows.map((r) => [r.utmCampaign || "", r.adGroup || ""])
     );
@@ -114,7 +115,6 @@ export async function GET(request: Request) {
 
     const rows = [];
 
-    // Process facebook ads rows
     for (const fb of fbRows) {
       const utm = fb.utmCampaign || "";
       const o = orderMap.get(utm);
@@ -136,7 +136,6 @@ export async function GET(request: Request) {
       orderMap.delete(utm);
     }
 
-    // Add remaining orders without facebook ads data
     for (const [utm, o] of orderMap) {
       rows.push({
         campaign: campaignNameMap.get(utm) || "",
@@ -149,10 +148,8 @@ export async function GET(request: Request) {
       });
     }
 
-    // Sort by ad spend descending
     rows.sort((a, b) => b.adSpend - a.adSpend);
 
-    // Build unfiltered totals for scorecards
     const shopifyRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
     const shopifyOrders = Number(allOrdersRow[0]?.orderCount) || 0;
     const amazonRevenue = Math.round((Number(amazonRow[0]?.revenue) || 0) * 100) / 100;
@@ -172,12 +169,12 @@ export async function GET(request: Request) {
       },
     });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Reports facebook-campaigns GET error:", error);
     return NextResponse.json(
-      {
-        error: "Failed to fetch report data",
-        details: error instanceof Error ? error.message : String(error),
-      },
+      { error: "Failed to fetch report data", details: error instanceof Error ? error.message : String(error) },
       { status: 500 }
     );
   }

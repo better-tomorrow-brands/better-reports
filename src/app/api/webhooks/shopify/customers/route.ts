@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
-import { eq } from "drizzle-orm";
-import { getShopifySettings } from "@/lib/settings";
+import { eq, and } from "drizzle-orm";
+import { getShopifySettings, getOrgIdByStoreDomain } from "@/lib/settings";
 import { verifyShopifyHmac } from "@/lib/shopify-orders";
 import { db } from "@/lib/db";
 import { customers } from "@/lib/db/schema";
@@ -21,7 +21,20 @@ interface ShopifyCustomerPayload {
 }
 
 export async function POST(request: Request) {
-  const settings = await getShopifySettings();
+  const shopDomain = request.headers.get("x-shopify-shop-domain");
+
+  if (!shopDomain) {
+    console.error("Missing X-Shopify-Shop-Domain header");
+    return NextResponse.json({ error: "Missing shop domain header" }, { status: 400 });
+  }
+
+  const orgId = await getOrgIdByStoreDomain(shopDomain);
+  if (!orgId) {
+    console.error(`No org found for shop domain: ${shopDomain}`);
+    return NextResponse.json({ error: "Unknown shop domain" }, { status: 400 });
+  }
+
+  const settings = await getShopifySettings(orgId);
   if (!settings?.webhook_secret) {
     console.error("Shopify webhook secret not configured");
     return NextResponse.json(
@@ -46,9 +59,10 @@ export async function POST(request: Request) {
   try {
     const data: ShopifyCustomerPayload = JSON.parse(body);
 
-    console.log(`Processing Shopify customer: ${data.id} (${data.email || "no email"})`);
+    console.log(`Processing Shopify customer: ${data.id} (${data.email || "no email"}) for org ${orgId}`);
 
     const customerData = {
+      orgId,
       shopifyCustomerId: data.id.toString(),
       firstName: data.first_name || undefined,
       lastName: data.last_name || undefined,
@@ -61,19 +75,19 @@ export async function POST(request: Request) {
       createdAt: new Date(data.created_at),
     };
 
-    // Upsert by email (if exists) or shopifyCustomerId
+    // Upsert by email (if exists) or shopifyCustomerId, scoped to org
     if (customerData.email) {
       const existing = await db
         .select()
         .from(customers)
-        .where(eq(customers.email, customerData.email))
+        .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)))
         .limit(1);
 
       if (existing.length > 0) {
         await db
           .update(customers)
           .set(customerData)
-          .where(eq(customers.email, customerData.email));
+          .where(and(eq(customers.orgId, orgId), eq(customers.email, customerData.email)));
       } else {
         await db.insert(customers).values(customerData);
       }
@@ -81,14 +95,14 @@ export async function POST(request: Request) {
       const existing = await db
         .select()
         .from(customers)
-        .where(eq(customers.shopifyCustomerId, data.id.toString()))
+        .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, data.id.toString())))
         .limit(1);
 
       if (existing.length > 0) {
         await db
           .update(customers)
           .set(customerData)
-          .where(eq(customers.shopifyCustomerId, data.id.toString()));
+          .where(and(eq(customers.orgId, orgId), eq(customers.shopifyCustomerId, data.id.toString())));
       } else {
         await db.insert(customers).values(customerData);
       }

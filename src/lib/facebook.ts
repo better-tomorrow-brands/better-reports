@@ -177,7 +177,7 @@ export function getYesterdayDateLondon(): string {
   return london.toISOString().split('T')[0];
 }
 
-export async function upsertFacebookAds(rows: FacebookAdRow[]): Promise<number> {
+export async function upsertFacebookAds(rows: FacebookAdRow[], orgId: number): Promise<number> {
   if (rows.length === 0) return 0;
 
   const BATCH_SIZE = 100;
@@ -185,6 +185,7 @@ export async function upsertFacebookAds(rows: FacebookAdRow[]): Promise<number> 
 
   for (let i = 0; i < rows.length; i += BATCH_SIZE) {
     const batch = rows.slice(i, i + BATCH_SIZE).map((row) => ({
+      orgId,
       date: row.date,
       campaign: row.campaign,
       adset: row.adset,
@@ -208,7 +209,7 @@ export async function upsertFacebookAds(rows: FacebookAdRow[]): Promise<number> 
       .insert(facebookAds)
       .values(batch)
       .onConflictDoUpdate({
-        target: [facebookAds.date, facebookAds.campaign, facebookAds.adset, facebookAds.ad],
+        target: [facebookAds.orgId, facebookAds.date, facebookAds.campaign, facebookAds.adset, facebookAds.ad],
         set: {
           utmCampaign: sql`excluded.utm_campaign`,
           spend: sql`excluded.spend`,

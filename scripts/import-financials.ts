@@ -13,6 +13,14 @@ import { readFileSync } from "fs";
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
 
+// Pass --org=<id> to target a specific org; defaults to 1
+const args = process.argv.slice(2).reduce((acc, arg) => {
+  const [key, val] = arg.replace(/^--/, "").split("=");
+  acc[key] = val;
+  return acc;
+}, {} as Record<string, string>);
+const ORG_ID = parseInt(args.org || "1");
+
 function parseCSV(content: string): Record<string, string>[] {
   const lines: string[] = [];
   let current = "";
@@ -91,6 +99,7 @@ async function main() {
         await db
           .insert(schema.amazonFinancialEvents)
           .values({
+            orgId: ORG_ID,
             transactionId: row.transaction_id,
             transactionType: row.transaction_type || null,
             postedDate: row.posted_date ? new Date(row.posted_date) : null,
@@ -101,7 +110,7 @@ async function main() {
             breakdowns: row.breakdowns || null,
           })
           .onConflictDoUpdate({
-            target: schema.amazonFinancialEvents.transactionId,
+            target: [schema.amazonFinancialEvents.orgId, schema.amazonFinancialEvents.transactionId],
             set: {
               transactionType: row.transaction_type || null,
               postedDate: row.posted_date ? new Date(row.posted_date) : null,

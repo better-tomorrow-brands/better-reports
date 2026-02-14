@@ -3,7 +3,9 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
+import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
 import { ChartSettingsPopover, SeriesConfig } from "@/components/reports/ChartSettingsPopover";
 import { CampaignFilterPopover } from "@/components/reports/CampaignFilterPopover";
 import { chartColors } from "@/lib/chart-colors";
@@ -98,7 +100,9 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function FacebookAdsChart() {
-  const [dateRange, setDateRange] = useState<DateRange | undefined>(
+  const { apiFetch, currentOrg } = useOrg();
+  const [dateRange, setDateRange] = usePersistedDateRange(
+    "dr-facebook-ads",
     () => presets.find((p) => p.label === "Last 90 days")!.getValue()
   );
   const [groupBy, setGroupBy] = useState<GroupBy>("week");
@@ -119,7 +123,7 @@ export function FacebookAdsChart() {
   };
 
   const fetchData = useCallback(async () => {
-    if (!dateRange?.from || !dateRange?.to) return;
+    if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
     setLoading(true);
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
@@ -128,7 +132,7 @@ export function FacebookAdsChart() {
       if (selectedCampaigns.length > 0) {
         url += `&campaigns=${selectedCampaigns.join(",")}`;
       }
-      const res = await fetch(url);
+      const res = await apiFetch(url);
       if (!res.ok) throw new Error("Failed to fetch");
       const json = await res.json();
       setData(json.data);
@@ -141,7 +145,7 @@ export function FacebookAdsChart() {
     } finally {
       setLoading(false);
     }
-  }, [dateRange, groupBy, selectedCampaigns]);
+  }, [dateRange, groupBy, selectedCampaigns, apiFetch, currentOrg]);
 
   useEffect(() => {
     fetchData();

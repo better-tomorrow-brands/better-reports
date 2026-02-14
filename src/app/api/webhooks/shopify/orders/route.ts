@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getShopifySettings } from "@/lib/settings";
+import { getShopifySettings, getOrgIdByStoreDomain } from "@/lib/settings";
 import {
   verifyShopifyHmac,
   upsertOrder,
@@ -7,7 +7,20 @@ import {
 } from "@/lib/shopify-orders";
 
 export async function POST(request: Request) {
-  const settings = await getShopifySettings();
+  const shopDomain = request.headers.get("x-shopify-shop-domain");
+
+  if (!shopDomain) {
+    console.error("Missing X-Shopify-Shop-Domain header");
+    return NextResponse.json({ error: "Missing shop domain header" }, { status: 400 });
+  }
+
+  const orgId = await getOrgIdByStoreDomain(shopDomain);
+  if (!orgId) {
+    console.error(`No org found for shop domain: ${shopDomain}`);
+    return NextResponse.json({ error: "Unknown shop domain" }, { status: 400 });
+  }
+
+  const settings = await getShopifySettings(orgId);
   if (!settings?.webhook_secret) {
     console.error("Shopify webhook secret not configured");
     return NextResponse.json(
@@ -32,9 +45,9 @@ export async function POST(request: Request) {
   try {
     const data: ShopifyOrderPayload = JSON.parse(body);
 
-    console.log(`Processing Shopify order: ${data.id} (#${data.order_number})`);
+    console.log(`Processing Shopify order: ${data.id} (#${data.order_number}) for org ${orgId}`);
 
-    await upsertOrder(data);
+    await upsertOrder(data, orgId);
 
     console.log(`Order ${data.id} upserted successfully`);
 

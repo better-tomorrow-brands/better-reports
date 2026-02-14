@@ -230,8 +230,9 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
   };
 }
 
-export async function upsertPosthogAnalytics(data: DailyAnalytics) {
+export async function upsertPosthogAnalytics(data: DailyAnalytics, orgId: number) {
   const row = {
+    orgId,
     date: data.date,
     uniqueVisitors: data.unique_visitors,
     totalSessions: data.total_sessions,
@@ -256,7 +257,7 @@ export async function upsertPosthogAnalytics(data: DailyAnalytics) {
     .insert(posthogAnalytics)
     .values(row)
     .onConflictDoUpdate({
-      target: posthogAnalytics.date,
+      target: [posthogAnalytics.orgId, posthogAnalytics.date],
       set: row,
     });
 }

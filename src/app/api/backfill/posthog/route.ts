@@ -18,6 +18,12 @@ export async function GET(request: Request) {
   const startDate = url.searchParams.get('start') || '2025-01-01';
   const endDate = url.searchParams.get('end') || getYesterdayDateLondon();
 
+  const orgIdParam = url.searchParams.get('orgId');
+  if (!orgIdParam) {
+    return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
   const results: Array<{ date: string; status: string; error?: string }> = [];
 
   try {
@@ -38,7 +44,7 @@ export async function GET(request: Request) {
       try {
         const analytics = await getDailyAnalytics(date);
         await appendDailyAnalytics(analytics);
-        await upsertPosthogAnalytics(analytics);
+        await upsertPosthogAnalytics(analytics, orgId);
         results.push({ date, status: 'success' });
         console.log(`Backfilled ${date}: ${analytics.unique_visitors} visitors`);
 

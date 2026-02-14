@@ -72,8 +72,7 @@ export function DateRangePicker({
     setSelectedPreset(null); // Clear preset when manually selecting
   };
 
-  const handleClear = (e: React.MouseEvent) => {
-    e.stopPropagation();
+  const handleClear = () => {
     onDateRangeChange(undefined);
     setSelectedPreset(null);
   };
@@ -110,16 +109,18 @@ export function DateRangePicker({
         </svg>
         {formatDateRange()}
         {dateRange?.from && (
-          <button
-            type="button"
-            onClick={handleClear}
+          <span
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); handleClear(); }}
+            onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.stopPropagation(); handleClear(); } }}
             className="btn-icon-clear"
             aria-label="Clear dates"
           >
             <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
             </svg>
-          </button>
+          </span>
         )}
       </button>
 

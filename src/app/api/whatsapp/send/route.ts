@@ -1,6 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getMetaSettings } from "@/lib/settings";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 interface ParamEntry {
   name: string;
@@ -36,13 +36,9 @@ function formatPhone(phone: string): string {
 }
 
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
   try {
-    const metaSettings = await getMetaSettings();
+    const { orgId } = await requireOrgFromRequest(request);
+    const metaSettings = await getMetaSettings(orgId);
     if (!metaSettings?.access_token || !metaSettings?.phone_number_id) {
       return NextResponse.json(
         { error: "WhatsApp not configured. Go to Settings to add your Meta credentials." },
@@ -103,6 +99,9 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("WhatsApp send error:", error);
     return NextResponse.json(
       {

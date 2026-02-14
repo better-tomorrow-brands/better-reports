@@ -13,6 +13,14 @@ import { readFileSync } from "fs";
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql, { schema });
 
+// Pass --org=<id> to target a specific org; defaults to 1
+const args = process.argv.slice(2).reduce((acc, arg) => {
+  const [key, val] = arg.replace(/^--/, "").split("=");
+  acc[key] = val;
+  return acc;
+}, {} as Record<string, string>);
+const ORG_ID = parseInt(args.org || "1");
+
 function parseCSV(content: string): Record<string, string>[] {
   const lines: string[] = [];
   let current = "";
@@ -89,6 +97,7 @@ async function main() {
     for (const row of batch) {
       try {
         const values = {
+          orgId: ORG_ID,
           date: row.date,
           parentAsin: row.parent_asin || null,
           childAsin: row.child_asin,
@@ -119,7 +128,7 @@ async function main() {
           .insert(schema.amazonSalesTraffic)
           .values(values)
           .onConflictDoUpdate({
-            target: [schema.amazonSalesTraffic.date, schema.amazonSalesTraffic.childAsin],
+            target: [schema.amazonSalesTraffic.orgId, schema.amazonSalesTraffic.date, schema.amazonSalesTraffic.childAsin],
             set: values,
           });
         upserted++;

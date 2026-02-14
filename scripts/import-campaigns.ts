@@ -8,6 +8,14 @@ import { resolve } from "path";
 const sql = neon(process.env.DATABASE_URL!);
 const db = drizzle(sql);
 
+// Pass --org=<id> to target a specific org; defaults to 1
+const args = process.argv.slice(2).reduce((acc, arg) => {
+  const [key, val] = arg.replace(/^--/, "").split("=");
+  acc[key] = val;
+  return acc;
+}, {} as Record<string, string>);
+const ORG_ID = parseInt(args.org || "1");
+
 function parseCsvLine(line: string): string[] {
   const fields: string[] = [];
   let current = "";
@@ -56,6 +64,7 @@ async function main() {
     const status = (cols[13] || "").toLowerCase() === "on" ? "active" : "inactive";
 
     await db.insert(campaignsFcb).values({
+      orgId: ORG_ID,
       campaign: cols[0] || null,
       adGroup: cols[1] || null,
       ad: cols[2] || null,

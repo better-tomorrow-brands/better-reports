@@ -103,7 +103,13 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const settings = await getShopifySettings();
+  const orgIdParam = url.searchParams.get("orgId");
+  if (!orgIdParam) {
+    return NextResponse.json({ error: "orgId query param required" }, { status: 400 });
+  }
+  const orgId = parseInt(orgIdParam);
+
+  const settings = await getShopifySettings(orgId);
   if (!settings?.store_domain || !settings?.access_token) {
     return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
   }
@@ -197,7 +203,7 @@ export async function GET(request: Request) {
     for (const edge of orders) {
       try {
         const payload = convertToPayload(edge.node);
-        await upsertOrder(payload);
+        await upsertOrder(payload, orgId);
         success++;
         console.log(`Upserted order #${edge.node.name}`);
       } catch (err) {

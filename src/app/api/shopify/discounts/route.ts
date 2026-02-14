@@ -1,6 +1,6 @@
-import { auth } from "@clerk/nextjs/server";
 import { NextResponse } from "next/server";
 import { getShopifySettings } from "@/lib/settings";
+import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 interface DiscountNode {
   id: string;
@@ -44,22 +44,18 @@ interface GraphQLResponse {
 
 // GET - Fetch existing discount codes
 export async function GET(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { orgId } = await requireOrgFromRequest(request);
+    const settings = await getShopifySettings(orgId);
+    if (!settings?.store_domain || !settings?.access_token) {
+      return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
+    }
 
-  const settings = await getShopifySettings();
-  if (!settings?.store_domain || !settings?.access_token) {
-    return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
-  }
+    const url = new URL(request.url);
+    const search = url.searchParams.get("search") || "";
+    const searchFilter = search ? `, query: "title:*${search}*"` : "";
 
-  const url = new URL(request.url);
-  const search = url.searchParams.get("search") || "";
-
-  const searchFilter = search ? `, query: "title:*${search}*"` : "";
-
-  const query = `{
+    const query = `{
     codeDiscountNodes(first: 50${searchFilter}) {
       edges {
         node {
@@ -94,7 +90,6 @@ export async function GET(request: Request) {
     }
   }`;
 
-  try {
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -139,6 +134,9 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ discounts });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Shopify discounts error:", error);
     return NextResponse.json(
       { error: "Failed to fetch discounts", details: error instanceof Error ? error.message : String(error) },
@@ -149,33 +147,21 @@ export async function GET(request: Request) {
 
 // POST - Create new discount code
 export async function POST(request: Request) {
-  const { userId } = await auth();
-  if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
+  try {
+    const { orgId } = await requireOrgFromRequest(request);
+    const settings = await getShopifySettings(orgId);
+    if (!settings?.store_domain || !settings?.access_token) {
+      return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
+    }
 
-  const settings = await getShopifySettings();
-  if (!settings?.store_domain || !settings?.access_token) {
-    return NextResponse.json({ error: "Shopify not configured" }, { status: 400 });
-  }
+    const body = await request.json();
+    const { code, title, discountType, discountValue } = body;
 
-  const body = await request.json();
-  const { code, title, discountType, discountValue } = body;
+    if (!code || !discountValue) {
+      return NextResponse.json({ error: "Code and discount value are required" }, { status: 400 });
+    }
 
-  if (!code || !discountValue) {
-    return NextResponse.json({ error: "Code and discount value are required" }, { status: 400 });
-  }
-
-  // Build the discount value based on type
-  let customerGetsValue = "";
-  if (discountType === "percentage") {
-    const percentage = parseFloat(discountValue) / 100;
-    customerGetsValue = `percentage: ${percentage}`;
-  } else {
-    customerGetsValue = `discountAmount: { amount: "${discountValue}", currencyCode: GBP }`;
-  }
-
-  const mutation = `
+    const mutation = `
     mutation discountCodeBasicCreate($basicCodeDiscount: DiscountCodeBasicInput!) {
       discountCodeBasicCreate(basicCodeDiscount: $basicCodeDiscount) {
         codeDiscountNode {
@@ -200,26 +186,21 @@ export async function POST(request: Request) {
     }
   `;
 
-  const variables = {
-    basicCodeDiscount: {
-      title: title || code,
-      code,
-      startsAt: new Date().toISOString(),
-      customerGets: {
-        value: discountType === "percentage"
-          ? { percentage: parseFloat(discountValue) / 100 }
-          : { discountAmount: { amount: discountValue, currencyCode: "GBP" } },
-        items: {
-          all: true,
+    const variables = {
+      basicCodeDiscount: {
+        title: title || code,
+        code,
+        startsAt: new Date().toISOString(),
+        customerGets: {
+          value: discountType === "percentage"
+            ? { percentage: parseFloat(discountValue) / 100 }
+            : { discountAmount: { amount: discountValue, currencyCode: "GBP" } },
+          items: { all: true },
         },
+        customerSelection: { all: true },
       },
-      customerSelection: {
-        all: true,
-      },
-    },
-  };
+    };
 
-  try {
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -252,11 +233,11 @@ export async function POST(request: Request) {
 
     const createdCode = data.data?.discountCodeBasicCreate?.codeDiscountNode?.codeDiscount?.codes?.edges[0]?.node?.code;
 
-    return NextResponse.json({
-      success: true,
-      code: createdCode || code,
-    });
+    return NextResponse.json({ success: true, code: createdCode || code });
   } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
     console.error("Shopify create discount error:", error);
     return NextResponse.json(
       { error: "Failed to create discount", details: error instanceof Error ? error.message : String(error) },
