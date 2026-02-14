@@ -9,6 +9,7 @@ import {
   upsertSalesTraffic,
   fetchFinancialEvents,
   upsertFinancialEvents,
+  syncRecentOrders,
 } from "@/lib/amazon";
 import {
   getAmazonAdsAccessToken,
@@ -128,6 +129,14 @@ async function syncAmazonSales(orgId: number): Promise<SourceResult> {
     }
   } catch (err) {
     errors.push(`finances: ${err instanceof Error ? err.message : "Unknown error"}`);
+  }
+
+  // Sync recent orders (last 24h) for real-time data
+  try {
+    const lastUpdatedAfter = new Date(Date.now() - 24 * 3600000).toISOString();
+    await syncRecentOrders(settings, orgId, lastUpdatedAfter);
+  } catch (err) {
+    errors.push(`orders: ${err instanceof Error ? err.message : "Unknown error"}`);
   }
 
   const latestAfter = await getLatestDate(amazonSalesTraffic, orgId);

@@ -10,6 +10,7 @@ import {
   upsertFinancialEvents,
   fetchInventory,
   upsertInventory,
+  syncRecentOrders,
 } from "@/lib/amazon";
 
 export const maxDuration = 300;
@@ -120,9 +121,18 @@ export async function GET(request: Request) {
         return NextResponse.json({ success: true, job, items: items.length, upserted, snapshotDate });
       }
 
+      case "orders": {
+        // Default: 7 days lookback, or use ?days=N
+        const daysParam = url.searchParams.get("days");
+        const days = daysParam ? parseInt(daysParam) : 7;
+        const lastUpdatedAfter = new Date(Date.now() - days * 86400000).toISOString();
+        const { ordersFound, itemsUpserted } = await syncRecentOrders(settings, orgId, lastUpdatedAfter);
+        return NextResponse.json({ success: true, job, days, lastUpdatedAfter, ordersFound, itemsUpserted });
+      }
+
       default:
         return NextResponse.json(
-          { error: `Unknown job: ${job}. Use: sales-traffic, finances, inventory` },
+          { error: `Unknown job: ${job}. Use: sales-traffic, finances, inventory, orders` },
           { status: 400 }
         );
     }

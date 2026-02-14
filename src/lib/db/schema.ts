@@ -425,6 +425,31 @@ export const amazonAdsPendingReports = pgTable("amazon_ads_pending_reports", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Amazon Orders (SP-API, real-time) ────────────────────
+export const amazonOrders = pgTable("amazon_orders", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id),
+  amazonOrderId: text("amazon_order_id").notNull(),
+  orderItemId: text("order_item_id").notNull(),
+  purchaseDate: timestamp("purchase_date", { withTimezone: true }).notNull(),
+  lastUpdateDate: timestamp("last_update_date", { withTimezone: true }),
+  orderStatus: text("order_status"),
+  fulfillmentChannel: text("fulfillment_channel"),
+  asin: text("asin"),
+  sellerSku: text("seller_sku"),
+  title: text("title"),
+  quantityOrdered: integer("quantity_ordered").default(0),
+  quantityShipped: integer("quantity_shipped").default(0),
+  itemPrice: decimal("item_price", { precision: 12, scale: 2 }).default("0"),
+  itemCurrency: text("item_currency").default("GBP"),
+  isPrime: boolean("is_prime").default(false),
+  isBusinessOrder: boolean("is_business_order").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  uniqueIndex("amazon_orders_org_order_item_idx")
+    .on(table.orgId, table.amazonOrderId, table.orderItemId),
+]);
+
 // ── Relations ─────────────────────────────────────────
 
 export const organizationsRelations = relations(organizations, ({ many }) => ({

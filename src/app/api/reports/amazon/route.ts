@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { amazonSalesTraffic, amazonSpAds, products } from "@/lib/db/schema";
-import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
+import { amazonSalesTraffic, amazonSpAds, amazonOrders, products } from "@/lib/db/schema";
+import { sql, gte, lte, and, eq, ne, sum, notInArray } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
@@ -77,13 +77,29 @@ export async function GET(request: Request) {
       adRevenue: Math.round((Number(r.adRevenue) || 0) * 100) / 100,
     }]));
 
-    const data = rows.map((row) => {
+    // Build report-sourced data points
+    const reportDates = new Set(rows.map((r) => r.date));
+
+    const data: {
+      date: string;
+      revenue: number;
+      unitsOrdered: number;
+      sessions: number;
+      adSpend: number;
+      adRevenue: number;
+      fbaFees: number;
+      referralFees: number;
+      estimatedPayout: number;
+      source: "report" | "orders";
+    }[] = [];
+
+    for (const row of rows) {
       const ads = adSpendMap.get(row.date) || { adSpend: 0, adRevenue: 0 };
       const revenue = Math.round((Number(row.revenue) || 0) * 100) / 100;
       const fbaFees = Math.round((Number(row.fbaFees) || 0) * 100) / 100;
       const referralFees = Math.round((Number(row.referralFees) || 0) * 100) / 100;
       const estimatedPayout = Math.round((revenue - ads.adSpend - fbaFees - referralFees) * 100) / 100;
-      return {
+      data.push({
         date: row.date,
         revenue,
         unitsOrdered: Number(row.unitsOrdered) || 0,
@@ -93,8 +109,72 @@ export async function GET(request: Request) {
         fbaFees,
         referralFees,
         estimatedPayout,
-      };
-    });
+        source: "report",
+      });
+    }
+
+    // Supplement with orders data for dates NOT covered by reports
+    const orderDateTrunc = sql`date_trunc('day', ${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`;
+
+    const orderConditions = [
+      eq(amazonOrders.orgId, orgId),
+      gte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${from}::date`),
+      lte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${to}::date`),
+      ne(amazonOrders.orderStatus, "Canceled"),
+    ];
+
+    if (reportDates.size > 0) {
+      const reportDatesArr = Array.from(reportDates);
+      orderConditions.push(
+        notInArray(
+          sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`,
+          reportDatesArr.map((d) => sql`${d}::date`)
+        )
+      );
+    }
+
+    const orderRows = await db
+      .select({
+        date: sql<string>`${orderDateTrunc}`.as("date"),
+        revenue: sql<string>`SUM(COALESCE(NULLIF(${amazonOrders.itemPrice}, 0), ${products.amazonRrp}, 0) * ${amazonOrders.quantityOrdered})`.as("revenue"),
+        unitsOrdered: sum(amazonOrders.quantityOrdered).as("units_ordered"),
+        fbaFees: sql<string>`SUM(${amazonOrders.quantityOrdered} * COALESCE(${products.fbaFee}, 0))`.as("fba_fees"),
+        referralFees: sql<string>`SUM(COALESCE(NULLIF(${amazonOrders.itemPrice}, 0), ${products.amazonRrp}, 0) * ${amazonOrders.quantityOrdered} * COALESCE(${products.referralPercent}, 0) / 100)`.as("referral_fees"),
+      })
+      .from(amazonOrders)
+      .leftJoin(
+        products,
+        and(
+          eq(products.orgId, amazonOrders.orgId),
+          eq(products.asin, amazonOrders.asin),
+        ),
+      )
+      .where(and(...orderConditions))
+      .groupBy(orderDateTrunc)
+      .orderBy(orderDateTrunc);
+
+    for (const row of orderRows) {
+      const ads = adSpendMap.get(row.date) || { adSpend: 0, adRevenue: 0 };
+      const revenue = Math.round((Number(row.revenue) || 0) * 100) / 100;
+      const fbaFees = Math.round((Number(row.fbaFees) || 0) * 100) / 100;
+      const referralFees = Math.round((Number(row.referralFees) || 0) * 100) / 100;
+      const estimatedPayout = Math.round((revenue - ads.adSpend - fbaFees - referralFees) * 100) / 100;
+      data.push({
+        date: row.date,
+        revenue,
+        unitsOrdered: Number(row.unitsOrdered) || 0,
+        sessions: 0,
+        adSpend: ads.adSpend,
+        adRevenue: ads.adRevenue,
+        fbaFees,
+        referralFees,
+        estimatedPayout,
+        source: "orders",
+      });
+    }
+
+    // Sort by date
+    data.sort((a, b) => a.date.localeCompare(b.date));
 
     return NextResponse.json({ data });
   } catch (error) {

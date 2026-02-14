@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, facebookAds, campaignsFcb, posthogAnalytics, amazonSalesTraffic } from "@/lib/db/schema";
-import { sql, gte, lte, and, eq, sum, count } from "drizzle-orm";
+import { orders, facebookAds, campaignsFcb, posthogAnalytics, amazonSalesTraffic, amazonOrders, products } from "@/lib/db/schema";
+import { sql, gte, lte, and, eq, ne, sum, count } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
@@ -152,8 +152,59 @@ export async function GET(request: Request) {
 
     const shopifyRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
     const shopifyOrders = Number(allOrdersRow[0]?.orderCount) || 0;
-    const amazonRevenue = Math.round((Number(amazonRow[0]?.revenue) || 0) * 100) / 100;
-    const amazonOrders = Number(amazonRow[0]?.orders) || 0;
+    let amazonRevenue = Math.round((Number(amazonRow[0]?.revenue) || 0) * 100) / 100;
+    let amazonOrderCount = Number(amazonRow[0]?.orders) || 0;
+
+    // Supplement Amazon totals with orders data for dates not in sales-traffic
+    const salesTrafficDates = await db
+      .select({ date: amazonSalesTraffic.date })
+      .from(amazonSalesTraffic)
+      .where(
+        and(
+          eq(amazonSalesTraffic.orgId, orgId),
+          gte(amazonSalesTraffic.date, from),
+          lte(amazonSalesTraffic.date, to)
+        )
+      )
+      .groupBy(amazonSalesTraffic.date);
+
+    const coveredDates = new Set(salesTrafficDates.map((r) => r.date));
+
+    const orderConditions = [
+      eq(amazonOrders.orgId, orgId),
+      gte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${from}::date`),
+      lte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${to}::date`),
+      ne(amazonOrders.orderStatus, "Canceled"),
+    ];
+
+    if (coveredDates.size > 0) {
+      const datesArr = Array.from(coveredDates);
+      orderConditions.push(
+        sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date NOT IN (${sql.join(datesArr.map((d) => sql`${d}::date`), sql`, `)})`
+      );
+    }
+
+    const ordersSupplementRow = await db
+      .select({
+        revenue: sql<string>`SUM(COALESCE(NULLIF(${amazonOrders.itemPrice}, 0), ${products.amazonRrp}, 0) * ${amazonOrders.quantityOrdered})`.as("revenue"),
+        orderCount: count().as("order_count"),
+      })
+      .from(amazonOrders)
+      .leftJoin(
+        products,
+        and(
+          eq(products.orgId, amazonOrders.orgId),
+          eq(products.asin, amazonOrders.asin),
+        ),
+      )
+      .where(and(...orderConditions));
+
+    const supplementRevenue = Math.round((Number(ordersSupplementRow[0]?.revenue) || 0) * 100) / 100;
+    const supplementOrders = Number(ordersSupplementRow[0]?.orderCount) || 0;
+
+    amazonRevenue += supplementRevenue;
+    amazonOrderCount += supplementOrders;
+
     const totalSessions = Number(sessionsRow[0]?.sessions) || 0;
     const totalAdSpend = rows.reduce((s, r) => s + r.adSpend, 0);
 
@@ -163,7 +214,7 @@ export async function GET(request: Request) {
         shopifyRevenue,
         shopifyOrders,
         amazonRevenue,
-        amazonOrders,
+        amazonOrders: amazonOrderCount,
         sessions: totalSessions,
         adSpend: Math.round(totalAdSpend * 100) / 100,
       },

@@ -39,6 +39,10 @@
     {
       "path": "/api/cron/amazon-ads-collect?orgId=1",
       "schedule": "30 9 * * *"
+    },
+    {
+      "path": "/api/cron/amazon?job=orders&orgId=1",
+      "schedule": "15 * * * *"
     }
   ]
 }
