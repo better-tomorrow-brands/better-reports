@@ -163,7 +163,13 @@ async function syncFacebook(orgId: number): Promise<SourceResult> {
 
   const today = getTodayDateLondon();
   const fromDate = latestBefore || formatDate(new Date(Date.now() - 30 * 86400000));
-  const dates = dateRange(fromDate, today);
+  const gapDates = dateRange(fromDate, today);
+
+  // Always re-fetch today and yesterday (data updates throughout the day)
+  const yesterday = formatDate(new Date(Date.now() - 86400000));
+  const alwaysRefresh = [yesterday, today];
+  const dateSet = new Set([...gapDates, ...alwaysRefresh]);
+  const dates = [...dateSet].sort();
 
   if (dates.length === 0) {
     return { status: "ok", latestBefore, latestAfter: latestBefore, datesSynced: 0, errors: [] };
