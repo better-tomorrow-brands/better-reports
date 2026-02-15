@@ -65,6 +65,12 @@ interface UTMParams {
   term?: string;
 }
 
+interface CustomerJourneyResult {
+  utmParams: UTMParams;
+  visitSource?: string;
+  sourceType?: string;
+}
+
 interface AttributionResult {
   source: string;
   medium: string;
@@ -82,16 +88,20 @@ export function verifyShopifyHmac(body: string, hmacHeader: string, secret: stri
 
 // ── Customer Journey (UTM from Shopify) ────────────────
 
-export async function getCustomerJourney(orderId: number, orgId: number): Promise<UTMParams> {
+export async function getCustomerJourney(orderId: number, orgId: number): Promise<CustomerJourneyResult> {
   const settings = await getShopifySettings(orgId);
   if (!settings?.store_domain || !settings?.access_token) {
-    return {};
+    return { utmParams: {} };
   }
 
   const query = `{
     order(id: "gid://shopify/Order/${orderId}") {
       customerJourneySummary {
         firstVisit {
+          source
+          sourceType
+          landingPage
+          referrerUrl
           utmParameters {
             source
             medium
@@ -118,10 +128,15 @@ export async function getCustomerJourney(orderId: number, orgId: number): Promis
     );
 
     const data = await response.json();
-    return data?.data?.order?.customerJourneySummary?.firstVisit?.utmParameters || {};
+    const firstVisit = data?.data?.order?.customerJourneySummary?.firstVisit;
+    return {
+      utmParams: firstVisit?.utmParameters || {},
+      visitSource: firstVisit?.source || undefined,
+      sourceType: firstVisit?.sourceType || undefined,
+    };
   } catch (error) {
     console.error("Error fetching customer journey:", error);
-    return {};
+    return { utmParams: {} };
   }
 }
 
@@ -129,56 +144,25 @@ export async function getCustomerJourney(orderId: number, orgId: number): Promis
 
 export async function getAttributionFromCampaigns(
   discountCode: string,
-  skus: string,
   orgId: number
 ): Promise<AttributionResult | null> {
-  // First: match by discount code
-  if (discountCode) {
-    const byDiscount = await db
-      .select()
-      .from(campaignsFcb)
-      .where(and(eq(campaignsFcb.orgId, orgId), sql`LOWER(${campaignsFcb.discountCode}) = LOWER(${discountCode})`))
-      .limit(1);
+  if (!discountCode) return null;
 
-    if (byDiscount.length > 0) {
-      const row = byDiscount[0];
-      return {
-        source: row.utmSource || "",
-        medium: row.utmMedium || "",
-        campaign: row.utmCampaign || "",
-        content: "",
-        term: row.utmTerm || "",
-      };
-    }
-  }
+  const byDiscount = await db
+    .select()
+    .from(campaignsFcb)
+    .where(and(eq(campaignsFcb.orgId, orgId), sql`LOWER(${campaignsFcb.discountCode}) = LOWER(${discountCode})`))
+    .limit(1);
 
-  // Second: match by SKU
-  if (skus) {
-    const orderSkuArray = skus.toLowerCase().split(",").map((s) => s.trim());
-
-    const allCampaigns = await db
-      .select()
-      .from(campaignsFcb)
-      .where(and(eq(campaignsFcb.orgId, orgId), sql`${campaignsFcb.skus} IS NOT NULL AND ${campaignsFcb.skus} != ''`));
-
-    for (const camp of allCampaigns) {
-      const campaignSkuArray = (camp.skus || "")
-        .toLowerCase()
-        .split(",")
-        .map((s) => s.trim());
-
-      for (const orderSku of orderSkuArray) {
-        if (campaignSkuArray.includes(orderSku)) {
-          return {
-            source: camp.utmSource || "",
-            medium: camp.utmMedium || "",
-            campaign: camp.utmCampaign || "",
-            content: "",
-            term: camp.utmTerm || "",
-          };
-        }
-      }
-    }
+  if (byDiscount.length > 0) {
+    const row = byDiscount[0];
+    return {
+      source: row.utmSource || "",
+      medium: row.utmMedium || "",
+      campaign: row.utmCampaign || "",
+      content: "",
+      term: row.utmTerm || "",
+    };
   }
 
   return null;
@@ -233,14 +217,44 @@ function formatDate(dateString?: string): Date | null {
   return new Date(dateString);
 }
 
+// ── sourceType → utm_medium mapping ────────────────────
+
+function mapSourceTypeToMedium(sourceType: string): string {
+  switch (sourceType.toUpperCase()) {
+    case "SEO":
+      return "organic";
+    case "AD":
+    case "RETARGETING":
+      return "cpc";
+    case "NEWSLETTER":
+    case "ABANDONED_CART":
+    case "TRANSACTIONAL":
+      return "email";
+    case "POST":
+    case "MESSAGE":
+      return "social";
+    case "LINK":
+    case "AFFILIATE":
+      return "referral";
+    case "LOYALTY":
+      return "loyalty";
+    default:
+      return "";
+  }
+}
+
 // ── Main Upsert ────────────────────────────────────────
 
 export async function upsertOrder(data: ShopifyOrderPayload, orgId: number): Promise<void> {
   const shopifyId = data.id.toString();
 
-  // Get UTM from Shopify API
-  const utmParams = await getCustomerJourney(data.id, orgId);
-  const hasConversionData = !!(utmParams.source || utmParams.campaign || utmParams.medium);
+  // Get journey data from Shopify API
+  const journey = await getCustomerJourney(data.id, orgId);
+  const { utmParams, visitSource, sourceType } = journey;
+
+  const hasUtmData = !!(utmParams.source || utmParams.campaign || utmParams.medium);
+  const hasReferralData = !!(visitSource || sourceType);
+  const hasConversionData = hasUtmData || hasReferralData;
 
   let finalUtm: AttributionResult = {
     source: utmParams.source || "",
@@ -250,13 +264,16 @@ export async function upsertOrder(data: ShopifyOrderPayload, orgId: number): Pro
     term: utmParams.term || "",
   };
 
-  // If no conversion data, try lookup
-  if (!hasConversionData) {
+  if (!hasUtmData) {
+    // Priority 2: Discount code match
     const discountCode = getDiscountCodes(data);
-    const skus = getLineItemSkus(data);
-    const lookupResult = await getAttributionFromCampaigns(discountCode, skus, orgId);
+    const lookupResult = await getAttributionFromCampaigns(discountCode, orgId);
     if (lookupResult) {
       finalUtm = lookupResult;
+    } else if (hasReferralData) {
+      // Priority 3: Shopify referral data (source/sourceType without UTM)
+      finalUtm.source = visitSource ? visitSource.toLowerCase() : "";
+      finalUtm.medium = sourceType ? mapSourceTypeToMedium(sourceType) : "";
     }
   }
 
