@@ -7,7 +7,7 @@ import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 
-const UTM_SOURCE_OPTIONS = ["facebook", "instagram", "google", "tiktok"];
+const UTM_SOURCE_OPTIONS = ["facebook", "instagram", "google", "tiktok", "email", "referral"];
 
 function EditableSelect({
   value,
