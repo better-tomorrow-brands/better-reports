@@ -127,6 +127,18 @@ function getDisplayValue(value: unknown): string {
 const STORAGE_KEY = "customers-visible-columns";
 const PAGE_SIZE = 100;
 
+interface DbStats {
+  total: number;
+  purchased: number;
+  prospects: number;
+  emailSubscribers: number;
+  activeSubscribers: number;
+  avgTotalSpent: number | null;
+  avgOrdersCount: number | null;
+  avgLapseDays: number | null;
+  lifecycle: { new: number; reorder: number; lapsed: number; lost: number };
+}
+
 function getInitialColumns(): Set<string> {
   if (typeof window === "undefined") {
     return new Set(allColumns.filter((c) => c.defaultVisible).map((c) => c.key));
@@ -191,14 +203,28 @@ export default function CustomersPage() {
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
 
+  // DB-aggregate stats (independent of list load)
+  const [dbStats, setDbStats] = useState<DbStats | null>(null);
+  const [statsLoading, setStatsLoading] = useState(true);
+
   // Sync
   const [syncing, setSyncing] = useState(false);
   const [syncMessage, setSyncMessage] = useState<string | null>(null);
 
+  const fetchStats = useCallback(() => {
+    if (!currentOrg) return;
+    setStatsLoading(true);
+    apiFetch("/api/customers/stats")
+      .then((res) => res.json())
+      .then((data) => { if (!data.error) setDbStats(data); })
+      .catch(() => {})
+      .finally(() => setStatsLoading(false));
+  }, [apiFetch, currentOrg]);
+
   const fetchCustomers = useCallback(() => {
     if (!currentOrg) return;
     Promise.all([
-      apiFetch("/api/customers?limit=1000").then((res) => res.json()),
+      apiFetch("/api/customers?limit=9999").then((res) => res.json()),
       apiFetch("/api/settings/lifecycle").then((res) => res.json()),
     ])
       .then(([customersData, lifecycleData]) => {
@@ -217,8 +243,9 @@ export default function CustomersPage() {
   }, [apiFetch, currentOrg]);
 
   useEffect(() => {
+    fetchStats();
     fetchCustomers();
-  }, [fetchCustomers]);
+  }, [fetchStats, fetchCustomers]);
 
   const handleSync = useCallback(async () => {
     setSyncing(true);
@@ -231,6 +258,7 @@ export default function CustomersPage() {
       } else {
         setSyncMessage(`Synced ${data.upserted} customer${data.upserted === 1 ? "" : "s"}`);
         fetchCustomers();
+        fetchStats();
       }
     } catch {
       setSyncMessage("Sync failed");
@@ -238,7 +266,7 @@ export default function CustomersPage() {
       setSyncing(false);
       setTimeout(() => setSyncMessage(null), 3000);
     }
-  }, [fetchCustomers, apiFetch]);
+  }, [fetchCustomers, fetchStats, apiFetch]);
 
   useEffect(() => {
     setVisibleColumns(getInitialColumns());
@@ -468,79 +496,6 @@ export default function CustomersPage() {
     return values.filter((v) => v.toLowerCase().includes(filterSearch.toLowerCase()));
   }, [editingFilter, customers, filterSearch]);
 
-  // Scorecard stats
-  const stats = useMemo(() => {
-    const totalCustomers = filteredCustomers.length;
-    const emailSubscribers = filteredCustomers.filter((c) => c.emailMarketingConsent).length;
-
-    // Subscribers = customers tagged with 'Active Subscriber'
-    const subscribers = filteredCustomers.filter((c) =>
-      c.tags?.toLowerCase().includes("active subscriber")
-    ).length;
-
-    const totalRevenue = filteredCustomers.reduce((sum, c) => {
-      return sum + (c.totalSpent ? parseFloat(c.totalSpent) : 0);
-    }, 0);
-
-    // LTV = Total Revenue / Number of Customers
-    const ltv = totalCustomers > 0 ? totalRevenue / totalCustomers : 0;
-
-    // Only include customers with orders for avg calculations
-    const customersWithOrders = filteredCustomers.filter((c) => (c.ordersCount || 0) > 0);
-    const totalOrders = customersWithOrders.reduce((sum, c) => sum + (c.ordersCount || 0), 0);
-
-    // For AOV, exclude customers with 0 spend (samples, replacements, etc.)
-    const customersWithSpend = filteredCustomers.filter((c) =>
-      (c.ordersCount || 0) > 0 && c.totalSpent && parseFloat(c.totalSpent) > 0
-    );
-    const totalOrdersWithSpend = customersWithSpend.reduce((sum, c) => sum + (c.ordersCount || 0), 0);
-    const totalRevenueWithSpend = customersWithSpend.reduce((sum, c) => {
-      return sum + parseFloat(c.totalSpent!);
-    }, 0);
-
-    const avgOrdersPerCustomer = customersWithOrders.length > 0 ? totalOrders / customersWithOrders.length : 0;
-    const avgOrderValue = totalOrdersWithSpend > 0 ? totalRevenueWithSpend / totalOrdersWithSpend : 0;
-
-    // Lifecycle segments (based on lapse - days since last order)
-    // Only include customers who have placed at least 1 order
-    const { newMaxDays, reorderMaxDays, lapsedMaxDays } = lifecycleSettings;
-    const customersWithLapse = filteredCustomers.filter((c) => c.lapse !== null && (c.ordersCount || 0) > 0);
-
-    const newCustomers = customersWithLapse.filter((c) => c.lapse! <= newMaxDays).length;
-
-    const dueReorder = customersWithLapse.filter((c) =>
-      c.lapse! > newMaxDays && c.lapse! <= reorderMaxDays
-    ).length;
-
-    const lapsed = customersWithLapse.filter((c) =>
-      c.lapse! > reorderMaxDays && c.lapse! <= lapsedMaxDays
-    ).length;
-
-    const lost = customersWithLapse.filter((c) => c.lapse! > lapsedMaxDays).length;
-
-    // Purchased = customers with total spent > 0
-    const purchased = filteredCustomers.filter((c) =>
-      c.totalSpent && parseFloat(c.totalSpent) > 0
-    ).length;
-
-    // Prospects = customers with 0 orders
-    const prospects = filteredCustomers.filter((c) => (c.ordersCount || 0) === 0).length;
-
-    return {
-      totalCustomers,
-      purchased,
-      prospects,
-      subscribers,
-      emailSubscribers,
-      ltv,
-      avgOrdersPerCustomer,
-      avgOrderValue,
-      newCustomers,
-      dueReorder,
-      lapsed,
-      lost,
-    };
-  }, [filteredCustomers, lifecycleSettings]);
 
   if (loading) {
     return (
@@ -825,64 +780,72 @@ export default function CustomersPage() {
         </div>
       </div>
 
-      {/* Scorecards */}
+      {/* Scorecards — powered by DB aggregates, load independently */}
       <ScorecardGrid scrollable>
-        <Scorecard
-          title="Total Customers"
-          value={stats.totalCustomers.toLocaleString()}
-        />
-        <Scorecard
-          title="Purchased"
-          value={stats.purchased.toLocaleString()}
-          subtitle={`${stats.totalCustomers > 0 ? Math.round((stats.purchased / stats.totalCustomers) * 100) : 0}% of total`}
-        />
-        <Scorecard
-          title="Prospects"
-          value={stats.prospects.toLocaleString()}
-          subtitle={`${stats.totalCustomers > 0 ? Math.round((stats.prospects / stats.totalCustomers) * 100) : 0}% of total`}
-        />
-        <Scorecard
-          title="Subscribers"
-          value={stats.subscribers.toLocaleString()}
-          subtitle={`${stats.totalCustomers > 0 ? Math.round((stats.subscribers / stats.totalCustomers) * 100) : 0}% of total`}
-        />
-        <Scorecard
-          title="Email Subscribers"
-          value={stats.emailSubscribers.toLocaleString()}
-          subtitle={`${stats.totalCustomers > 0 ? Math.round((stats.emailSubscribers / stats.totalCustomers) * 100) : 0}% of total`}
-        />
-        <Scorecard
-          title="LTV"
-          value={`£${stats.ltv.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        />
-        <Scorecard
-          title="Avg Orders / Customer"
-          value={stats.avgOrdersPerCustomer.toFixed(1)}
-        />
-        <Scorecard
-          title="AOV"
-          value={`£${stats.avgOrderValue.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`}
-        />
-        <Scorecard
-          title="New"
-          value={stats.newCustomers.toLocaleString()}
-          subtitle={`≤${lifecycleSettings.newMaxDays} days`}
-        />
-        <Scorecard
-          title="Due Reorder"
-          value={stats.dueReorder.toLocaleString()}
-          subtitle={`${lifecycleSettings.newMaxDays + 1}-${lifecycleSettings.reorderMaxDays} days`}
-        />
-        <Scorecard
-          title="Lapsed"
-          value={stats.lapsed.toLocaleString()}
-          subtitle={`${lifecycleSettings.reorderMaxDays + 1}-${lifecycleSettings.lapsedMaxDays} days`}
-        />
-        <Scorecard
-          title="Lost"
-          value={stats.lost.toLocaleString()}
-          subtitle={`>${lifecycleSettings.lapsedMaxDays} days`}
-        />
+        {statsLoading || !dbStats ? (
+          [...Array(12)].map((_, i) => (
+            <div key={i} className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 w-40">
+              <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-3" />
+              <div className="h-7 w-14 bg-zinc-300 dark:bg-zinc-700 rounded animate-pulse" />
+            </div>
+          ))
+        ) : (
+          <>
+            <Scorecard title="Total Customers" value={dbStats.total.toLocaleString()} />
+            <Scorecard
+              title="Purchased"
+              value={dbStats.purchased.toLocaleString()}
+              subtitle={`${dbStats.total > 0 ? Math.round((dbStats.purchased / dbStats.total) * 100) : 0}% of total`}
+            />
+            <Scorecard
+              title="Prospects"
+              value={dbStats.prospects.toLocaleString()}
+              subtitle={`${dbStats.total > 0 ? Math.round((dbStats.prospects / dbStats.total) * 100) : 0}% of total`}
+            />
+            <Scorecard
+              title="Subscribers"
+              value={dbStats.activeSubscribers.toLocaleString()}
+              subtitle={`${dbStats.total > 0 ? Math.round((dbStats.activeSubscribers / dbStats.total) * 100) : 0}% of total`}
+            />
+            <Scorecard
+              title="Email Subscribers"
+              value={dbStats.emailSubscribers.toLocaleString()}
+              subtitle={`${dbStats.total > 0 ? Math.round((dbStats.emailSubscribers / dbStats.total) * 100) : 0}% of total`}
+            />
+            <Scorecard
+              title="LTV"
+              value={dbStats.avgTotalSpent != null ? `£${dbStats.avgTotalSpent.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+            />
+            <Scorecard
+              title="Avg Orders / Customer"
+              value={dbStats.avgOrdersCount != null ? dbStats.avgOrdersCount.toFixed(1) : "-"}
+            />
+            <Scorecard
+              title="Avg Days Between Orders"
+              value={dbStats.avgLapseDays != null ? `${dbStats.avgLapseDays}d` : "-"}
+            />
+            <Scorecard
+              title="New"
+              value={dbStats.lifecycle.new.toLocaleString()}
+              subtitle={`≤${lifecycleSettings.newMaxDays} days`}
+            />
+            <Scorecard
+              title="Due Reorder"
+              value={dbStats.lifecycle.reorder.toLocaleString()}
+              subtitle={`${lifecycleSettings.newMaxDays + 1}-${lifecycleSettings.reorderMaxDays} days`}
+            />
+            <Scorecard
+              title="Lapsed"
+              value={dbStats.lifecycle.lapsed.toLocaleString()}
+              subtitle={`${lifecycleSettings.reorderMaxDays + 1}-${lifecycleSettings.lapsedMaxDays} days`}
+            />
+            <Scorecard
+              title="Lost"
+              value={dbStats.lifecycle.lost.toLocaleString()}
+              subtitle={`>${lifecycleSettings.lapsedMaxDays} days`}
+            />
+          </>
+        )}
       </ScorecardGrid>
 
       {/* Filter Pills */}

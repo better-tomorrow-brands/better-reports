@@ -132,10 +132,13 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Shopify not configured for this org" }, { status: 400 });
     }
 
-    // No status filter — Shopify Admin GraphQL returns all orders by default
-    // (REST API defaults to status=open, but GraphQL does not)
+    // Explicitly include all statuses — Shopify defaults to open-only without this.
+    // Valid values: open, closed, cancelled, not_closed.
+    // Use NOT status:open to capture closed+cancelled, combined with open separately.
+    const statusFilter = "status:open OR status:closed OR status:cancelled";
     const dateFilter = startDate ? `created_at:>=${startDate}` : "";
-    const ordersQueryClause = dateFilter ? `, query: "${dateFilter}"` : "";
+    const ordersQuery = [statusFilter, dateFilter].filter(Boolean).join(" ");
+    const ordersQueryClause = `, query: "${ordersQuery}"`;
     const afterClause = cursor ? `, after: "${cursor}"` : "";
 
     const query =
@@ -176,6 +179,11 @@ export async function GET(request: Request) {
             }
           }`;
 
+    console.log(`[backfill/shopify] type=${type} startDate=${startDate ?? "none"} limit=${limit} cursor=${cursor ?? "none"} orgId=${orgId}`);
+    if (type === "orders") {
+      console.log(`[backfill/shopify] orders query filter: ${ordersQuery}`);
+    }
+
     const response = await fetch(
       `https://${settings.store_domain}/admin/api/2024-10/graphql.json`,
       {
@@ -191,6 +199,7 @@ export async function GET(request: Request) {
     const data: GraphQLResponse = await response.json();
 
     if (data.errors) {
+      console.error(`[backfill/shopify] Shopify API errors:`, JSON.stringify(data.errors));
       return NextResponse.json(
         { error: "Shopify API error", details: data.errors[0]?.message },
         { status: 500 }
@@ -205,6 +214,7 @@ export async function GET(request: Request) {
     if (type === "orders") {
       const edges = data.data?.orders?.edges || [];
       pageInfo = data.data?.orders?.pageInfo;
+      console.log(`[backfill/shopify] orders: returned ${edges.length} edges, hasNextPage=${pageInfo?.hasNextPage}, endCursor=${pageInfo?.endCursor ?? "none"}`);
 
       for (const edge of edges) {
         try {

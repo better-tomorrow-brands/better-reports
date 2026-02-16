@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
@@ -112,14 +112,22 @@ export function SessionsChart({ controlsContainer }: { controlsContainer?: HTMLD
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+  const userSetGroupByRef = useRef(false);
 
   if (dateRange !== prevDateRange) {
     setPrevDateRange(dateRange);
-    setGroupBy(suggestGroupBy(dateRange));
+    if (!userSetGroupByRef.current) {
+      setGroupBy(suggestGroupBy(dateRange));
+    }
   }
 
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
+    const stored = localStorage.getItem("chart-sessions-groupby");
+    if (stored === "day" || stored === "week" || stored === "month") {
+      setGroupBy(stored);
+      userSetGroupByRef.current = true;
+    }
   }, []);
 
   const handleSeriesChange = (updated: SeriesConfig[]) => {
@@ -184,7 +192,11 @@ export function SessionsChart({ controlsContainer }: { controlsContainer?: HTMLD
             {groupByOrder.map((g) => (
               <button
                 key={g}
-                onClick={() => setGroupBy(g)}
+                onClick={() => {
+                  setGroupBy(g);
+                  userSetGroupByRef.current = true;
+                  localStorage.setItem("chart-sessions-groupby", g);
+                }}
                 className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
                   groupBy === g
                     ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"

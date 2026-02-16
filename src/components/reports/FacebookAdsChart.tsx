@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { createPortal } from "react-dom";
 import { format, startOfDay, getDaysInMonth, startOfWeek, differenceInDays } from "date-fns";
 import { DateRange } from "react-day-picker";
@@ -113,15 +113,23 @@ export function FacebookAdsChart({ controlsContainer }: { controlsContainer?: HT
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
   const [selectedCampaigns, setSelectedCampaigns] = useState<string[]>([]);
   const [availableCampaigns, setAvailableCampaigns] = useState<{ utmCampaign: string; label: string }[]>([]);
+  const userSetGroupByRef = useRef(false);
 
   if (dateRange !== prevDateRange) {
     setPrevDateRange(dateRange);
-    setGroupBy(suggestGroupBy(dateRange));
+    if (!userSetGroupByRef.current) {
+      setGroupBy(suggestGroupBy(dateRange));
+    }
   }
 
   // Load persisted config on mount
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
+    const stored = localStorage.getItem("chart-facebook-ads-groupby");
+    if (stored === "day" || stored === "week" || stored === "month") {
+      setGroupBy(stored);
+      userSetGroupByRef.current = true;
+    }
   }, []);
 
   const handleSeriesChange = (updated: SeriesConfig[]) => {
@@ -224,7 +232,11 @@ export function FacebookAdsChart({ controlsContainer }: { controlsContainer?: HT
             {groupByOrder.map((g) => (
               <button
                 key={g}
-                onClick={() => setGroupBy(g)}
+                onClick={() => {
+                  setGroupBy(g);
+                  userSetGroupByRef.current = true;
+                  localStorage.setItem("chart-facebook-ads-groupby", g);
+                }}
                 className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
                   groupBy === g
                     ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"

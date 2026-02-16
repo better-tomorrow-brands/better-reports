@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets, suggestGroupBy } from "@/components/DateRangePicker";
@@ -50,14 +50,22 @@ export default function ReportsPage() {
   const [groupBy, setGroupBy] = useState<GroupBy>(() => suggestGroupBy(dateRange));
   const [prevDateRange, setPrevDateRange] = useState(dateRange);
   const [seriesConfig, setSeriesConfig] = useState<SeriesConfig[]>(DEFAULT_SERIES);
+  const userSetGroupByRef = useRef(false);
 
   if (dateRange !== prevDateRange) {
     setPrevDateRange(dateRange);
-    setGroupBy(suggestGroupBy(dateRange));
+    if (!userSetGroupByRef.current) {
+      setGroupBy(suggestGroupBy(dateRange));
+    }
   }
 
   useEffect(() => {
     setSeriesConfig(loadSeriesConfig());
+    const stored = localStorage.getItem("chart-amazon-groupby");
+    if (stored === "day" || stored === "week" || stored === "month") {
+      setGroupBy(stored);
+      userSetGroupByRef.current = true;
+    }
   }, []);
 
   const handleSeriesChange = useCallback((updated: SeriesConfig[]) => {
@@ -120,7 +128,11 @@ export default function ReportsPage() {
                   {groupByOrder.map((g) => (
                     <button
                       key={g}
-                      onClick={() => setGroupBy(g)}
+                      onClick={() => {
+                        setGroupBy(g);
+                        userSetGroupByRef.current = true;
+                        localStorage.setItem("chart-amazon-groupby", g);
+                      }}
                       className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
                         groupBy === g
                           ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"

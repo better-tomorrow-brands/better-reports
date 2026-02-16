@@ -4,8 +4,11 @@ import { auth } from "@clerk/nextjs/server";
 import { requireOrgAccess } from "@/lib/org-auth";
 import { getShopifySettings } from "@/lib/settings";
 
+// read_all_orders is a protected scope automatically granted to admin-created custom apps.
+// It is not shown in the standard scope picker but is valid and required to access
+// orders older than 60 days. Must be used alongside read_orders or write_orders.
 const SCOPES =
-  "read_products,read_analytics,write_customers,write_orders,write_discounts,write_price_rules";
+  "read_orders,read_all_orders,read_products,read_analytics,write_customers,write_orders,write_discounts,write_price_rules";
 
 export async function GET(request: Request) {
   const { userId } = await auth();

@@ -322,7 +322,7 @@ export default function OrdersPage() {
 
   const fetchOrders = useCallback(() => {
     if (!currentOrg) return;
-    apiFetch("/api/orders?limit=1000")
+    apiFetch("/api/orders?limit=9999")
       .then((res) => res.json())
       .then((data) => {
         if (data.error) {
