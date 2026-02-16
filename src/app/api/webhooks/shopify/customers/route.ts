@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
-import { createHmac } from "crypto";
 import { getShopifySettings, getOrgIdByStoreDomain } from "@/lib/settings";
 import { verifyShopifyHmac } from "@/lib/shopify-orders";
 import { db } from "@/lib/db";
@@ -53,8 +52,7 @@ export async function POST(request: Request) {
   }
 
   if (!verifyShopifyHmac(body, hmacHeader, settings.webhook_secret)) {
-    const computed = createHmac("sha256", settings.webhook_secret).update(body, "utf8").digest("base64");
-    console.error(`Invalid HMAC signature for org=${orgId} secret_prefix=${settings.webhook_secret.slice(0, 8)} body_len=${body.length} received=${hmacHeader.slice(0, 16)} computed=${computed.slice(0, 16)}`);
+    console.error(`Invalid HMAC signature for org=${orgId}`);
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
