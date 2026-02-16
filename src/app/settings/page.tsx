@@ -596,7 +596,7 @@ export default function SettingsPage() {
                 savedValue={savedShopify.webhook_secret}
                 onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
                 placeholder="e.g. fb0250d6cedb1d64..."
-                helpText="Found in Shopify Partner Dashboard → Apps → [your app] → Webhooks → Client secret."
+                helpText="Found in Shopify Admin → Settings → Notifications → Webhooks → show the signing secret."
                 mono
               />
             </div>
