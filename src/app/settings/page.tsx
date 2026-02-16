@@ -528,6 +528,7 @@ export default function SettingsPage() {
               onChange={(e) => setStartDate(e.target.value)}
               className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
             />
+            <p className="text-xs text-zinc-400 mt-1">Leave empty to import all records.</p>
           </div>
 
           <div className="flex flex-col gap-3">
