@@ -69,14 +69,14 @@ export async function GET(request: Request) {
 
   const { orgId } = cookieState;
 
-  // Load client credentials from settings
-  const shopifySettings = await getShopifySettings(orgId);
-  if (!shopifySettings?.client_id || !shopifySettings?.client_secret) {
-    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_credentials`);
+  const clientId = process.env.SHOPIFY_CLIENT_ID;
+  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
+  if (!clientId || !clientSecret) {
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_env`);
   }
 
   // Verify Shopify's HMAC on the callback params
-  if (!verifyShopifyHmac(searchParams, shopifySettings.client_secret)) {
+  if (!verifyShopifyHmac(searchParams, clientSecret)) {
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=invalid_hmac`);
   }
 
@@ -88,11 +88,7 @@ export async function GET(request: Request) {
       {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          client_id: shopifySettings.client_id,
-          client_secret: shopifySettings.client_secret,
-          code,
-        }),
+        body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
       }
     );
 
@@ -112,13 +108,14 @@ export async function GET(request: Request) {
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=token_exchange`);
   }
 
-  // Save access token + store domain back to settings
+  // Save access token + store domain to org settings
   // webhook_secret = client_secret (Shopify uses this for HMAC on partner app webhooks)
+  const existing = await getShopifySettings(orgId);
   await saveShopifySettings(orgId, {
-    ...shopifySettings,
+    ...(existing ?? {}),
     store_domain: shop,
     access_token: accessToken,
-    webhook_secret: shopifySettings.client_secret,
+    webhook_secret: clientSecret,
   });
 
   // Clear the state cookie and redirect to settings

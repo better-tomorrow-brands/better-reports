@@ -10,8 +10,6 @@ export interface MetaSettings {
 }
 
 export interface ShopifySettings {
-  client_id: string;
-  client_secret: string;
   store_domain: string;
   access_token: string;
   webhook_secret: string;
