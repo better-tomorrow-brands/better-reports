@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, type NextRequest } from "next/server";
 import { createHmac } from "crypto";
 import { getShopifySettings, saveShopifySettings } from "@/lib/settings";
 
@@ -27,7 +27,7 @@ function verifyShopifyHmac(
   return digest.length === hmac.length && digest === hmac;
 }
 
-export async function GET(request: Request) {
+export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const code = searchParams.get("code");
   const shop = searchParams.get("shop");
@@ -36,34 +36,32 @@ export async function GET(request: Request) {
   const appUrl =
     process.env.NEXT_PUBLIC_APP_URL ?? "https://app.better-tomorrow.co";
 
+  console.log(`[shopify/callback] shop=${shop} state=${state} code=${!!code}`);
+
   if (!code || !shop || !state) {
+    console.error("[shopify/callback] Missing params");
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_params`);
   }
 
   // Read and validate the state cookie
-  const cookieHeader = request.headers.get("cookie") ?? "";
-  const cookieMatch = cookieHeader
-    .split(";")
-    .map((c) => c.trim())
-    .find((c) => c.startsWith("shopify_oauth_state="));
+  const rawCookie = request.cookies.get("shopify_oauth_state")?.value;
+  console.log(`[shopify/callback] cookie present=${!!rawCookie}`);
 
-  if (!cookieMatch) {
+  if (!rawCookie) {
+    console.error("[shopify/callback] Missing state cookie");
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_state`);
   }
 
   let cookieState: { nonce: string; orgId: number; shop: string };
   try {
-    cookieState = JSON.parse(
-      decodeURIComponent(cookieMatch.split("=").slice(1).join("="))
-    );
+    cookieState = JSON.parse(rawCookie);
   } catch {
+    console.error("[shopify/callback] Failed to parse state cookie");
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=invalid_state`);
   }
 
-  if (
-    state !== cookieState.nonce ||
-    shop !== cookieState.shop
-  ) {
+  if (state !== cookieState.nonce || shop !== cookieState.shop) {
+    console.error(`[shopify/callback] State mismatch: url=${state} cookie=${cookieState.nonce}`);
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=state_mismatch`);
   }
 
