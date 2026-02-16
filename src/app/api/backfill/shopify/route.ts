@@ -132,13 +132,15 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Shopify not configured for this org" }, { status: 400 });
     }
 
-    const dateFilter = startDate ? `created_at:>=${startDate}` : "";
+    const dateFilter = startDate
+      ? `status:any created_at:>=${startDate}`
+      : "status:any";
     const afterClause = cursor ? `, after: "${cursor}"` : "";
 
     const query =
       type === "orders"
         ? `{
-            orders(first: ${limit}, sortKey: CREATED_AT, reverse: false${dateFilter ? `, query: "${dateFilter}"` : ""}${afterClause}) {
+            orders(first: ${limit}, sortKey: CREATED_AT, reverse: false, query: "${dateFilter}"${afterClause}) {
               edges {
                 node {
                   id legacyResourceId name email createdAt displayFulfillmentStatus
@@ -158,7 +160,7 @@ export async function GET(request: Request) {
             }
           }`
         : `{
-            customers(first: ${limit}, sortKey: CREATED_AT, reverse: false${dateFilter ? `, query: "${dateFilter}"` : ""}${afterClause}) {
+            customers(first: ${limit}, sortKey: CREATED_AT, reverse: false${startDate ? `, query: "created_at:>=${startDate}"` : ""}${afterClause}) {
               edges {
                 node {
                   id legacyResourceId firstName lastName email phone
