@@ -468,6 +468,95 @@ export default function SettingsPage() {
     );
   }
 
+  // ── Backfill Section ──────────────────────────────────────────────────────
+  function BackfillSection({
+    orgId,
+    apiFetch,
+  }: {
+    orgId: number | undefined;
+    apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  }) {
+    const [startDate, setStartDate] = useState("2025-01-01");
+    const [ordersState, setOrdersState] = useState<{ running: boolean; count: number; done: boolean; error: string | null }>({ running: false, count: 0, done: false, error: null });
+    const [customersState, setCustomersState] = useState<{ running: boolean; count: number; done: boolean; error: string | null }>({ running: false, count: 0, done: false, error: null });
+
+    async function runBackfill(type: "orders" | "customers") {
+      if (!orgId) return;
+      const setState = type === "orders" ? setOrdersState : setCustomersState;
+      setState({ running: true, count: 0, done: false, error: null });
+
+      let cursor: string | null = null;
+      let total = 0;
+
+      try {
+        while (true) {
+          const params = new URLSearchParams({ type, startDate });
+          if (cursor) params.set("cursor", cursor);
+
+          const res = await apiFetch(`/api/backfill/shopify?${params}`);
+          if (!res.ok) {
+            const err = await res.json().catch(() => ({}));
+            throw new Error(err.error || `HTTP ${res.status}`);
+          }
+
+          const data = await res.json();
+          total += data.upserted ?? 0;
+          setState({ running: true, count: total, done: false, error: null });
+
+          if (!data.hasNextPage) break;
+          cursor = data.endCursor;
+        }
+        setState({ running: false, count: total, done: true, error: null });
+      } catch (err) {
+        setState({ running: false, count: total, done: false, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
+
+    return (
+      <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+        <h2 className="text-lg font-semibold mb-1">Data Backfill</h2>
+        <p className="text-sm text-zinc-500 mb-4">
+          Import historical data from Shopify from the selected start date.
+        </p>
+
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-1">Start Date</label>
+            <input
+              type="date"
+              value={startDate}
+              onChange={(e) => setStartDate(e.target.value)}
+              className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+            />
+          </div>
+
+          <div className="flex flex-col gap-3">
+            {(["orders", "customers"] as const).map((type) => {
+              const state = type === "orders" ? ordersState : customersState;
+              const label = type === "orders" ? "Orders" : "Customers";
+              return (
+                <div key={type} className="flex items-center gap-3">
+                  <button
+                    onClick={() => runBackfill(type)}
+                    disabled={state.running || ordersState.running || customersState.running}
+                    className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50 w-40"
+                  >
+                    {state.running ? `Importing...` : `Backfill ${label}`}
+                  </button>
+                  <span className="text-sm text-zinc-500">
+                    {state.running && `${state.count.toLocaleString()} ${label.toLowerCase()} imported`}
+                    {state.done && <span className="text-green-600 dark:text-green-400">{state.count.toLocaleString()} {label.toLowerCase()} imported</span>}
+                    {state.error && <span className="text-red-600 dark:text-red-400">Error: {state.error}</span>}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   if (loading) {
     return (
       <div className="max-w-2xl mx-auto p-6">
@@ -654,6 +743,11 @@ export default function SettingsPage() {
               </div>
             )}
           </section>
+
+          {/* Data Backfill - Super Admin Only */}
+          {userRole === "super_admin" && (
+            <BackfillSection orgId={currentOrg?.id} apiFetch={apiFetch} />
+          )}
 
           {/* Lifecycle Settings - Super Admin Only */}
           {userRole === "super_admin" && (
