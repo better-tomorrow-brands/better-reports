@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { Eye, EyeOff, Pencil, X } from "lucide-react";
@@ -14,6 +15,8 @@ interface MetaForm {
 }
 
 interface ShopifyForm {
+  client_id: string;
+  client_secret: string;
   store_domain: string;
   access_token: string;
   webhook_secret: string;
@@ -42,6 +45,7 @@ interface AmazonAdsForm {
 export default function SettingsPage() {
   const { apiFetch, currentOrg } = useOrg();
   const { theme, setTheme } = useTheme();
+  const searchParams = useSearchParams();
   const [activeTab, setActiveTab] = useState<SettingsTab>("shopify");
   const [meta, setMeta] = useState<MetaForm>({
     phone_number_id: "",
@@ -49,6 +53,8 @@ export default function SettingsPage() {
     access_token: "",
   });
   const [shopify, setShopify] = useState<ShopifyForm>({
+    client_id: "",
+    client_secret: "",
     store_domain: "",
     access_token: "",
     webhook_secret: "",
@@ -85,7 +91,7 @@ export default function SettingsPage() {
 
   // Saved snapshots — track what's persisted so we can detect changes & lock fields
   const [savedMeta, setSavedMeta] = useState<MetaForm>({ phone_number_id: "", waba_id: "", access_token: "" });
-  const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ store_domain: "", access_token: "", webhook_secret: "" });
+  const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
   const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
   const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
 
@@ -168,6 +174,22 @@ export default function SettingsPage() {
       .catch(() => setMessage({ type: "error", text: "Failed to load settings" }))
       .finally(() => setLoading(false));
   }, [apiFetch, currentOrg]);
+
+  // Handle OAuth redirect result
+  useEffect(() => {
+    const shopifyParam = searchParams.get("shopify");
+    if (shopifyParam === "connected") {
+      setMessage({ type: "success", text: "Shopify connected successfully." });
+      setActiveTab("shopify");
+      // Clean the query param from the URL
+      window.history.replaceState({}, "", "/settings");
+    } else if (shopifyParam === "error") {
+      const reason = searchParams.get("reason") ?? "unknown";
+      setMessage({ type: "error", text: `Shopify connection failed (${reason}). Please try again.` });
+      setActiveTab("shopify");
+      window.history.replaceState({}, "", "/settings");
+    }
+  }, [searchParams]);
 
   async function handleSaveMeta() {
     setSavingMeta(true);
@@ -521,44 +543,26 @@ export default function SettingsPage() {
 
             <div className="flex flex-col gap-4">
               <LockedInput
-                fieldKey="shopify.store_domain"
-                label="Store Domain"
-                value={shopify.store_domain}
-                savedValue={savedShopify.store_domain}
-                onChange={(v) => setShopify({ ...shopify, store_domain: v })}
-                placeholder="e.g. yourstore.myshopify.com"
-                helpText="Your Shopify store domain (without https://)."
-              />
-
-              <LockedInput
-                fieldKey="shopify.access_token"
-                label="Access Token"
-                value={shopify.access_token}
-                savedValue={savedShopify.access_token}
-                onChange={(v) => setShopify({ ...shopify, access_token: v })}
-                placeholder="shpat_xxxxx"
-                helpText="Admin API access token from your Shopify custom app. In Shopify Admin → Apps → Develop apps → your app → API credentials."
+                fieldKey="shopify.client_id"
+                label="Client ID"
+                value={shopify.client_id}
+                savedValue={savedShopify.client_id}
+                onChange={(v) => setShopify({ ...shopify, client_id: v })}
+                placeholder="Client ID from Shopify Partner Dashboard"
+                helpText="Found in Shopify Partner Dashboard → Apps → [your app] → API credentials → Client ID."
                 mono
               />
 
               <LockedInput
-                fieldKey="shopify.webhook_secret"
-                label="Webhook Signing Secret"
-                value={shopify.webhook_secret}
-                savedValue={savedShopify.webhook_secret}
-                onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
-                placeholder="Webhook signing secret from Shopify"
-                helpText="Found in Shopify Admin → Settings → Notifications → Webhooks (at the bottom of the page)."
+                fieldKey="shopify.client_secret"
+                label="Client Secret"
+                value={shopify.client_secret}
+                savedValue={savedShopify.client_secret}
+                onChange={(v) => setShopify({ ...shopify, client_secret: v })}
+                placeholder="shpss_xxxxx"
+                helpText="Found in Shopify Partner Dashboard → Apps → [your app] → Settings → Secret."
                 mono
               />
-
-              <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
-                <label className="block text-sm font-medium mb-1">Webhook URL</label>
-                <code className="text-xs break-all">{webhookUrl}</code>
-                <p className="text-xs text-zinc-400 mt-2">
-                  Add this URL in Shopify Admin → Settings → Notifications → Webhooks for &quot;Order creation&quot; and &quot;Order update&quot; events (JSON format).
-                </p>
-              </div>
             </div>
 
             <button
@@ -568,6 +572,80 @@ export default function SettingsPage() {
             >
               {savingShopify ? "Saving..." : "Save"}
             </button>
+
+            {/* OAuth Connect */}
+            {savedShopify.client_id && savedShopify.client_secret && (
+              <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700 flex flex-col gap-4">
+                <div>
+                  <h3 className="text-sm font-semibold mb-1">Connect Store</h3>
+                  <p className="text-xs text-zinc-500 mb-3">
+                    Enter the store domain and click Connect to complete OAuth and automatically retrieve the access token.
+                  </p>
+                  {savedShopify.access_token ? (
+                    <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
+                      <span>Connected: {savedShopify.store_domain}</span>
+                    </div>
+                  ) : null}
+                </div>
+
+                <LockedInput
+                  fieldKey="shopify.store_domain"
+                  label="Store Domain"
+                  value={shopify.store_domain}
+                  savedValue={savedShopify.store_domain}
+                  onChange={(v) => setShopify({ ...shopify, store_domain: v })}
+                  placeholder="e.g. yourstore.myshopify.com"
+                  helpText="Your Shopify store domain (without https://)."
+                />
+
+                <button
+                  onClick={() => {
+                    const domain = shopify.store_domain || savedShopify.store_domain;
+                    if (!domain || !currentOrg) return;
+                    window.location.href = `/api/auth/shopify?shop=${encodeURIComponent(domain)}&orgId=${currentOrg.id}`;
+                  }}
+                  disabled={!shopify.store_domain && !savedShopify.store_domain}
+                  className="self-start px-4 py-2 bg-[#96BF48] hover:bg-[#85a93f] text-white rounded-md text-sm font-medium disabled:opacity-50"
+                >
+                  {savedShopify.access_token ? "Reconnect with Shopify" : "Connect with Shopify"}
+                </button>
+
+                {/* Read-only token info after OAuth */}
+                {savedShopify.access_token && (
+                  <div className="flex flex-col gap-4 pt-2">
+                    <LockedInput
+                      fieldKey="shopify.access_token"
+                      label="Access Token"
+                      value={shopify.access_token}
+                      savedValue={savedShopify.access_token}
+                      onChange={(v) => setShopify({ ...shopify, access_token: v })}
+                      placeholder="shpat_xxxxx"
+                      helpText="Auto-populated via OAuth. You can also set this manually."
+                      mono
+                    />
+
+                    <LockedInput
+                      fieldKey="shopify.webhook_secret"
+                      label="Webhook Signing Secret"
+                      value={shopify.webhook_secret}
+                      savedValue={savedShopify.webhook_secret}
+                      onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
+                      placeholder="Auto-populated via OAuth"
+                      helpText="Auto-populated via OAuth (uses Client Secret for HMAC verification)."
+                      mono
+                    />
+
+                    <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
+                      <label className="block text-sm font-medium mb-1">Webhook URL</label>
+                      <code className="text-xs break-all">{webhookUrl}</code>
+                      <p className="text-xs text-zinc-400 mt-2">
+                        Register this URL in Shopify Partner Dashboard → [your app] → Webhooks for &quot;Order creation&quot; and &quot;Order update&quot; events (JSON format).
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </section>
 
           {/* Lifecycle Settings - Super Admin Only */}
