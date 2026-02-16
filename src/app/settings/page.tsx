@@ -144,6 +144,21 @@ export default function SettingsPage() {
 
   useEffect(() => {
     if (!currentOrg) return;
+
+    // Reset state when org changes so stale values don't persist
+    setLoading(true);
+    setMessage(null);
+    setMeta({ phone_number_id: "", waba_id: "", access_token: "" });
+    setSavedMeta({ phone_number_id: "", waba_id: "", access_token: "" });
+    setShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
+    setSavedShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
+    setAmazon({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
+    setSavedAmazon({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
+    setAmazonAds({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
+    setSavedAmazonAds({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
+    setEditingFields(new Set());
+    setVisibleFields(new Set());
+
     Promise.all([
       apiFetch("/api/settings").then((res) => res.json()),
       apiFetch("/api/settings/lifecycle").then((res) => res.json()),
@@ -159,12 +174,12 @@ export default function SettingsPage() {
           setSavedShopify(settingsData.shopify);
         }
         if (settingsData.amazon) {
-          const merged = { ...amazon, ...settingsData.amazon };
+          const merged = { client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P", ...settingsData.amazon };
           setAmazon(merged);
           setSavedAmazon(merged);
         }
         if (settingsData.amazon_ads) {
-          const merged = { ...amazonAds, ...settingsData.amazon_ads };
+          const merged = { client_id: "", client_secret: "", refresh_token: "", profile_id: "", ...settingsData.amazon_ads };
           setAmazonAds(merged);
           setSavedAmazonAds(merged);
         }
