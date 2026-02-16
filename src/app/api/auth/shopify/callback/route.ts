@@ -113,12 +113,12 @@ export async function GET(request: NextRequest) {
   console.log(`[shopify/callback] Token exchanged, saving settings for org=${orgId}`);
 
   // Save access token + store domain to org settings
-  // webhook_secret = client_secret (Shopify uses this for HMAC on partner app webhooks)
+  // webhook_secret is NOT client_secret — it's a separate signing secret from
+  // Partner Dashboard → Webhooks → Client secret. Preserve whatever the user has set.
   await saveShopifySettings(orgId, {
     ...shopifySettings,
     store_domain: shop,
     access_token: accessToken,
-    webhook_secret: clientSecret,
   });
 
   // Clear the state cookie and redirect to settings

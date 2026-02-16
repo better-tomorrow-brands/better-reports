@@ -588,6 +588,17 @@ export default function SettingsPage() {
                 placeholder="e.g. yourstore.myshopify.com"
                 helpText="Your Shopify store domain (without https://)."
               />
+
+              <LockedInput
+                fieldKey="shopify.webhook_secret"
+                label="Webhook Signing Secret"
+                value={shopify.webhook_secret}
+                savedValue={savedShopify.webhook_secret}
+                onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
+                placeholder="e.g. fb0250d6cedb1d64..."
+                helpText="Found in Shopify Partner Dashboard → Apps → [your app] → Webhooks → Client secret."
+                mono
+              />
             </div>
 
             <button
