@@ -76,8 +76,11 @@ export async function GET(request: NextRequest) {
 
   // Verify Shopify's HMAC on the callback params
   if (!verifyShopifyHmac(searchParams, clientSecret)) {
+    console.error("[shopify/callback] HMAC verification failed");
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=invalid_hmac`);
   }
+
+  console.log("[shopify/callback] HMAC verified, exchanging code for token");
 
   // Exchange code for access token
   let accessToken: string;
@@ -106,6 +109,8 @@ export async function GET(request: NextRequest) {
     console.error("Shopify token exchange error:", err);
     return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=token_exchange`);
   }
+
+  console.log(`[shopify/callback] Token exchanged, saving settings for org=${orgId}`);
 
   // Save access token + store domain to org settings
   // webhook_secret = client_secret (Shopify uses this for HMAC on partner app webhooks)

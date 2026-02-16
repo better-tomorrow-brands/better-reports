@@ -52,7 +52,7 @@ export async function POST(request: Request) {
   }
 
   if (!verifyShopifyHmac(body, hmacHeader, settings.webhook_secret)) {
-    console.error("Invalid HMAC signature");
+    console.error(`Invalid HMAC signature for org=${orgId} secret_prefix=${settings.webhook_secret.slice(0, 8)}`);
     return NextResponse.json({ error: "Invalid signature" }, { status: 401 });
   }
 
