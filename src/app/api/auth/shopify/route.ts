@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { randomBytes } from "crypto";
 import { auth } from "@clerk/nextjs/server";
 import { requireOrgAccess } from "@/lib/org-auth";
+import { getShopifySettings } from "@/lib/settings";
 
 const SCOPES =
   "read_products,read_analytics,write_customers,write_orders,write_discounts,write_price_rules";
@@ -10,11 +11,6 @@ export async function GET(request: Request) {
   const { userId } = await auth();
   if (!userId) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
-  }
-
-  const clientId = process.env.SHOPIFY_CLIENT_ID;
-  if (!clientId) {
-    return NextResponse.json({ error: "SHOPIFY_CLIENT_ID not configured" }, { status: 500 });
   }
 
   const { searchParams } = new URL(request.url);
@@ -36,6 +32,14 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 });
   }
 
+  const shopifySettings = await getShopifySettings(orgId);
+  if (!shopifySettings?.client_id || !shopifySettings?.client_secret) {
+    return NextResponse.json(
+      { error: "Shopify client_id and client_secret must be saved in settings before connecting" },
+      { status: 400 }
+    );
+  }
+
   const nonce = randomBytes(16).toString("hex");
 
   const appUrl =
@@ -43,7 +47,7 @@ export async function GET(request: Request) {
   const redirectUri = `${appUrl}/api/auth/shopify/callback`;
 
   const oauthUrl = new URL(`https://${shop}/admin/oauth/authorize`);
-  oauthUrl.searchParams.set("client_id", clientId);
+  oauthUrl.searchParams.set("client_id", shopifySettings.client_id);
   oauthUrl.searchParams.set("scope", SCOPES);
   oauthUrl.searchParams.set("redirect_uri", redirectUri);
   oauthUrl.searchParams.set("state", nonce);

@@ -69,11 +69,12 @@ export async function GET(request: Request) {
 
   const { orgId } = cookieState;
 
-  const clientId = process.env.SHOPIFY_CLIENT_ID;
-  const clientSecret = process.env.SHOPIFY_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_env`);
+  const shopifySettings = await getShopifySettings(orgId);
+  if (!shopifySettings?.client_id || !shopifySettings?.client_secret) {
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_credentials`);
   }
+
+  const { client_id: clientId, client_secret: clientSecret } = shopifySettings;
 
   // Verify Shopify's HMAC on the callback params
   if (!verifyShopifyHmac(searchParams, clientSecret)) {
@@ -110,9 +111,8 @@ export async function GET(request: Request) {
 
   // Save access token + store domain to org settings
   // webhook_secret = client_secret (Shopify uses this for HMAC on partner app webhooks)
-  const existing = await getShopifySettings(orgId);
   await saveShopifySettings(orgId, {
-    ...(existing ?? {}),
+    ...shopifySettings,
     store_domain: shop,
     access_token: accessToken,
     webhook_secret: clientSecret,
