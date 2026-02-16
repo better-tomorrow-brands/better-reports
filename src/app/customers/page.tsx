@@ -125,6 +125,7 @@ function getDisplayValue(value: unknown): string {
 }
 
 const STORAGE_KEY = "customers-visible-columns";
+const PAGE_SIZE = 100;
 
 function getInitialColumns(): Set<string> {
   if (typeof window === "undefined") {
@@ -183,6 +184,9 @@ export default function CustomersPage() {
 
   // Search
   const [search, setSearch] = useState("");
+
+  // Pagination
+  const [page, setPage] = useState(1);
 
   // Row selection
   const [selectedRows, setSelectedRows] = useState<Set<string | number>>(new Set());
@@ -415,6 +419,13 @@ export default function CustomersPage() {
 
     return result;
   }, [customers, filters, dateRange, lapseFilter, lifecycleSettings, sortField, sortDirection, search]);
+
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setPage(1);
+  }, [search, dateRange, filters, lapseFilter, sortField, sortDirection]);
+
+  const pagedCustomers = filteredCustomers.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE);
 
   function toggleColumn(key: string) {
     const newSet = new Set(visibleColumns);
@@ -1096,13 +1107,37 @@ export default function CustomersPage() {
       <div className="page-content">
         <Table
           columns={activeColumns}
-          data={filteredCustomers}
+          data={pagedCustomers}
           rowKey="id"
           emptyMessage={filters.length > 0 ? "No customers match the current filters." : "No customers yet. Run the backfill to import customers from Shopify."}
           selectable
           selectedRows={selectedRows}
           onSelectionChange={setSelectedRows}
         />
+        {filteredCustomers.length > PAGE_SIZE && (
+          <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500">
+            <span>
+              {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filteredCustomers.length).toLocaleString()} of {filteredCustomers.length.toLocaleString()}
+            </span>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                disabled={page === 1}
+                className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Previous
+              </button>
+              <span>{page} / {Math.ceil(filteredCustomers.length / PAGE_SIZE)}</span>
+              <button
+                onClick={() => setPage((p) => Math.min(Math.ceil(filteredCustomers.length / PAGE_SIZE), p + 1))}
+                disabled={page >= Math.ceil(filteredCustomers.length / PAGE_SIZE)}
+                className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Next
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

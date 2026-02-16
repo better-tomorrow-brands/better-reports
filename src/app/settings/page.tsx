@@ -490,7 +490,8 @@ export default function SettingsPage() {
 
       try {
         while (true) {
-          const params = new URLSearchParams({ type, startDate });
+          const params = new URLSearchParams({ type });
+          if (startDate) params.set("startDate", startDate);
           if (cursor) params.set("cursor", cursor);
 
           const res = await apiFetch(`/api/backfill/shopify?${params}`);

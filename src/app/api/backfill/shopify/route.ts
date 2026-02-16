@@ -123,7 +123,7 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "type must be 'orders' or 'customers'" }, { status: 400 });
     }
 
-    const startDate = url.searchParams.get("startDate") || "2025-01-01";
+    const startDate = url.searchParams.get("startDate") || null;
     const limit = Math.min(parseInt(url.searchParams.get("limit") || "50"), 250);
     const cursor = url.searchParams.get("cursor") || null;
 
@@ -132,15 +132,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Shopify not configured for this org" }, { status: 400 });
     }
 
-    const dateFilter = startDate
-      ? `status:any created_at:>=${startDate}`
-      : "status:any";
+    // No status filter — Shopify Admin GraphQL returns all orders by default
+    // (REST API defaults to status=open, but GraphQL does not)
+    const dateFilter = startDate ? `created_at:>=${startDate}` : "";
+    const ordersQueryClause = dateFilter ? `, query: "${dateFilter}"` : "";
     const afterClause = cursor ? `, after: "${cursor}"` : "";
 
     const query =
       type === "orders"
         ? `{
-            orders(first: ${limit}, sortKey: CREATED_AT, reverse: false, query: "${dateFilter}"${afterClause}) {
+            orders(first: ${limit}, sortKey: CREATED_AT, reverse: false${ordersQueryClause}${afterClause}) {
               edges {
                 node {
                   id legacyResourceId name email createdAt displayFulfillmentStatus
