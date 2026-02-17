@@ -4,6 +4,7 @@ import {
   getShopifySettings, saveShopifySettings,
   getAmazonSettings, saveAmazonSettings,
   getAmazonAdsSettings, saveAmazonAdsSettings,
+  getFacebookAdsSettings, saveFacebookAdsSettings,
   getPosthogSettings, savePosthogSettings,
   getPreferencesSettings, savePreferencesSettings,
 } from "@/lib/settings";
@@ -13,11 +14,12 @@ export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
 
-    const [meta, shopify, amazon, amazonAds, posthog, preferences] = await Promise.all([
+    const [meta, shopify, amazon, amazonAds, facebookAds, posthog, preferences] = await Promise.all([
       getMetaSettings(orgId),
       getShopifySettings(orgId),
       getAmazonSettings(orgId),
       getAmazonAdsSettings(orgId),
+      getFacebookAdsSettings(orgId),
       getPosthogSettings(orgId),
       getPreferencesSettings(orgId),
     ]);
@@ -77,7 +79,16 @@ export async function GET(request: Request) {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, posthog: maskedPosthog, preferences: preferences ?? { displayCurrency: "USD" } });
+    const maskedFacebookAds = facebookAds
+      ? {
+          ...facebookAds,
+          access_token: facebookAds.access_token
+            ? `${facebookAds.access_token.slice(0, 10)}...${facebookAds.access_token.slice(-4)}`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, facebook_ads: maskedFacebookAds, posthog: maskedPosthog, preferences: preferences ?? { displayCurrency: "USD" } });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -138,6 +149,14 @@ export async function POST(request: Request) {
         if (existing) body.amazon_ads.refresh_token = existing.refresh_token;
       }
       await saveAmazonAdsSettings(orgId, body.amazon_ads);
+    }
+
+    if (body.facebook_ads) {
+      if (body.facebook_ads.access_token?.includes("...")) {
+        const existing = await getFacebookAdsSettings(orgId);
+        if (existing) body.facebook_ads.access_token = existing.access_token;
+      }
+      await saveFacebookAdsSettings(orgId, body.facebook_ads);
     }
 
     if (body.posthog) {

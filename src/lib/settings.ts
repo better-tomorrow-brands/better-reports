@@ -31,6 +31,11 @@ export interface AmazonAdsSettings {
   profile_id: string; // Amazon Advertising profile ID
 }
 
+export interface FacebookAdsSettings {
+  access_token: string;
+  ad_account_id: string; // e.g. act_123456789
+}
+
 export interface PosthogSettings {
   api_key: string;
   project_id: string;
@@ -116,6 +121,16 @@ export async function getAmazonAdsSettings(orgId: number): Promise<AmazonAdsSett
 
 export async function saveAmazonAdsSettings(orgId: number, amazonAds: AmazonAdsSettings): Promise<void> {
   await setSetting(orgId, "amazon_ads", JSON.stringify(amazonAds));
+}
+
+export async function getFacebookAdsSettings(orgId: number): Promise<FacebookAdsSettings | null> {
+  const raw = await getSetting(orgId, "facebook_ads");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function saveFacebookAdsSettings(orgId: number, data: FacebookAdsSettings): Promise<void> {
+  await setSetting(orgId, "facebook_ads", JSON.stringify(data));
 }
 
 export async function getPosthogSettings(orgId: number): Promise<PosthogSettings | null> {

@@ -1,9 +1,7 @@
 import { sql, and, isNotNull } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { facebookAds, campaignsFcb } from "@/lib/db/schema";
-
-const FACEBOOK_ACCESS_TOKEN = process.env.FACEBOOK_ACCESS_TOKEN;
-const FACEBOOK_AD_ACCOUNT_ID = process.env.FACEBOOK_AD_ACCOUNT_ID;
+import type { FacebookAdsSettings } from "@/lib/settings";
 
 const API_VERSION = 'v21.0';
 
@@ -58,9 +56,9 @@ export interface FacebookAdRow {
   roas: number;
 }
 
-export async function getDailyFacebookAds(date: string): Promise<FacebookAdRow[]> {
-  if (!FACEBOOK_ACCESS_TOKEN || !FACEBOOK_AD_ACCOUNT_ID) {
-    throw new Error('Missing Facebook configuration');
+export async function getDailyFacebookAds(date: string, settings: FacebookAdsSettings): Promise<FacebookAdRow[]> {
+  if (!settings.access_token || !settings.ad_account_id) {
+    throw new Error('Missing Facebook Ads configuration');
   }
 
   const fields = [
@@ -85,13 +83,13 @@ export async function getDailyFacebookAds(date: string): Promise<FacebookAdRow[]
 
   // Build initial URL
   const baseUrl = new URL(
-    `https://graph.facebook.com/${API_VERSION}/${FACEBOOK_AD_ACCOUNT_ID}/insights`
+    `https://graph.facebook.com/${API_VERSION}/${settings.ad_account_id}/insights`
   );
   baseUrl.searchParams.set('fields', fields);
   baseUrl.searchParams.set('time_range', JSON.stringify({ since: date, until: date }));
   baseUrl.searchParams.set('level', 'ad');
   baseUrl.searchParams.set('limit', '500');
-  baseUrl.searchParams.set('access_token', FACEBOOK_ACCESS_TOKEN);
+  baseUrl.searchParams.set('access_token', settings.access_token);
 
   let url: string = baseUrl.toString();
 

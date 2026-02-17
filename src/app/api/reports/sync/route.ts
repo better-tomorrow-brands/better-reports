@@ -3,7 +3,7 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { amazonSalesTraffic, facebookAds, posthogAnalytics } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { getAmazonSettings, getAmazonAdsSettings, getPosthogSettings } from "@/lib/settings";
+import { getAmazonSettings, getAmazonAdsSettings, getPosthogSettings, getFacebookAdsSettings } from "@/lib/settings";
 import {
   fetchSalesTrafficReport,
   upsertSalesTraffic,
@@ -162,6 +162,17 @@ async function syncFacebook(orgId: number): Promise<SourceResult> {
     return { status: "error", latestBefore: null, latestAfter: null, datesSynced: 0, errors: [`DB query failed: ${err instanceof Error ? err.message : "Unknown"}`] };
   }
 
+  let fbSettings;
+  try {
+    fbSettings = await getFacebookAdsSettings(orgId);
+  } catch (err) {
+    console.error("syncFacebook: getFacebookAdsSettings failed:", err);
+    return { status: "error", latestBefore, latestAfter: latestBefore, datesSynced: 0, errors: [`Settings decrypt failed: ${err instanceof Error ? err.message : "Unknown"}`] };
+  }
+  if (!fbSettings) {
+    return { status: "skipped", latestBefore, latestAfter: latestBefore, datesSynced: 0, errors: ["No Facebook Ads settings configured"] };
+  }
+
   const today = getTodayDateLondon();
   const fromDate = latestBefore || formatDate(new Date(Date.now() - 30 * 86400000));
   const gapDates = dateRange(fromDate, today);
@@ -188,7 +199,7 @@ async function syncFacebook(orgId: number): Promise<SourceResult> {
   let synced = 0;
   for (const date of dates) {
     try {
-      const ads = await getDailyFacebookAds(date);
+      const ads = await getDailyFacebookAds(date, fbSettings);
       const adsWithUtm = ads.map((ad) => ({
         ...ad,
         utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",

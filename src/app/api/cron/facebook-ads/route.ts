@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon, lookupUtmCampaignsFromDb, upsertFacebookAds } from '@/lib/facebook';
 import { syncFacebookAds } from '@/lib/sheets';
+import { getFacebookAdsSettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -24,8 +25,14 @@ export async function GET(request: Request) {
     }
     const orgId = parseInt(orgIdParam);
 
+    // Load Facebook Ads credentials from per-org settings
+    const fbSettings = await getFacebookAdsSettings(orgId);
+    if (!fbSettings) {
+      return NextResponse.json({ error: 'Facebook Ads settings not configured for this org' }, { status: 400 });
+    }
+
     // Fetch from Facebook Marketing API
-    const ads = await getDailyFacebookAds(date);
+    const ads = await getDailyFacebookAds(date, fbSettings);
 
     // Write to Google Sheets
     const result = await syncFacebookAds(date, ads);

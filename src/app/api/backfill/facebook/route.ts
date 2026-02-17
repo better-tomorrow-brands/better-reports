@@ -1,6 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDailyFacebookAds } from '@/lib/facebook';
 import { appendFacebookAds } from '@/lib/sheets';
+import { getFacebookAdsSettings } from '@/lib/settings';
+import { requireOrgFromRequest, OrgAuthError } from '@/lib/org-auth';
 
 export const maxDuration = 300; // 5 minutes for Vercel
 
@@ -12,6 +14,22 @@ export async function GET(request: Request) {
     authHeader !== `Bearer ${process.env.CRON_SECRET}`
   ) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  let orgId: number;
+  try {
+    const auth = await requireOrgFromRequest(request);
+    orgId = auth.orgId;
+  } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+  }
+
+  const fbSettings = await getFacebookAdsSettings(orgId);
+  if (!fbSettings) {
+    return NextResponse.json({ error: 'Facebook Ads settings not configured for this org' }, { status: 400 });
   }
 
   const url = new URL(request.url);
@@ -30,7 +48,7 @@ export async function GET(request: Request) {
 
       try {
         // Fetch from Facebook
-        const ads = await getDailyFacebookAds(date);
+        const ads = await getDailyFacebookAds(date, fbSettings);
 
         // Append to sheets (no delete)
         const result = await appendFacebookAds(ads);

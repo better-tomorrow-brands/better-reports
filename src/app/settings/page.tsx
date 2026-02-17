@@ -20,6 +20,11 @@ interface MetaForm {
   access_token: string;
 }
 
+interface FacebookAdsForm {
+  access_token: string;
+  ad_account_id: string;
+}
+
 interface ShopifyForm {
   client_id: string;
   client_secret: string;
@@ -93,11 +98,16 @@ export default function SettingsPage() {
     refresh_token: "",
     profile_id: "",
   });
+  const [facebookAds, setFacebookAds] = useState<FacebookAdsForm>({
+    access_token: "",
+    ad_account_id: "",
+  });
   const [displayCurrency, setDisplayCurrency] = useState("USD");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
+  const [savingFacebookAds, setSavingFacebookAds] = useState(false);
   const [savingPosthog, setSavingPosthog] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
@@ -147,6 +157,10 @@ export default function SettingsPage() {
     client_secret: "",
     refresh_token: "",
     profile_id: "",
+  });
+  const [savedFacebookAds, setSavedFacebookAds] = useState<FacebookAdsForm>({
+    access_token: "",
+    ad_account_id: "",
   });
 
   // Which locked fields are currently unlocked for editing / have their value revealed
@@ -255,6 +269,8 @@ export default function SettingsPage() {
       refresh_token: "",
       profile_id: "",
     });
+    setFacebookAds({ access_token: "", ad_account_id: "" });
+    setSavedFacebookAds({ access_token: "", ad_account_id: "" });
     setEditingFields(new Set());
     setVisibleFields(new Set());
 
@@ -305,6 +321,10 @@ export default function SettingsPage() {
           };
           setAmazonAds(merged);
           setSavedAmazonAds(merged);
+        }
+        if (settingsData.facebook_ads) {
+          setFacebookAds(settingsData.facebook_ads);
+          setSavedFacebookAds(settingsData.facebook_ads);
         }
         if (settingsData.preferences?.displayCurrency) {
           setDisplayCurrency(settingsData.preferences.displayCurrency);
@@ -381,6 +401,35 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: "Failed to save settings" });
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  async function handleSaveFacebookAds() {
+    setSavingFacebookAds(true);
+    setMessage(null);
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ facebook_ads: facebookAds }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "Facebook Ads settings saved" });
+        const reload = await apiFetch("/api/settings");
+        const reloaded = await reload.json();
+        if (reloaded.facebook_ads) {
+          setFacebookAds(reloaded.facebook_ads);
+          setSavedFacebookAds(reloaded.facebook_ads);
+        }
+        resetFieldStates("facebookAds.");
+      } else {
+        setMessage({ type: "error", text: data.details || data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingFacebookAds(false);
     }
   }
 
@@ -568,8 +617,11 @@ export default function SettingsPage() {
 
   // Detect unsaved changes per section
   const hasShopifyChanges = (
-    Object.keys(shopify) as (keyof ShopifyForm)[]
+    ["client_id", "client_secret", "store_domain", "webhook_secret"] as const
   ).some((k) => shopify[k] !== savedShopify[k]);
+  const hasFacebookAdsChanges = (
+    Object.keys(facebookAds) as (keyof FacebookAdsForm)[]
+  ).some((k) => facebookAds[k] !== savedFacebookAds[k]);
   const hasPosthogChanges = (
     Object.keys(posthog) as (keyof PosthogForm)[]
   ).some((k) => posthog[k] !== savedPosthog[k]);
@@ -1011,17 +1063,11 @@ export default function SettingsPage() {
         <div className="flex flex-col gap-6">
           <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
             <h2 className="text-lg font-semibold mb-1">Shopify</h2>
-
-            <div className="mb-4 flex flex-col gap-1">
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                Option 1 — Custom App (Recommended)
-              </p>
-              <p className="text-sm text-zinc-500">
-                Create a custom app directly in the client&apos;s Shopify Admin
-                (Settings → Apps → Develop apps). Gives access to the full order
-                history with no 60-day limit.
-              </p>
-            </div>
+            <p className="text-sm text-zinc-500 mb-4">
+              Connect your Shopify store using OAuth. Save your credentials
+              first, then click &quot;Connect with Shopify&quot; to authorise
+              access.
+            </p>
 
             <div className="flex flex-col gap-4">
               <LockedInput
@@ -1033,74 +1079,6 @@ export default function SettingsPage() {
                 placeholder="e.g. yourstore.myshopify.com"
                 helpText="Your Shopify store domain (without https://)."
               />
-
-              <LockedInput
-                fieldKey="shopify.access_token"
-                label="Admin API Access Token"
-                value={shopify.access_token}
-                savedValue={savedShopify.access_token}
-                onChange={(v) => setShopify({ ...shopify, access_token: v })}
-                placeholder="shpat_xxxxx"
-                helpText="Shopify Admin → Settings → Apps → Develop apps → [your app] → API credentials → Admin API access token. Ensure read_orders, write_orders, read_products, write_customers scopes are enabled."
-                mono
-              />
-
-              <LockedInput
-                fieldKey="shopify.webhook_secret"
-                label="Webhook Signing Secret"
-                value={shopify.webhook_secret}
-                savedValue={savedShopify.webhook_secret}
-                onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
-                placeholder="e.g. fb0250d6cedb1d64..."
-                helpText="Shopify Admin → Settings → Notifications → Webhooks → show the signing secret."
-                mono
-              />
-            </div>
-
-            <button
-              onClick={handleSaveShopify}
-              disabled={savingShopify || !hasShopifyChanges}
-              className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
-            >
-              {savingShopify ? "Saving..." : "Save"}
-            </button>
-
-            {savedShopify.access_token && (
-              <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700 flex flex-col gap-4">
-                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
-                  Connected: {savedShopify.store_domain}
-                </div>
-
-                <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
-                  <label className="block text-sm font-medium mb-1">
-                    Webhook URL
-                  </label>
-                  <code className="text-xs break-all">{webhookUrl}</code>
-                  <p className="text-xs text-zinc-400 mt-2">
-                    Register this in Shopify Admin → Settings → Notifications →
-                    Webhooks for &quot;Order creation&quot; and &quot;Order
-                    update&quot; events (JSON format).
-                  </p>
-                </div>
-              </div>
-            )}
-
-            {/* OAuth section — for Partner Dashboard apps */}
-            <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700 flex flex-col gap-4">
-              <div className="flex flex-col gap-1">
-                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
-                  Option 2 — Partner Dashboard OAuth
-                </p>
-                <p className="text-sm text-zinc-500">
-                  For existing setups using a Partner Dashboard app. Note:
-                  access to orders older than 60 days requires Shopify approval
-                  for the{" "}
-                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
-                    read_all_orders
-                  </code>{" "}
-                  scope.
-                </p>
-              </div>
 
               <LockedInput
                 fieldKey="shopify.client_id"
@@ -1124,6 +1102,44 @@ export default function SettingsPage() {
                 mono
               />
 
+              <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
+                <label className="block text-sm font-medium mb-1">
+                  Webhook URL
+                </label>
+                <code className="text-xs break-all">{webhookUrl}</code>
+                <p className="text-xs text-zinc-400 mt-2">
+                  Register this in Shopify Admin → Settings → Notifications →
+                  Webhooks for &quot;Order creation&quot; and &quot;Order
+                  update&quot; events (JSON format).
+                </p>
+              </div>
+
+              <LockedInput
+                fieldKey="shopify.webhook_secret"
+                label="Webhook Signing Secret"
+                value={shopify.webhook_secret}
+                savedValue={savedShopify.webhook_secret}
+                onChange={(v) => setShopify({ ...shopify, webhook_secret: v })}
+                placeholder="e.g. fb0250d6cedb1d64..."
+                helpText="Shopify Admin → Settings → Notifications → Webhooks → show the signing secret."
+                mono
+              />
+            </div>
+
+            <button
+              onClick={handleSaveShopify}
+              disabled={savingShopify || !hasShopifyChanges}
+              className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+            >
+              {savingShopify ? "Saving..." : "Save"}
+            </button>
+
+            <div className="mt-4 flex flex-col gap-3">
+              {savedShopify.access_token && (
+                <div className="flex items-center gap-2 text-sm text-green-700 dark:text-green-400 bg-green-50 dark:bg-green-950 border border-green-200 dark:border-green-800 rounded-md px-3 py-2">
+                  Connected: {savedShopify.store_domain}
+                </div>
+              )}
               <button
                 onClick={() => {
                   const domain =
@@ -1244,6 +1260,64 @@ export default function SettingsPage() {
 
       {/* ── Meta Tab ────────────────────────────── */}
       {activeTab === "meta" && (
+        <div className="flex flex-col gap-6">
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+          <h2 className="text-lg font-semibold mb-1">Facebook Ads</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Connect your Facebook Ads account for ad spend, revenue, and ROAS
+            reporting.
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <LockedInput
+              fieldKey="facebookAds.access_token"
+              label="Access Token"
+              value={facebookAds.access_token}
+              savedValue={savedFacebookAds.access_token}
+              onChange={(v) => setFacebookAds({ ...facebookAds, access_token: v })}
+              placeholder="EAAxxxxxxxx..."
+              helpText={
+                <>
+                  A long-lived system user token from{" "}
+                  <a
+                    href="https://business.facebook.com/settings/system-users"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="underline"
+                  >
+                    Meta Business Suite → System Users
+                  </a>
+                  . Requires{" "}
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                    ads_read
+                  </code>{" "}
+                  permission on the ad account.
+                </>
+              }
+              mono
+            />
+
+            <LockedInput
+              fieldKey="facebookAds.ad_account_id"
+              label="Ad Account ID"
+              value={facebookAds.ad_account_id}
+              savedValue={savedFacebookAds.ad_account_id}
+              onChange={(v) => setFacebookAds({ ...facebookAds, ad_account_id: v })}
+              placeholder="act_123456789"
+              helpText="Found in Facebook Ads Manager → Account Overview. Include the 'act_' prefix."
+              mono
+            />
+          </div>
+
+          <button
+            onClick={handleSaveFacebookAds}
+            disabled={savingFacebookAds || !hasFacebookAdsChanges}
+            className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+          >
+            {savingFacebookAds ? "Saving..." : "Save"}
+          </button>
+        </section>
+
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
           <h2 className="text-lg font-semibold mb-1">Meta / WhatsApp</h2>
           <p className="text-sm text-zinc-500 mb-4">
@@ -1299,6 +1373,7 @@ export default function SettingsPage() {
             {savingMeta ? "Saving..." : "Save"}
           </button>
         </section>
+        </div>
       )}
 
       {/* ── PostHog Tab ────────────────────────────── */}

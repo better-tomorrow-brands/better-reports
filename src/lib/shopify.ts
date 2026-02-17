@@ -1,5 +1,4 @@
-const SHOPIFY_STORE = process.env.SHOPIFY_STORE;
-const SHOPIFY_ACCESS_TOKEN = process.env.SHOPIFY_ACCESS_TOKEN;
+import type { ShopifySettings } from "@/lib/settings";
 
 const API_VERSION = '2024-10';
 
@@ -9,8 +8,8 @@ interface ShopifyResponse {
 }
 
 // Test what fields are available
-export async function testShopifyAccess(): Promise<ShopifyResponse> {
-  if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
+export async function testShopifyAccess(settings: ShopifySettings): Promise<ShopifyResponse> {
+  if (!settings.store_domain || !settings.access_token) {
     throw new Error('Missing Shopify configuration');
   }
 
@@ -27,12 +26,12 @@ export async function testShopifyAccess(): Promise<ShopifyResponse> {
   `;
 
   const response = await fetch(
-    `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/graphql.json`,
+    `https://${settings.store_domain}/admin/api/${API_VERSION}/graphql.json`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+        'X-Shopify-Access-Token': settings.access_token,
       },
       body: JSON.stringify({ query }),
     }
@@ -42,20 +41,20 @@ export async function testShopifyAccess(): Promise<ShopifyResponse> {
   return result;
 }
 
-export async function getSessionsData(date: string): Promise<{
+export async function getSessionsData(date: string, settings: ShopifySettings): Promise<{
   visitors: number;
   sessions: number;
 }> {
-  if (!SHOPIFY_STORE || !SHOPIFY_ACCESS_TOKEN) {
+  if (!settings.store_domain || !settings.access_token) {
     throw new Error('Missing Shopify configuration');
   }
 
   // Try REST API for analytics
   const response = await fetch(
-    `https://${SHOPIFY_STORE}/admin/api/${API_VERSION}/reports.json`,
+    `https://${settings.store_domain}/admin/api/${API_VERSION}/reports.json`,
     {
       headers: {
-        'X-Shopify-Access-Token': SHOPIFY_ACCESS_TOKEN,
+        'X-Shopify-Access-Token': settings.access_token,
       },
     }
   );
@@ -85,7 +84,6 @@ export function getTodayDateLondon(): string {
 
 import { db } from "@/lib/db";
 import { inventorySnapshots } from "@/lib/db/schema";
-import type { ShopifySettings } from "@/lib/settings";
 
 interface ShopifyInventoryItem {
   sku: string;
