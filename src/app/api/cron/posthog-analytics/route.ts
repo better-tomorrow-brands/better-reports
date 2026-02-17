@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon, upsertPosthogAnalytics } from '@/lib/posthog';
+import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon, upsertPosthogAnalytics, getEnvCredentials } from '@/lib/posthog';
 import { appendDailyAnalytics } from '@/lib/sheets';
+import { getPosthogSettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -24,8 +25,12 @@ export async function GET(request: Request) {
     }
     const orgId = parseInt(orgIdParam);
 
+    // Use org settings if saved, otherwise fall back to env vars
+    const phSettings = await getPosthogSettings(orgId);
+    const creds = phSettings ?? getEnvCredentials();
+
     // Fetch from PostHog
-    const analytics = await getDailyAnalytics(date);
+    const analytics = await getDailyAnalytics(date, creds);
 
     // Write to Google Sheets
     const result = await appendDailyAnalytics(analytics);

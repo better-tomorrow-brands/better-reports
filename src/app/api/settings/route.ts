@@ -4,6 +4,7 @@ import {
   getShopifySettings, saveShopifySettings,
   getAmazonSettings, saveAmazonSettings,
   getAmazonAdsSettings, saveAmazonAdsSettings,
+  getPosthogSettings, savePosthogSettings,
 } from "@/lib/settings";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -11,11 +12,12 @@ export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
 
-    const [meta, shopify, amazon, amazonAds] = await Promise.all([
+    const [meta, shopify, amazon, amazonAds, posthog] = await Promise.all([
       getMetaSettings(orgId),
       getShopifySettings(orgId),
       getAmazonSettings(orgId),
       getAmazonAdsSettings(orgId),
+      getPosthogSettings(orgId),
     ]);
 
     // Mask tokens for display
@@ -64,7 +66,16 @@ export async function GET(request: Request) {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds });
+    const maskedPosthog = posthog
+      ? {
+          ...posthog,
+          api_key: posthog.api_key
+            ? `${posthog.api_key.slice(0, 10)}...${posthog.api_key.slice(-4)}`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, posthog: maskedPosthog });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -125,6 +136,14 @@ export async function POST(request: Request) {
         if (existing) body.amazon_ads.refresh_token = existing.refresh_token;
       }
       await saveAmazonAdsSettings(orgId, body.amazon_ads);
+    }
+
+    if (body.posthog) {
+      if (body.posthog.api_key?.includes("...")) {
+        const existing = await getPosthogSettings(orgId);
+        if (existing) body.posthog.api_key = existing.api_key;
+      }
+      await savePosthogSettings(orgId, body.posthog);
     }
 
     return NextResponse.json({ success: true });

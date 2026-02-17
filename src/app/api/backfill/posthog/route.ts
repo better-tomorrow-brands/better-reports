@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
-import { getDailyAnalytics, getYesterdayDateLondon, upsertPosthogAnalytics } from '@/lib/posthog';
+import { getDailyAnalytics, getYesterdayDateLondon, upsertPosthogAnalytics, getEnvCredentials } from '@/lib/posthog';
 import { appendDailyAnalytics } from '@/lib/sheets';
+import { getPosthogSettings } from '@/lib/settings';
 
 export const maxDuration = 300; // 5 minutes max for Vercel
 
@@ -37,12 +38,16 @@ export async function GET(request: Request) {
       current.setDate(current.getDate() + 1);
     }
 
+    // Use org settings if saved, otherwise fall back to env vars
+    const phSettings = await getPosthogSettings(orgId);
+    const creds = phSettings ?? getEnvCredentials();
+
     console.log(`Backfilling ${dates.length} days from ${startDate} to ${endDate}`);
 
     // Process each date
     for (const date of dates) {
       try {
-        const analytics = await getDailyAnalytics(date);
+        const analytics = await getDailyAnalytics(date, creds);
         await appendDailyAnalytics(analytics);
         await upsertPosthogAnalytics(analytics, orgId);
         results.push({ date, status: 'success' });

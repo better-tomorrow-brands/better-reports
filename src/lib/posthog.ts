@@ -1,9 +1,20 @@
 import { db } from "@/lib/db";
 import { posthogAnalytics } from "@/lib/db/schema";
 
-const POSTHOG_API_KEY = process.env.POSTHOG_API_KEY;
-const POSTHOG_PROJECT_ID = process.env.POSTHOG_PROJECT_ID;
-const POSTHOG_HOST = process.env.POSTHOG_HOST || 'eu.posthog.com';
+export interface PosthogCredentials {
+  api_key: string;
+  project_id: string;
+  host: string;
+}
+
+// Fallback to env vars so existing org-1 setup keeps working before credentials are saved in settings
+export function getEnvCredentials(): PosthogCredentials {
+  return {
+    api_key: process.env.POSTHOG_API_KEY ?? "",
+    project_id: process.env.POSTHOG_PROJECT_ID ?? "",
+    host: process.env.POSTHOG_HOST ?? "eu.posthog.com",
+  };
+}
 
 interface PostHogQueryResult {
   results?: unknown[][];
@@ -11,18 +22,18 @@ interface PostHogQueryResult {
   error?: string;
 }
 
-async function posthogQuery(query: string): Promise<PostHogQueryResult> {
-  if (!POSTHOG_API_KEY || !POSTHOG_PROJECT_ID) {
+async function posthogQuery(query: string, creds: PosthogCredentials): Promise<PostHogQueryResult> {
+  if (!creds.api_key || !creds.project_id) {
     throw new Error('Missing PostHog configuration');
   }
 
   const response = await fetch(
-    `https://${POSTHOG_HOST}/api/projects/${POSTHOG_PROJECT_ID}/query`,
+    `https://${creds.host}/api/projects/${creds.project_id}/query`,
     {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${POSTHOG_API_KEY}`,
+        Authorization: `Bearer ${creds.api_key}`,
       },
       body: JSON.stringify({
         query: {
@@ -72,7 +83,7 @@ export interface DailyAnalytics {
   conversion_rate: number;
 }
 
-export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
+export async function getDailyAnalytics(date: string, creds: PosthogCredentials): Promise<DailyAnalytics> {
   // Traffic metrics
   const trafficQuery = `
     SELECT
@@ -83,7 +94,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     WHERE toDate(timestamp) = '${date}'
   `;
 
-  const trafficResult = await posthogQuery(trafficQuery);
+  const trafficResult = await posthogQuery(trafficQuery, creds);
   const trafficRow = trafficResult.results?.[0] || [0, 0, 0];
 
   const unique_visitors = Number(trafficRow[0]) || 0;
@@ -107,7 +118,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     )
   `;
 
-  const sessionResult = await posthogQuery(sessionQuery);
+  const sessionResult = await posthogQuery(sessionQuery, creds);
   const sessionRow = sessionResult.results?.[0] || [0, 0];
   const avg_session_duration = Math.round(Number(sessionRow[0]) || 0);
   const bounce_rate = Math.round((Number(sessionRow[1]) || 0) * 100) / 100;
@@ -123,7 +134,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     GROUP BY properties.$device_type
   `;
 
-  const deviceResult = await posthogQuery(deviceQuery);
+  const deviceResult = await posthogQuery(deviceQuery, creds);
   let mobile_sessions = 0;
   let desktop_sessions = 0;
 
@@ -150,7 +161,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     LIMIT 1
   `;
 
-  const countryResult = await posthogQuery(countryQuery);
+  const countryResult = await posthogQuery(countryQuery, creds);
   const top_country = String(countryResult.results?.[0]?.[0] || 'Unknown');
 
   // Referrer breakdown
@@ -170,7 +181,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     GROUP BY channel
   `;
 
-  const referrerResult = await posthogQuery(referrerQuery);
+  const referrerResult = await posthogQuery(referrerQuery, creds);
   let direct_sessions = 0;
   let organic_sessions = 0;
   let paid_sessions = 0;
@@ -196,7 +207,7 @@ export async function getDailyAnalytics(date: string): Promise<DailyAnalytics> {
     WHERE toDate(timestamp) = '${date}'
   `;
 
-  const funnelResult = await posthogQuery(funnelQuery);
+  const funnelResult = await posthogQuery(funnelQuery, creds);
   const funnelRow = funnelResult.results?.[0] || [0, 0, 0, 0];
 
   const product_views = Number(funnelRow[0]) || 0;

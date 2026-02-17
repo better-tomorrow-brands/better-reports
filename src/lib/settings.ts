@@ -31,6 +31,12 @@ export interface AmazonAdsSettings {
   profile_id: string; // Amazon Advertising profile ID
 }
 
+export interface PosthogSettings {
+  api_key: string;
+  project_id: string;
+  host: string; // e.g. eu.posthog.com
+}
+
 export interface LifecycleSettings {
   newMaxDays: number;      // New: ≤ this many days (default 30)
   reorderMaxDays: number;  // Due Reorder: newMaxDays+1 to this (default 60)
@@ -96,6 +102,16 @@ export async function getAmazonAdsSettings(orgId: number): Promise<AmazonAdsSett
 
 export async function saveAmazonAdsSettings(orgId: number, amazonAds: AmazonAdsSettings): Promise<void> {
   await setSetting(orgId, "amazon_ads", JSON.stringify(amazonAds));
+}
+
+export async function getPosthogSettings(orgId: number): Promise<PosthogSettings | null> {
+  const raw = await getSetting(orgId, "posthog");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function savePosthogSettings(orgId: number, posthog: PosthogSettings): Promise<void> {
+  await setSetting(orgId, "posthog", JSON.stringify(posthog));
 }
 
 export const DEFAULT_LIFECYCLE_SETTINGS: LifecycleSettings = {

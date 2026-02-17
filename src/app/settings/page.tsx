@@ -6,7 +6,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { Eye, EyeOff, Pencil, X } from "lucide-react";
 
-type SettingsTab = "shopify" | "meta" | "amazon" | "expenses" | "preferences";
+type SettingsTab = "shopify" | "meta" | "posthog" | "amazon" | "expenses" | "preferences";
 
 interface MetaForm {
   phone_number_id: string;
@@ -26,6 +26,12 @@ interface LifecycleForm {
   newMaxDays: number;
   reorderMaxDays: number;
   lapsedMaxDays: number;
+}
+
+interface PosthogForm {
+  api_key: string;
+  project_id: string;
+  host: string;
 }
 
 interface AmazonForm {
@@ -64,6 +70,7 @@ export default function SettingsPage() {
     reorderMaxDays: 60,
     lapsedMaxDays: 90,
   });
+  const [posthog, setPosthog] = useState<PosthogForm>({ api_key: "", project_id: "", host: "eu.posthog.com" });
   const [amazon, setAmazon] = useState<AmazonForm>({
     client_id: "",
     client_secret: "",
@@ -79,6 +86,7 @@ export default function SettingsPage() {
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
+  const [savingPosthog, setSavingPosthog] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
   const [savingAmazon, setSavingAmazon] = useState(false);
@@ -91,6 +99,7 @@ export default function SettingsPage() {
 
   // Saved snapshots — track what's persisted so we can detect changes & lock fields
   const [savedMeta, setSavedMeta] = useState<MetaForm>({ phone_number_id: "", waba_id: "", access_token: "" });
+  const [savedPosthog, setSavedPosthog] = useState<PosthogForm>({ api_key: "", project_id: "", host: "eu.posthog.com" });
   const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
   const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
   const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
@@ -150,6 +159,8 @@ export default function SettingsPage() {
     setMessage(null);
     setMeta({ phone_number_id: "", waba_id: "", access_token: "" });
     setSavedMeta({ phone_number_id: "", waba_id: "", access_token: "" });
+    setPosthog({ api_key: "", project_id: "", host: "eu.posthog.com" });
+    setSavedPosthog({ api_key: "", project_id: "", host: "eu.posthog.com" });
     setShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
     setSavedShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
     setAmazon({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
@@ -168,6 +179,11 @@ export default function SettingsPage() {
         if (settingsData.meta) {
           setMeta(settingsData.meta);
           setSavedMeta(settingsData.meta);
+        }
+        if (settingsData.posthog) {
+          const merged = { api_key: "", project_id: "", host: "eu.posthog.com", ...settingsData.posthog };
+          setPosthog(merged);
+          setSavedPosthog(merged);
         }
         if (settingsData.shopify) {
           setShopify(settingsData.shopify);
@@ -234,6 +250,36 @@ export default function SettingsPage() {
       setMessage({ type: "error", text: "Failed to save settings" });
     } finally {
       setSavingMeta(false);
+    }
+  }
+
+  async function handleSavePosthog() {
+    setSavingPosthog(true);
+    setMessage(null);
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ posthog }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "PostHog settings saved" });
+        const reload = await apiFetch("/api/settings");
+        const reloaded = await reload.json();
+        if (reloaded.posthog) {
+          const merged = { api_key: "", project_id: "", host: "eu.posthog.com", ...reloaded.posthog };
+          setPosthog(merged);
+          setSavedPosthog(merged);
+        }
+        resetFieldStates("posthog.");
+      } else {
+        setMessage({ type: "error", text: data.details || data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingPosthog(false);
     }
   }
 
@@ -386,6 +432,7 @@ export default function SettingsPage() {
 
   // Detect unsaved changes per section
   const hasShopifyChanges = (Object.keys(shopify) as (keyof ShopifyForm)[]).some((k) => shopify[k] !== savedShopify[k]);
+  const hasPosthogChanges = (Object.keys(posthog) as (keyof PosthogForm)[]).some((k) => posthog[k] !== savedPosthog[k]);
   const hasMetaChanges = (Object.keys(meta) as (keyof MetaForm)[]).some((k) => meta[k] !== savedMeta[k]);
   const hasAmazonChanges = (Object.keys(amazon) as (keyof AmazonForm)[]).some((k) => amazon[k] !== savedAmazon[k]);
   const hasAmazonAdsChanges = (Object.keys(amazonAds) as (keyof AmazonAdsForm)[]).some((k) => amazonAds[k] !== savedAmazonAds[k]);
@@ -600,6 +647,7 @@ export default function SettingsPage() {
   const tabs: { key: SettingsTab; label: string }[] = [
     { key: "shopify", label: "Shopify" },
     { key: "meta", label: "Meta" },
+    { key: "posthog", label: "PostHog" },
     { key: "amazon", label: "Amazon" },
     { key: "expenses", label: "Expenses" },
     { key: "preferences", label: "Preferences" },
@@ -868,6 +916,61 @@ export default function SettingsPage() {
             className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
           >
             {savingMeta ? "Saving..." : "Save"}
+          </button>
+        </section>
+      )}
+
+      {/* ── PostHog Tab ────────────────────────────── */}
+      {activeTab === "posthog" && (
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+          <h2 className="text-lg font-semibold mb-1">PostHog</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Connect your PostHog project for website analytics (sessions, traffic sources, purchase funnel).
+          </p>
+
+          <div className="flex flex-col gap-4">
+            <LockedInput
+              fieldKey="posthog.api_key"
+              label="API Key"
+              value={posthog.api_key}
+              savedValue={savedPosthog.api_key}
+              onChange={(v) => setPosthog({ ...posthog, api_key: v })}
+              placeholder="phx_xxxxx"
+              helpText="PostHog → Project Settings → Personal API Keys. Create a key with read access to your project."
+              mono
+            />
+
+            <LockedInput
+              fieldKey="posthog.project_id"
+              label="Project ID"
+              value={posthog.project_id}
+              savedValue={savedPosthog.project_id}
+              onChange={(v) => setPosthog({ ...posthog, project_id: v })}
+              placeholder="e.g. 39116"
+              helpText="PostHog → Project Settings → Project ID (shown at the top of the page)."
+            />
+
+            <div>
+              <label className="block text-sm font-medium mb-1">Host</label>
+              <input
+                type="text"
+                value={posthog.host}
+                onChange={(e) => setPosthog({ ...posthog, host: e.target.value })}
+                placeholder="eu.posthog.com"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 text-sm bg-white dark:bg-zinc-900 font-mono"
+              />
+              <p className="text-xs text-zinc-400 mt-1">
+                <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">eu.posthog.com</code> for EU cloud, <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">us.posthog.com</code> for US cloud.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleSavePosthog}
+            disabled={savingPosthog || !hasPosthogChanges}
+            className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+          >
+            {savingPosthog ? "Saving..." : "Save"}
           </button>
         </section>
       )}

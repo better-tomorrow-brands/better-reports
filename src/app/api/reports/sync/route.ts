@@ -3,7 +3,7 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { amazonSalesTraffic, facebookAds, posthogAnalytics } from "@/lib/db/schema";
 import { eq, sql } from "drizzle-orm";
-import { getAmazonSettings, getAmazonAdsSettings } from "@/lib/settings";
+import { getAmazonSettings, getAmazonAdsSettings, getPosthogSettings } from "@/lib/settings";
 import {
   fetchSalesTrafficReport,
   upsertSalesTraffic,
@@ -29,6 +29,7 @@ import {
   getDailyAnalytics,
   upsertPosthogAnalytics,
   getYesterdayDateLondon,
+  getEnvCredentials,
 } from "@/lib/posthog";
 
 export const maxDuration = 300;
@@ -229,10 +230,13 @@ async function syncPosthog(orgId: number): Promise<SourceResult> {
     return { status: "ok", latestBefore, latestAfter: latestBefore, datesSynced: 0, errors: [] };
   }
 
+  const phSettings = await getPosthogSettings(orgId);
+  const creds = phSettings ?? getEnvCredentials();
+
   let synced = 0;
   for (const date of dates) {
     try {
-      const analytics = await getDailyAnalytics(date);
+      const analytics = await getDailyAnalytics(date, creds);
       await upsertPosthogAnalytics(analytics, orgId);
       synced++;
     } catch (err) {

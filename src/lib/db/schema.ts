@@ -291,6 +291,7 @@ export const orders = pgTable("orders", {
   utmTerm: text("utm_term"),
   trackingNumber: text("tracking_number"),
   tags: text("tags"),
+  currency: text("currency").default("USD"),
   hasConversionData: boolean("has_conversion_data").default(false),
   isRepeatCustomer: boolean("is_repeat_customer").default(false),
   customerId: integer("customer_id").references(() => customers.id),
