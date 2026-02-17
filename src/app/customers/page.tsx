@@ -1094,7 +1094,7 @@ export default function CustomersPage() {
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
                 disabled={page === 1}
                 className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -1102,7 +1102,7 @@ export default function CustomersPage() {
               </button>
               <span>{page} / {Math.ceil(filteredCustomers.length / PAGE_SIZE)}</span>
               <button
-                onClick={() => { setPage((p) => Math.min(Math.ceil(filteredCustomers.length / PAGE_SIZE), p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
+                onClick={() => { setPage((p) => Math.min(Math.ceil(filteredCustomers.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
                 disabled={page >= Math.ceil(filteredCustomers.length / PAGE_SIZE)}
                 className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >

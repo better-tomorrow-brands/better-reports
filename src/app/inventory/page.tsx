@@ -83,6 +83,7 @@ type TabKey = (typeof tabs)[number]["key"];
 // ── Helpers ────────────────────────────────────────────────
 const BRAND_OPTIONS = ["Teevo", "Doogood"];
 const REORDER_THRESHOLD = 100;
+const PAGE_SIZE = 100;
 const FORECAST_HORIZON = 180;
 
 type ForecastSkuFilter = "all" | "8-rolls" | "24-rolls" | "48-rolls";
@@ -605,6 +606,7 @@ export default function InventoryPage() {
   const [syncingProducts, setSyncingProducts] = useState(false);
   const [syncResult, setSyncResult] = useState<{ synced: number; skipped: number; deactivated: number } | null>(null);
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
+  const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
 
   // Inventory tab state
@@ -1271,6 +1273,15 @@ export default function InventoryPage() {
     return result;
   }, [products, filters, search, sortField, sortDirection, activeTab, statusFilter]);
 
+  // Reset page when filters / search / tab / status change
+  useEffect(() => { setPage(1); }, [search, filters, statusFilter, activeTab]);
+
+  // Paginated slice
+  const pagedProducts = useMemo(
+    () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
+    [filtered, page]
+  );
+
   // ── Build Product Database columns ───────────────────────
   const columns: Column<Product>[] = useMemo(() => {
     const cols: Column<Product>[] = [];
@@ -1731,10 +1742,34 @@ export default function InventoryPage() {
             ) : (
               <Table<Product>
                 columns={columns}
-                data={filtered}
+                data={pagedProducts}
                 rowKey="id"
                 emptyMessage={search || filters.length > 0 ? "No products match your search." : "No products yet. Click \"Sync from Shopify\" to import."}
               />
+            )}
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
+                <span>
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <button
+                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ) : activeTab === "amazon" ? (
@@ -1759,10 +1794,34 @@ export default function InventoryPage() {
             ) : (
               <Table<Product>
                 columns={amazonColumns}
-                data={filtered}
+                data={pagedProducts}
                 rowKey="id"
                 emptyMessage="No products yet."
               />
+            )}
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
+                <span>
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <button
+                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ) : activeTab === "dtc" ? (
@@ -1787,10 +1846,34 @@ export default function InventoryPage() {
             ) : (
               <Table<Product>
                 columns={dtcColumns}
-                data={filtered}
+                data={pagedProducts}
                 rowKey="id"
                 emptyMessage="No products yet."
               />
+            )}
+            {filtered.length > PAGE_SIZE && (
+              <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
+                <span>
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                </span>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page === 1}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Previous
+                  </button>
+                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <button
+                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
+                    className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Next
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         ) : activeTab === "inventory" ? (
