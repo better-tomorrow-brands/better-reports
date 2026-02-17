@@ -11,7 +11,7 @@ interface ShopifyOrderEdge {
     email: string | null;
     createdAt: string;
     displayFulfillmentStatus: string;
-    totalPriceSet: { shopMoney: { amount: string } };
+    totalPriceSet: { shopMoney: { amount: string; currencyCode: string } };
     subtotalPriceSet: { shopMoney: { amount: string } };
     totalShippingPriceSet: { shopMoney: { amount: string } };
     totalTaxSet: { shopMoney: { amount: string } };
@@ -77,6 +77,7 @@ function convertToPayload(node: ShopifyOrderEdge["node"]): ShopifyOrderPayload {
       shop_money: { amount: node.totalShippingPriceSet.shopMoney.amount },
     },
     total_tax: node.totalTaxSet.shopMoney.amount,
+    currency: node.totalPriceSet.shopMoney.currencyCode,
     tags: node.tags.join(", "),
     discount_codes: node.discountCodes.map((code) => ({ code })),
     line_items: node.lineItems.edges.map((e) => ({
@@ -100,7 +101,7 @@ const ORDERS_QUERY = `{
         email
         createdAt
         displayFulfillmentStatus
-        totalPriceSet { shopMoney { amount } }
+        totalPriceSet { shopMoney { amount currencyCode } }
         subtotalPriceSet { shopMoney { amount } }
         totalShippingPriceSet { shopMoney { amount } }
         totalTaxSet { shopMoney { amount } }

@@ -55,6 +55,7 @@ export interface ShopifyOrderPayload {
   line_items?: ShopifyLineItem[];
   fulfillments?: ShopifyFulfillment[];
   tags?: string;
+  currency?: string;
 }
 
 interface UTMParams {
@@ -322,6 +323,7 @@ export async function upsertOrder(data: ShopifyOrderPayload, orgId: number): Pro
     utmTerm: finalUtm.term || null,
     trackingNumber: getTrackingNumber(data) || null,
     tags: data.tags || null,
+    currency: data.currency || null,
     hasConversionData,
     isRepeatCustomer,
   };

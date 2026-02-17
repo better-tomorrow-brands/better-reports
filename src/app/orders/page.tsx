@@ -143,6 +143,7 @@ interface Order {
   utmTerm: string | null;
   trackingNumber: string | null;
   tags: string | null;
+  currency: string | null;
   hasConversionData: boolean;
   isRepeatCustomer: boolean;
   receivedAt: string | null;
@@ -171,10 +172,10 @@ const allColumns: ColumnDef[] = [
   { key: "customerName", label: "Customer", defaultVisible: true, filterable: true },
   { key: "email", label: "Email", defaultVisible: false, filterable: true },
   { key: "phone", label: "Phone", defaultVisible: false },
-  { key: "total", label: "Total", defaultVisible: true, render: (v) => formatCurrency(v as string) },
-  { key: "subtotal", label: "Subtotal", defaultVisible: false, render: (v) => formatCurrency(v as string) },
-  { key: "shipping", label: "Shipping", defaultVisible: false, render: (v) => formatCurrency(v as string) },
-  { key: "tax", label: "Tax", defaultVisible: false, render: (v) => formatCurrency(v as string) },
+  { key: "total", label: "Total", defaultVisible: true, render: (v, order) => formatCurrency(v as string, order.currency) },
+  { key: "subtotal", label: "Subtotal", defaultVisible: false, render: (v, order) => formatCurrency(v as string, order.currency) },
+  { key: "shipping", label: "Shipping", defaultVisible: false, render: (v, order) => formatCurrency(v as string, order.currency) },
+  { key: "tax", label: "Tax", defaultVisible: false, render: (v, order) => formatCurrency(v as string, order.currency) },
   { key: "fulfillmentStatus", label: "Status", defaultVisible: true, filterable: true, render: (v) => formatStatus(v as string) },
   { key: "quantity", label: "Qty", defaultVisible: true },
   { key: "skus", label: "SKUs", defaultVisible: false, filterable: true },
@@ -204,9 +205,19 @@ function formatDate(dateString: string | null): string {
   });
 }
 
-function formatCurrency(amount: string | null): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  GBP: "£", USD: "$", EUR: "€", CAD: "CA$", AUD: "A$", NZD: "NZ$",
+  CHF: "CHF ", SEK: "kr", NOK: "kr", DKK: "kr", JPY: "¥", CNY: "¥",
+  HKD: "HK$", SGD: "S$", INR: "₹", MXN: "MX$", BRL: "R$", ZAR: "R",
+};
+
+function currencySymbol(currency: string | null): string {
+  return CURRENCY_SYMBOLS[(currency ?? "").toUpperCase()] ?? `${currency} `;
+}
+
+function formatCurrency(amount: string | null, currency: string | null): string {
   if (!amount) return "-";
-  return `£${parseFloat(amount).toFixed(2)}`;
+  return `${currencySymbol(currency)}${parseFloat(amount).toFixed(2)}`;
 }
 
 function formatStatus(status: string | null): React.ReactNode {
