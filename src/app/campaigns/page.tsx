@@ -229,7 +229,7 @@ function StatusBadge({ status, type }: { status: string | null; type: "fb" | "wa
 // ── Main Component ─────────────────────────────────────
 
 export default function CampaignsPage() {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [activeTab, setActiveTab] = useState<"facebook" | "whatsapp" | "manual">("facebook");
 
   // ── Facebook State ─────────────────────────────────
@@ -1519,7 +1519,7 @@ export default function CampaignsPage() {
     {
       key: "totalSpent",
       label: "Total Spent",
-      render: (v) => (v ? `£${parseFloat(v as string).toFixed(2)}` : "-"),
+      render: (v) => (v ? `${({ GBP: "£", USD: "$", EUR: "€", CAD: "CA$", AUD: "A$", NZD: "NZ$" } as Record<string,string>)[displayCurrency] ?? displayCurrency}${parseFloat(v as string).toFixed(2)}` : "-"),
     },
     {
       key: "lastOrderAt",
@@ -2433,7 +2433,7 @@ export default function CampaignsPage() {
                           </div>
                           <div className="flex-1">
                             <label className="block text-xs text-zinc-500 mb-1">
-                              {newDiscountType === "percentage" ? "Percentage" : "Amount (£)"}
+                              {newDiscountType === "percentage" ? "Percentage" : `Amount (${displayCurrency})`}
                             </label>
                             <input
                               type="number"

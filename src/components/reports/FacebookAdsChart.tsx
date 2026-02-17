@@ -69,15 +69,15 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function CustomTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   const visible = payload.filter((e) => !(e.name === "Forecast" && e.value === 0));
   return (
@@ -92,7 +92,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
               ? `${entry.value.toFixed(2)}x`
               : entry.name === "FB Orders"
                 ? entry.value
-                : formatCurrency(entry.value)}
+                : formatCurrency(entry.value, currency)}
           </span>
         </div>
       ))}
@@ -101,7 +101,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function FacebookAdsChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [dateRange, setDateRange] = usePersistedDateRange(
     "dr-facebook-ads",
     () => presets.find((p) => p.label === "Last 90 days")!.getValue()
@@ -296,7 +296,7 @@ export function FacebookAdsChart({ controlsContainer }: { controlsContainer?: HT
                   axisLine={false}
                   width={45}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip currency={displayCurrency} />} />
                 <Legend
                   verticalAlign="top"
                   height={36}
@@ -349,13 +349,13 @@ export function FacebookAdsChart({ controlsContainer }: { controlsContainer?: HT
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.adRevenue)}
+              {loading ? "—" : formatCurrency(totals.adRevenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.adSpend)}
+              {loading ? "—" : formatCurrency(totals.adSpend, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">

@@ -6,7 +6,13 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { Eye, EyeOff, Pencil, X } from "lucide-react";
 
-type SettingsTab = "shopify" | "meta" | "posthog" | "amazon" | "expenses" | "preferences";
+type SettingsTab =
+  | "shopify"
+  | "meta"
+  | "posthog"
+  | "amazon"
+  | "expenses"
+  | "preferences";
 
 interface MetaForm {
   phone_number_id: string;
@@ -70,7 +76,11 @@ export default function SettingsPage() {
     reorderMaxDays: 60,
     lapsedMaxDays: 90,
   });
-  const [posthog, setPosthog] = useState<PosthogForm>({ api_key: "", project_id: "", host: "eu.posthog.com" });
+  const [posthog, setPosthog] = useState<PosthogForm>({
+    api_key: "",
+    project_id: "",
+    host: "eu.posthog.com",
+  });
   const [amazon, setAmazon] = useState<AmazonForm>({
     client_id: "",
     client_secret: "",
@@ -95,42 +105,82 @@ export default function SettingsPage() {
   const [savingAmazonAds, setSavingAmazonAds] = useState(false);
   const [testingAmazon, setTestingAmazon] = useState(false);
   const [testingAmazonAds, setTestingAmazonAds] = useState(false);
-  const [amazonTestResult, setAmazonTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [amazonAdsTestResult, setAmazonAdsTestResult] = useState<{ success: boolean; message: string } | null>(null);
-  const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
+  const [amazonTestResult, setAmazonTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [amazonAdsTestResult, setAmazonAdsTestResult] = useState<{
+    success: boolean;
+    message: string;
+  } | null>(null);
+  const [message, setMessage] = useState<{
+    type: "success" | "error";
+    text: string;
+  } | null>(null);
 
   // Saved snapshots — track what's persisted so we can detect changes & lock fields
-  const [savedMeta, setSavedMeta] = useState<MetaForm>({ phone_number_id: "", waba_id: "", access_token: "" });
-  const [savedPosthog, setSavedPosthog] = useState<PosthogForm>({ api_key: "", project_id: "", host: "eu.posthog.com" });
-  const [savedShopify, setSavedShopify] = useState<ShopifyForm>({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
-  const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
-  const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
+  const [savedMeta, setSavedMeta] = useState<MetaForm>({
+    phone_number_id: "",
+    waba_id: "",
+    access_token: "",
+  });
+  const [savedPosthog, setSavedPosthog] = useState<PosthogForm>({
+    api_key: "",
+    project_id: "",
+    host: "eu.posthog.com",
+  });
+  const [savedShopify, setSavedShopify] = useState<ShopifyForm>({
+    client_id: "",
+    client_secret: "",
+    store_domain: "",
+    access_token: "",
+    webhook_secret: "",
+  });
+  const [savedAmazon, setSavedAmazon] = useState<AmazonForm>({
+    client_id: "",
+    client_secret: "",
+    refresh_token: "",
+    marketplace_id: "A1F83G8C2ARO7P",
+  });
+  const [savedAmazonAds, setSavedAmazonAds] = useState<AmazonAdsForm>({
+    client_id: "",
+    client_secret: "",
+    refresh_token: "",
+    profile_id: "",
+  });
 
   // Which locked fields are currently unlocked for editing / have their value revealed
   const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
   const [visibleFields, setVisibleFields] = useState<Set<string>>(new Set());
 
-  const toggleEditing = useCallback((fieldKey: string, savedValue: string, restoreValue: (val: string) => void) => {
-    setEditingFields((prev) => {
-      const next = new Set(prev);
-      if (next.has(fieldKey)) {
-        // Cancel editing — restore saved value
+  const toggleEditing = useCallback(
+    (
+      fieldKey: string,
+      savedValue: string,
+      restoreValue: (val: string) => void,
+    ) => {
+      setEditingFields((prev) => {
+        const next = new Set(prev);
+        if (next.has(fieldKey)) {
+          // Cancel editing — restore saved value
+          next.delete(fieldKey);
+          restoreValue(savedValue);
+        } else {
+          // Start editing — clear the field so user types fresh
+          next.add(fieldKey);
+          restoreValue("");
+        }
+        return next;
+      });
+      // Hide value when toggling edit state
+      setVisibleFields((prev) => {
+        const next = new Set(prev);
         next.delete(fieldKey);
-        restoreValue(savedValue);
-      } else {
-        // Start editing — clear the field so user types fresh
-        next.add(fieldKey);
-        restoreValue("");
-      }
-      return next;
-    });
-    // Hide value when toggling edit state
-    setVisibleFields((prev) => {
-      const next = new Set(prev);
-      next.delete(fieldKey);
-      return next;
-    });
-  }, []);
+        return next;
+      });
+    },
+    [],
+  );
 
   const toggleVisible = useCallback((fieldKey: string) => {
     setVisibleFields((prev) => {
@@ -144,11 +194,15 @@ export default function SettingsPage() {
   // Reset lock/visibility state for a section after save
   const resetFieldStates = useCallback((prefix: string) => {
     setEditingFields((prev) => {
-      const next = new Set(Array.from(prev).filter((k) => !k.startsWith(prefix)));
+      const next = new Set(
+        Array.from(prev).filter((k) => !k.startsWith(prefix)),
+      );
       return next;
     });
     setVisibleFields((prev) => {
-      const next = new Set(Array.from(prev).filter((k) => !k.startsWith(prefix)));
+      const next = new Set(
+        Array.from(prev).filter((k) => !k.startsWith(prefix)),
+      );
       return next;
     });
   }, []);
@@ -163,19 +217,53 @@ export default function SettingsPage() {
     setSavedMeta({ phone_number_id: "", waba_id: "", access_token: "" });
     setPosthog({ api_key: "", project_id: "", host: "eu.posthog.com" });
     setSavedPosthog({ api_key: "", project_id: "", host: "eu.posthog.com" });
-    setShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
-    setSavedShopify({ client_id: "", client_secret: "", store_domain: "", access_token: "", webhook_secret: "" });
-    setAmazon({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
-    setSavedAmazon({ client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P" });
-    setAmazonAds({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
-    setSavedAmazonAds({ client_id: "", client_secret: "", refresh_token: "", profile_id: "" });
+    setShopify({
+      client_id: "",
+      client_secret: "",
+      store_domain: "",
+      access_token: "",
+      webhook_secret: "",
+    });
+    setSavedShopify({
+      client_id: "",
+      client_secret: "",
+      store_domain: "",
+      access_token: "",
+      webhook_secret: "",
+    });
+    setAmazon({
+      client_id: "",
+      client_secret: "",
+      refresh_token: "",
+      marketplace_id: "A1F83G8C2ARO7P",
+    });
+    setSavedAmazon({
+      client_id: "",
+      client_secret: "",
+      refresh_token: "",
+      marketplace_id: "A1F83G8C2ARO7P",
+    });
+    setAmazonAds({
+      client_id: "",
+      client_secret: "",
+      refresh_token: "",
+      profile_id: "",
+    });
+    setSavedAmazonAds({
+      client_id: "",
+      client_secret: "",
+      refresh_token: "",
+      profile_id: "",
+    });
     setEditingFields(new Set());
     setVisibleFields(new Set());
 
     Promise.all([
       apiFetch("/api/settings").then((res) => res.json()),
       apiFetch("/api/settings/lifecycle").then((res) => res.json()),
-      fetch("/api/users/me").then((res) => res.json()).catch(() => ({ role: null })),
+      fetch("/api/users/me")
+        .then((res) => res.json())
+        .catch(() => ({ role: null })),
     ])
       .then(([settingsData, lifecycleData, userData]) => {
         if (settingsData.meta) {
@@ -183,7 +271,12 @@ export default function SettingsPage() {
           setSavedMeta(settingsData.meta);
         }
         if (settingsData.posthog) {
-          const merged = { api_key: "", project_id: "", host: "eu.posthog.com", ...settingsData.posthog };
+          const merged = {
+            api_key: "",
+            project_id: "",
+            host: "eu.posthog.com",
+            ...settingsData.posthog,
+          };
           setPosthog(merged);
           setSavedPosthog(merged);
         }
@@ -192,12 +285,24 @@ export default function SettingsPage() {
           setSavedShopify(settingsData.shopify);
         }
         if (settingsData.amazon) {
-          const merged = { client_id: "", client_secret: "", refresh_token: "", marketplace_id: "A1F83G8C2ARO7P", ...settingsData.amazon };
+          const merged = {
+            client_id: "",
+            client_secret: "",
+            refresh_token: "",
+            marketplace_id: "A1F83G8C2ARO7P",
+            ...settingsData.amazon,
+          };
           setAmazon(merged);
           setSavedAmazon(merged);
         }
         if (settingsData.amazon_ads) {
-          const merged = { client_id: "", client_secret: "", refresh_token: "", profile_id: "", ...settingsData.amazon_ads };
+          const merged = {
+            client_id: "",
+            client_secret: "",
+            refresh_token: "",
+            profile_id: "",
+            ...settingsData.amazon_ads,
+          };
           setAmazonAds(merged);
           setSavedAmazonAds(merged);
         }
@@ -207,7 +312,9 @@ export default function SettingsPage() {
         if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
         if (userData.role) setUserRole(userData.role);
       })
-      .catch(() => setMessage({ type: "error", text: "Failed to load settings" }))
+      .catch(() =>
+        setMessage({ type: "error", text: "Failed to load settings" }),
+      )
       .finally(() => setLoading(false));
   }, [apiFetch, currentOrg]);
 
@@ -222,18 +329,24 @@ export default function SettingsPage() {
     } else if (shopifyParam === "error") {
       const reason = searchParams.get("reason") ?? "unknown";
       const reasonMessages: Record<string, string> = {
-        missing_app_credentials: "Save your Client ID and Client Secret before connecting via OAuth.",
+        missing_app_credentials:
+          "Save your Client ID and Client Secret before connecting via OAuth.",
         unauthorized: "You must be logged in to connect Shopify.",
         forbidden: "You do not have access to this organisation.",
         missing_params: "Missing required parameters. Please try again.",
         missing_state: "Session expired — please try connecting again.",
         state_mismatch: "Security check failed. Please try connecting again.",
-        invalid_hmac: "Shopify signature verification failed. Please try again.",
-        token_exchange: "Failed to exchange authorisation code with Shopify. Check your Client Secret.",
+        invalid_hmac:
+          "Shopify signature verification failed. Please try again.",
+        token_exchange:
+          "Failed to exchange authorisation code with Shopify. Check your Client Secret.",
         no_token: "Shopify did not return an access token. Please try again.",
-        missing_credentials: "App credentials missing. Please save Client ID and Secret first.",
+        missing_credentials:
+          "App credentials missing. Please save Client ID and Secret first.",
       };
-      const text = reasonMessages[reason] ?? `Shopify connection failed (${reason}). Please try again.`;
+      const text =
+        reasonMessages[reason] ??
+        `Shopify connection failed (${reason}). Please try again.`;
       setMessage({ type: "error", text });
       setActiveTab("shopify");
       window.history.replaceState({}, "", "/settings");
@@ -286,7 +399,12 @@ export default function SettingsPage() {
         const reload = await apiFetch("/api/settings");
         const reloaded = await reload.json();
         if (reloaded.posthog) {
-          const merged = { api_key: "", project_id: "", host: "eu.posthog.com", ...reloaded.posthog };
+          const merged = {
+            api_key: "",
+            project_id: "",
+            host: "eu.posthog.com",
+            ...reloaded.posthog,
+          };
           setPosthog(merged);
           setSavedPosthog(merged);
         }
@@ -449,11 +567,21 @@ export default function SettingsPage() {
   }
 
   // Detect unsaved changes per section
-  const hasShopifyChanges = (Object.keys(shopify) as (keyof ShopifyForm)[]).some((k) => shopify[k] !== savedShopify[k]);
-  const hasPosthogChanges = (Object.keys(posthog) as (keyof PosthogForm)[]).some((k) => posthog[k] !== savedPosthog[k]);
-  const hasMetaChanges = (Object.keys(meta) as (keyof MetaForm)[]).some((k) => meta[k] !== savedMeta[k]);
-  const hasAmazonChanges = (Object.keys(amazon) as (keyof AmazonForm)[]).some((k) => amazon[k] !== savedAmazon[k]);
-  const hasAmazonAdsChanges = (Object.keys(amazonAds) as (keyof AmazonAdsForm)[]).some((k) => amazonAds[k] !== savedAmazonAds[k]);
+  const hasShopifyChanges = (
+    Object.keys(shopify) as (keyof ShopifyForm)[]
+  ).some((k) => shopify[k] !== savedShopify[k]);
+  const hasPosthogChanges = (
+    Object.keys(posthog) as (keyof PosthogForm)[]
+  ).some((k) => posthog[k] !== savedPosthog[k]);
+  const hasMetaChanges = (Object.keys(meta) as (keyof MetaForm)[]).some(
+    (k) => meta[k] !== savedMeta[k],
+  );
+  const hasAmazonChanges = (Object.keys(amazon) as (keyof AmazonForm)[]).some(
+    (k) => amazon[k] !== savedAmazon[k],
+  );
+  const hasAmazonAdsChanges = (
+    Object.keys(amazonAds) as (keyof AmazonAdsForm)[]
+  ).some((k) => amazonAds[k] !== savedAmazonAds[k]);
 
   // Reusable locked-input component
   function LockedInput({
@@ -543,7 +671,11 @@ export default function SettingsPage() {
   }) {
     const [file, setFile] = useState<File | null>(null);
     const [importing, setImporting] = useState(false);
-    const [result, setResult] = useState<{ imported: number; failed: number; total: number } | null>(null);
+    const [result, setResult] = useState<{
+      imported: number;
+      failed: number;
+      total: number;
+    } | null>(null);
     const [error, setError] = useState<string | null>(null);
 
     async function handleImport() {
@@ -565,7 +697,11 @@ export default function SettingsPage() {
         if (!res.ok) {
           setError(data.details || data.error || "Import failed");
         } else {
-          setResult({ imported: data.imported, failed: data.failed, total: data.total });
+          setResult({
+            imported: data.imported,
+            failed: data.failed,
+            total: data.total,
+          });
         }
       } catch {
         setError("Request failed");
@@ -578,8 +714,9 @@ export default function SettingsPage() {
       <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
         <h2 className="text-lg font-semibold mb-1">Import Orders from CSV</h2>
         <p className="text-sm text-zinc-500 mb-4">
-          Upload a Shopify orders CSV export to import historical orders beyond the 60-day API limit.
-          Export from Shopify Admin → Orders → Export → All orders.
+          Upload a Shopify orders CSV export to import historical orders beyond
+          the 60-day API limit. Export from Shopify Admin → Orders → Export →
+          All orders.
         </p>
 
         <div className="flex flex-col gap-4">
@@ -615,12 +752,15 @@ export default function SettingsPage() {
             </button>
             {result && (
               <span className="text-sm text-green-600 dark:text-green-400">
-                {result.imported.toLocaleString()} of {result.total.toLocaleString()} orders imported
+                {result.imported.toLocaleString()} of{" "}
+                {result.total.toLocaleString()} orders imported
                 {result.failed > 0 && ` (${result.failed} failed)`}
               </span>
             )}
             {error && (
-              <span className="text-sm text-red-600 dark:text-red-400">Error: {error}</span>
+              <span className="text-sm text-red-600 dark:text-red-400">
+                Error: {error}
+              </span>
             )}
           </div>
         </div>
@@ -637,13 +777,31 @@ export default function SettingsPage() {
     apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
   }) {
     const [startDate, setStartDate] = useState("2025-01-01");
-    const [ordersState, setOrdersState] = useState<{ running: boolean; count: number; failed: number; done: boolean; error: string | null }>({ running: false, count: 0, failed: 0, done: false, error: null });
-    const [customersState, setCustomersState] = useState<{ running: boolean; count: number; failed: number; done: boolean; error: string | null }>({ running: false, count: 0, failed: 0, done: false, error: null });
+    const [ordersState, setOrdersState] = useState<{
+      running: boolean;
+      count: number;
+      failed: number;
+      done: boolean;
+      error: string | null;
+    }>({ running: false, count: 0, failed: 0, done: false, error: null });
+    const [customersState, setCustomersState] = useState<{
+      running: boolean;
+      count: number;
+      failed: number;
+      done: boolean;
+      error: string | null;
+    }>({ running: false, count: 0, failed: 0, done: false, error: null });
 
     async function runBackfill(type: "orders" | "customers") {
       if (!orgId) return;
       const setState = type === "orders" ? setOrdersState : setCustomersState;
-      setState({ running: true, count: 0, failed: 0, done: false, error: null });
+      setState({
+        running: true,
+        count: 0,
+        failed: 0,
+        done: false,
+        error: null,
+      });
 
       let cursor: string | null = null;
       let total = 0;
@@ -664,20 +822,38 @@ export default function SettingsPage() {
           const data = await res.json();
           total += data.upserted ?? 0;
           totalFailed += data.failed ?? 0;
-          setState({ running: true, count: total, failed: totalFailed, done: false, error: null });
+          setState({
+            running: true,
+            count: total,
+            failed: totalFailed,
+            done: false,
+            error: null,
+          });
 
           if (!data.hasNextPage) break;
           cursor = data.endCursor;
         }
-        setState({ running: false, count: total, failed: totalFailed, done: true, error: null });
+        setState({
+          running: false,
+          count: total,
+          failed: totalFailed,
+          done: true,
+          error: null,
+        });
       } catch (err) {
-        setState({ running: false, count: total, failed: totalFailed, done: false, error: err instanceof Error ? err.message : String(err) });
+        setState({
+          running: false,
+          count: total,
+          failed: totalFailed,
+          done: false,
+          error: err instanceof Error ? err.message : String(err),
+        });
       }
     }
 
     return (
       <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
-        <h2 className="text-lg font-semibold mb-1">Data Backfill</h2>
+        <h2 className="text-lg font-semibold mb-1">Data Backfill via API</h2>
         <p className="text-sm text-zinc-500 mb-4">
           Import historical data from Shopify from the selected start date.
         </p>
@@ -691,7 +867,9 @@ export default function SettingsPage() {
               onChange={(e) => setStartDate(e.target.value)}
               className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
             />
-            <p className="text-xs text-zinc-400 mt-1">Leave empty to import all records.</p>
+            <p className="text-xs text-zinc-400 mt-1">
+              Leave empty to import all records.
+            </p>
           </div>
 
           <div className="flex flex-col gap-3">
@@ -702,19 +880,39 @@ export default function SettingsPage() {
                 <div key={type} className="flex items-center gap-3">
                   <button
                     onClick={() => runBackfill(type)}
-                    disabled={state.running || ordersState.running || customersState.running}
+                    disabled={
+                      state.running ||
+                      ordersState.running ||
+                      customersState.running
+                    }
                     className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50 w-40"
                   >
                     {state.running ? `Importing...` : `Backfill ${label}`}
                   </button>
                   <span className="text-sm text-zinc-500">
-                    {state.running && `${state.count.toLocaleString()} ${label.toLowerCase()} imported${state.failed > 0 ? ` (${state.failed} failed)` : ""}`}
+                    {state.running &&
+                      `${state.count.toLocaleString()} ${label.toLowerCase()} imported${state.failed > 0 ? ` (${state.failed} failed)` : ""}`}
                     {state.done && (
-                      <span className={state.failed > 0 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}>
-                        {state.count.toLocaleString()} {label.toLowerCase()} imported{state.failed > 0 ? `, ${state.failed} failed` : ""}
+                      <span
+                        className={
+                          state.failed > 0
+                            ? "text-amber-600 dark:text-amber-400"
+                            : "text-green-600 dark:text-green-400"
+                        }
+                      >
+                        {state.count.toLocaleString()} {label.toLowerCase()}{" "}
+                        imported
+                        {state.failed > 0 ? `, ${state.failed} failed` : ""}
                       </span>
                     )}
-                    {state.error && <span className="text-red-600 dark:text-red-400">Error: {state.error}{state.count > 0 ? ` (${state.count} imported before failure)` : ""}</span>}
+                    {state.error && (
+                      <span className="text-red-600 dark:text-red-400">
+                        Error: {state.error}
+                        {state.count > 0
+                          ? ` (${state.count} imported before failure)`
+                          : ""}
+                      </span>
+                    )}
                   </span>
                 </div>
               );
@@ -733,7 +931,10 @@ export default function SettingsPage() {
         {/* Tab bar skeleton */}
         <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 mb-6">
           {[...Array(4)].map((_, i) => (
-            <div key={i} className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-t animate-pulse mx-1" />
+            <div
+              key={i}
+              className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-t animate-pulse mx-1"
+            />
           ))}
         </div>
 
@@ -812,9 +1013,13 @@ export default function SettingsPage() {
             <h2 className="text-lg font-semibold mb-1">Shopify</h2>
 
             <div className="mb-4 flex flex-col gap-1">
-              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Option 1 — Custom App (Recommended)</p>
+              <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                Option 1 — Custom App (Recommended)
+              </p>
               <p className="text-sm text-zinc-500">
-                Create a custom app directly in the client&apos;s Shopify Admin (Settings → Apps → Develop apps). Gives access to the full order history with no 60-day limit.
+                Create a custom app directly in the client&apos;s Shopify Admin
+                (Settings → Apps → Develop apps). Gives access to the full order
+                history with no 60-day limit.
               </p>
             </div>
 
@@ -867,10 +1072,14 @@ export default function SettingsPage() {
                 </div>
 
                 <div className="bg-zinc-50 dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-700 rounded-md p-3">
-                  <label className="block text-sm font-medium mb-1">Webhook URL</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Webhook URL
+                  </label>
                   <code className="text-xs break-all">{webhookUrl}</code>
                   <p className="text-xs text-zinc-400 mt-2">
-                    Register this in Shopify Admin → Settings → Notifications → Webhooks for &quot;Order creation&quot; and &quot;Order update&quot; events (JSON format).
+                    Register this in Shopify Admin → Settings → Notifications →
+                    Webhooks for &quot;Order creation&quot; and &quot;Order
+                    update&quot; events (JSON format).
                   </p>
                 </div>
               </div>
@@ -878,44 +1087,57 @@ export default function SettingsPage() {
 
             {/* OAuth section — for Partner Dashboard apps */}
             <div className="mt-6 pt-6 border-t border-zinc-200 dark:border-zinc-700 flex flex-col gap-4">
-                <div className="flex flex-col gap-1">
-                  <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">Option 2 — Partner Dashboard OAuth</p>
-                  <p className="text-sm text-zinc-500">For existing setups using a Partner Dashboard app. Note: access to orders older than 60 days requires Shopify approval for the <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">read_all_orders</code> scope.</p>
-                </div>
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-medium text-zinc-500 uppercase tracking-wide">
+                  Option 2 — Partner Dashboard OAuth
+                </p>
+                <p className="text-sm text-zinc-500">
+                  For existing setups using a Partner Dashboard app. Note:
+                  access to orders older than 60 days requires Shopify approval
+                  for the{" "}
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                    read_all_orders
+                  </code>{" "}
+                  scope.
+                </p>
+              </div>
 
-                <LockedInput
-                  fieldKey="shopify.client_id"
-                  label="Client ID"
-                  value={shopify.client_id}
-                  savedValue={savedShopify.client_id}
-                  onChange={(v) => setShopify({ ...shopify, client_id: v })}
-                  placeholder="Client ID from Shopify Partner Dashboard"
-                  helpText="Partner Dashboard → Apps → [your app] → API credentials."
-                  mono
-                />
+              <LockedInput
+                fieldKey="shopify.client_id"
+                label="Client ID"
+                value={shopify.client_id}
+                savedValue={savedShopify.client_id}
+                onChange={(v) => setShopify({ ...shopify, client_id: v })}
+                placeholder="Client ID from Shopify Partner Dashboard"
+                helpText="Partner Dashboard → Apps → [your app] → API credentials."
+                mono
+              />
 
-                <LockedInput
-                  fieldKey="shopify.client_secret"
-                  label="Client Secret"
-                  value={shopify.client_secret}
-                  savedValue={savedShopify.client_secret}
-                  onChange={(v) => setShopify({ ...shopify, client_secret: v })}
-                  placeholder="shpss_xxxxx"
-                  helpText="Partner Dashboard → Apps → [your app] → Settings → Secret."
-                  mono
-                />
+              <LockedInput
+                fieldKey="shopify.client_secret"
+                label="Client Secret"
+                value={shopify.client_secret}
+                savedValue={savedShopify.client_secret}
+                onChange={(v) => setShopify({ ...shopify, client_secret: v })}
+                placeholder="shpss_xxxxx"
+                helpText="Partner Dashboard → Apps → [your app] → Settings → Secret."
+                mono
+              />
 
-                <button
-                  onClick={() => {
-                    const domain = shopify.store_domain || savedShopify.store_domain;
-                    if (!domain || !currentOrg) return;
-                    window.location.href = `/api/auth/shopify?shop=${encodeURIComponent(domain)}&orgId=${currentOrg.id}`;
-                  }}
-                  disabled={!shopify.store_domain && !savedShopify.store_domain}
-                  className="self-start px-4 py-2 bg-[#96BF48] hover:bg-[#85a93f] text-white rounded-md text-sm font-medium disabled:opacity-50"
-                >
-                  {savedShopify.access_token ? "Reconnect with Shopify" : "Connect with Shopify"}
-                </button>
+              <button
+                onClick={() => {
+                  const domain =
+                    shopify.store_domain || savedShopify.store_domain;
+                  if (!domain || !currentOrg) return;
+                  window.location.href = `/api/auth/shopify?shop=${encodeURIComponent(domain)}&orgId=${currentOrg.id}`;
+                }}
+                disabled={!shopify.store_domain && !savedShopify.store_domain}
+                className="self-start px-4 py-2 bg-[#96BF48] hover:bg-[#85a93f] text-white rounded-md text-sm font-medium disabled:opacity-50"
+              >
+                {savedShopify.access_token
+                  ? "Reconnect with Shopify"
+                  : "Connect with Shopify"}
+              </button>
             </div>
           </section>
 
@@ -934,49 +1156,76 @@ export default function SettingsPage() {
             <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
               <h2 className="text-lg font-semibold mb-1">Customer Lifecycle</h2>
               <p className="text-sm text-zinc-500 mb-4">
-                Configure the thresholds (in days since last order) for customer lifecycle stages.
+                Configure the thresholds (in days since last order) for customer
+                lifecycle stages.
               </p>
 
               <div className="flex flex-col gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">New Customer (up to X days)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    New Customer (up to X days)
+                  </label>
                   <input
                     type="number"
                     value={lifecycle.newMaxDays}
-                    onChange={(e) => setLifecycle({ ...lifecycle, newMaxDays: parseInt(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setLifecycle({
+                        ...lifecycle,
+                        newMaxDays: parseInt(e.target.value) || 0,
+                      })
+                    }
                     min={1}
                     className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
                   />
                   <p className="text-xs text-zinc-400 mt-1">
-                    Customers with ≤{lifecycle.newMaxDays} days since last order (or only 1 order) are &quot;New&quot;.
+                    Customers with ≤{lifecycle.newMaxDays} days since last order
+                    (or only 1 order) are &quot;New&quot;.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Due Reorder (up to X days)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Due Reorder (up to X days)
+                  </label>
                   <input
                     type="number"
                     value={lifecycle.reorderMaxDays}
-                    onChange={(e) => setLifecycle({ ...lifecycle, reorderMaxDays: parseInt(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setLifecycle({
+                        ...lifecycle,
+                        reorderMaxDays: parseInt(e.target.value) || 0,
+                      })
+                    }
                     min={lifecycle.newMaxDays + 1}
                     className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
                   />
                   <p className="text-xs text-zinc-400 mt-1">
-                    Customers with {lifecycle.newMaxDays + 1}-{lifecycle.reorderMaxDays} days since last order are &quot;Due Reorder&quot;.
+                    Customers with {lifecycle.newMaxDays + 1}-
+                    {lifecycle.reorderMaxDays} days since last order are
+                    &quot;Due Reorder&quot;.
                   </p>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-medium mb-1">Lapsed (up to X days)</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Lapsed (up to X days)
+                  </label>
                   <input
                     type="number"
                     value={lifecycle.lapsedMaxDays}
-                    onChange={(e) => setLifecycle({ ...lifecycle, lapsedMaxDays: parseInt(e.target.value) || 0 })}
+                    onChange={(e) =>
+                      setLifecycle({
+                        ...lifecycle,
+                        lapsedMaxDays: parseInt(e.target.value) || 0,
+                      })
+                    }
                     min={lifecycle.reorderMaxDays + 1}
                     className="w-32 border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
                   />
                   <p className="text-xs text-zinc-400 mt-1">
-                    Customers with {lifecycle.reorderMaxDays + 1}-{lifecycle.lapsedMaxDays} days are &quot;Lapsed&quot;. Beyond {lifecycle.lapsedMaxDays} days = &quot;Lost&quot;.
+                    Customers with {lifecycle.reorderMaxDays + 1}-
+                    {lifecycle.lapsedMaxDays} days are &quot;Lapsed&quot;.
+                    Beyond {lifecycle.lapsedMaxDays} days = &quot;Lost&quot;.
                   </p>
                 </div>
               </div>
@@ -1029,7 +1278,15 @@ export default function SettingsPage() {
               savedValue={savedMeta.access_token}
               onChange={(v) => setMeta({ ...meta, access_token: v })}
               placeholder="System User token or temporary token"
-              helpText={<>System User token with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">whatsapp_business_messaging</code> permission. Create one in Meta Business Suite → System Users.</>}
+              helpText={
+                <>
+                  System User token with{" "}
+                  <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                    whatsapp_business_messaging
+                  </code>{" "}
+                  permission. Create one in Meta Business Suite → System Users.
+                </>
+              }
               mono
             />
           </div>
@@ -1049,7 +1306,8 @@ export default function SettingsPage() {
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
           <h2 className="text-lg font-semibold mb-1">PostHog</h2>
           <p className="text-sm text-zinc-500 mb-4">
-            Connect your PostHog project for website analytics (sessions, traffic sources, purchase funnel).
+            Connect your PostHog project for website analytics (sessions,
+            traffic sources, purchase funnel).
           </p>
 
           <div className="flex flex-col gap-4">
@@ -1079,12 +1337,21 @@ export default function SettingsPage() {
               <input
                 type="text"
                 value={posthog.host}
-                onChange={(e) => setPosthog({ ...posthog, host: e.target.value })}
+                onChange={(e) =>
+                  setPosthog({ ...posthog, host: e.target.value })
+                }
                 placeholder="eu.posthog.com"
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 text-sm bg-white dark:bg-zinc-900 font-mono"
               />
               <p className="text-xs text-zinc-400 mt-1">
-                <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">eu.posthog.com</code> for EU cloud, <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">us.posthog.com</code> for US cloud.
+                <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                  eu.posthog.com
+                </code>{" "}
+                for EU cloud,{" "}
+                <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                  us.posthog.com
+                </code>{" "}
+                for US cloud.
               </p>
             </div>
           </div>
@@ -1105,7 +1372,8 @@ export default function SettingsPage() {
           <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
             <h2 className="text-lg font-semibold mb-1">Amazon SP-API</h2>
             <p className="text-sm text-zinc-500 mb-4">
-              Connect your Amazon Seller account for sales, traffic and financial reporting.
+              Connect your Amazon Seller account for sales, traffic and
+              financial reporting.
             </p>
 
             <div className="flex flex-col gap-4">
@@ -1116,7 +1384,12 @@ export default function SettingsPage() {
                 savedValue={savedAmazon.client_id}
                 onChange={(v) => setAmazon({ ...amazon, client_id: v })}
                 placeholder="amzn1.application-oa2-client.xxxxx"
-                helpText={<>From Seller Central → Apps &amp; Services → Develop Apps → your app → LWA credentials.</>}
+                helpText={
+                  <>
+                    From Seller Central → Apps &amp; Services → Develop Apps →
+                    your app → LWA credentials.
+                  </>
+                }
                 mono
               />
 
@@ -1138,7 +1411,16 @@ export default function SettingsPage() {
                 savedValue={savedAmazon.refresh_token}
                 onChange={(v) => setAmazon({ ...amazon, refresh_token: v })}
                 placeholder="Atzr|xxxxx"
-                helpText={<>Generated when the seller authorizes your app via the SP-API OAuth flow (starts with <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">Atzr|</code>).</>}
+                helpText={
+                  <>
+                    Generated when the seller authorizes your app via the SP-API
+                    OAuth flow (starts with{" "}
+                    <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      Atzr|
+                    </code>
+                    ).
+                  </>
+                }
                 mono
               />
 
@@ -1149,11 +1431,22 @@ export default function SettingsPage() {
                 savedValue={savedAmazon.marketplace_id}
                 onChange={(v) => setAmazon({ ...amazon, marketplace_id: v })}
                 placeholder="A1F83G8C2ARO7P"
-                helpText={<>
-                  UK: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">A1F83G8C2ARO7P</code> &nbsp;
-                  DE: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">A1PA6795UKMFR9</code> &nbsp;
-                  US: <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">ATVPDKIKX0DER</code>
-                </>}
+                helpText={
+                  <>
+                    UK:{" "}
+                    <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      A1F83G8C2ARO7P
+                    </code>{" "}
+                    &nbsp; DE:{" "}
+                    <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      A1PA6795UKMFR9
+                    </code>{" "}
+                    &nbsp; US:{" "}
+                    <code className="bg-zinc-100 dark:bg-zinc-800 px-1 rounded">
+                      ATVPDKIKX0DER
+                    </code>
+                  </>
+                }
               />
             </div>
 
@@ -1191,7 +1484,8 @@ export default function SettingsPage() {
           <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
             <h2 className="text-lg font-semibold mb-1">Amazon Ads API</h2>
             <p className="text-sm text-zinc-500 mb-4">
-              Connect your Amazon Advertising account for Sponsored Products campaign data.
+              Connect your Amazon Advertising account for Sponsored Products
+              campaign data.
             </p>
 
             <div className="flex flex-col gap-4">
@@ -1211,7 +1505,9 @@ export default function SettingsPage() {
                 label="Client Secret"
                 value={amazonAds.client_secret}
                 savedValue={savedAmazonAds.client_secret}
-                onChange={(v) => setAmazonAds({ ...amazonAds, client_secret: v })}
+                onChange={(v) =>
+                  setAmazonAds({ ...amazonAds, client_secret: v })
+                }
                 placeholder="Client secret from Amazon Ads app"
                 helpText="LWA client secret for your Amazon Ads application."
                 mono
@@ -1222,7 +1518,9 @@ export default function SettingsPage() {
                 label="Refresh Token"
                 value={amazonAds.refresh_token}
                 savedValue={savedAmazonAds.refresh_token}
-                onChange={(v) => setAmazonAds({ ...amazonAds, refresh_token: v })}
+                onChange={(v) =>
+                  setAmazonAds({ ...amazonAds, refresh_token: v })
+                }
                 placeholder="Atzr|xxxxx"
                 helpText="Generated via the Amazon Ads OAuth flow. Separate from the SP-API refresh token."
                 mono
@@ -1276,10 +1574,12 @@ export default function SettingsPage() {
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
           <h2 className="text-lg font-semibold mb-1">Expenses</h2>
           <p className="text-sm text-zinc-500 mb-4">
-            Track recurring and one-off business expenses for profitability reporting.
+            Track recurring and one-off business expenses for profitability
+            reporting.
           </p>
           <p className="text-sm text-zinc-400">
-            Coming soon — expense categories and recurring costs will be configured here.
+            Coming soon — expense categories and recurring costs will be
+            configured here.
           </p>
         </section>
       )}
@@ -1294,9 +1594,12 @@ export default function SettingsPage() {
 
           <div className="flex flex-col gap-5">
             <div>
-              <label className="block text-sm font-medium mb-2">Display Currency</label>
+              <label className="block text-sm font-medium mb-2">
+                Display Currency
+              </label>
               <p className="text-xs text-zinc-400 mb-2">
-                Used as the fallback symbol for orders with no currency recorded. The currency symbol shown in reports and scorecards.
+                Used as the fallback symbol for orders with no currency
+                recorded. The currency symbol shown in reports and scorecards.
               </p>
               <select
                 value={displayCurrency}
@@ -1316,7 +1619,9 @@ export default function SettingsPage() {
                   ["NOK", "kr NOK"],
                   ["DKK", "kr DKK"],
                 ].map(([code, label]) => (
-                  <option key={code} value={code}>{label}</option>
+                  <option key={code} value={code}>
+                    {label}
+                  </option>
                 ))}
               </select>
               <button
@@ -1326,10 +1631,20 @@ export default function SettingsPage() {
                     const res = await apiFetch("/api/settings", {
                       method: "POST",
                       headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({ preferences: { displayCurrency } }),
+                      body: JSON.stringify({
+                        preferences: { displayCurrency },
+                      }),
                     });
-                    if (res.ok) setMessage({ type: "success", text: "Preferences saved." });
-                    else setMessage({ type: "error", text: "Failed to save preferences." });
+                    if (res.ok)
+                      setMessage({
+                        type: "success",
+                        text: "Preferences saved.",
+                      });
+                    else
+                      setMessage({
+                        type: "error",
+                        text: "Failed to save preferences.",
+                      });
                   } finally {
                     setSavingPreferences(false);
                   }
@@ -1341,45 +1656,51 @@ export default function SettingsPage() {
               </button>
             </div>
 
-          <div>
-            <label className="block text-sm font-medium mb-3">Appearance</label>
-            <div className="flex gap-3">
-              {(["light", "system", "dark"] as Theme[]).map((option) => {
-                const labels: Record<Theme, string> = {
-                  light: "Light",
-                  system: "System",
-                  dark: "Dark",
-                };
-                const isActive = theme === option;
-                return (
-                  <button
-                    key={option}
-                    onClick={() => setTheme(option)}
-                    className={`flex-1 flex flex-col items-center gap-2 px-3 py-4 rounded-lg border text-sm font-medium transition-colors ${
-                      isActive
-                        ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
-                        : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-                    }`}
-                  >
-                    {/* Preview swatch */}
-                    <span
-                      className={`w-12 h-8 rounded border border-zinc-200 dark:border-zinc-700 overflow-hidden flex ${
-                        option === "dark" ? "bg-zinc-900" : option === "light" ? "bg-white" : "bg-gradient-to-r from-white to-zinc-900"
+            <div>
+              <label className="block text-sm font-medium mb-3">
+                Appearance
+              </label>
+              <div className="flex gap-3">
+                {(["light", "system", "dark"] as Theme[]).map((option) => {
+                  const labels: Record<Theme, string> = {
+                    light: "Light",
+                    system: "System",
+                    dark: "Dark",
+                  };
+                  const isActive = theme === option;
+                  return (
+                    <button
+                      key={option}
+                      onClick={() => setTheme(option)}
+                      className={`flex-1 flex flex-col items-center gap-2 px-3 py-4 rounded-lg border text-sm font-medium transition-colors ${
+                        isActive
+                          ? "border-zinc-900 dark:border-zinc-100 bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100"
+                          : "border-zinc-200 dark:border-zinc-700 text-zinc-500 dark:text-zinc-400 hover:border-zinc-400 dark:hover:border-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
                       }`}
-                    />
-                    {labels[option]}
-                  </button>
-                );
-              })}
+                    >
+                      {/* Preview swatch */}
+                      <span
+                        className={`w-12 h-8 rounded border border-zinc-200 dark:border-zinc-700 overflow-hidden flex ${
+                          option === "dark"
+                            ? "bg-zinc-900"
+                            : option === "light"
+                              ? "bg-white"
+                              : "bg-gradient-to-r from-white to-zinc-900"
+                        }`}
+                      />
+                      {labels[option]}
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-xs text-zinc-400 mt-3">
+                {theme === "system"
+                  ? "Follows your operating system's light/dark setting."
+                  : theme === "dark"
+                    ? "Always use the dark theme."
+                    : "Always use the light theme."}
+              </p>
             </div>
-            <p className="text-xs text-zinc-400 mt-3">
-              {theme === "system"
-                ? "Follows your operating system's light/dark setting."
-                : theme === "dark"
-                ? "Always use the dark theme."
-                : "Always use the light theme."}
-            </p>
-          </div>
           </div>
         </section>
       )}

@@ -64,7 +64,7 @@ const EXPENSE_COLORS = {
   referralFees: "#6366f1",
 } as const;
 
-function ExpensesTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function ExpensesTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   return (
     <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-sm">
@@ -74,7 +74,7 @@ function ExpensesTooltip({ active, payload, label }: { active?: boolean; payload
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(entry.value)}
+            {formatCurrency(entry.value, currency)}
           </span>
         </div>
       ))}
@@ -116,16 +116,16 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function CustomTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   const revenue = payload.find((e) => e.name === "Revenue")?.value ?? 0;
   const forecast = payload.find((e) => e.name === "Forecast")?.value ?? 0;
@@ -140,7 +140,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
             {entry.name === "Units Ordered" || entry.name === "Sessions"
               ? entry.value.toLocaleString()
-              : formatCurrency(entry.value)}
+              : formatCurrency(entry.value, currency)}
           </span>
         </div>
       ))}
@@ -149,7 +149,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: visible.find((e) => e.name === "Revenue")?.color, opacity: 0.4 }} />
           <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(revenue + forecast)}
+            {formatCurrency(revenue + forecast, currency)}
           </span>
         </div>
       )}
@@ -164,7 +164,7 @@ interface AmazonChartProps {
 }
 
 export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartProps) {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [data, setData] = useState<DataPoint[]>([]);
   const [loading, setLoading] = useState(true);
 
@@ -417,7 +417,7 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
                   axisLine={false}
                   width={50}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip currency={displayCurrency} />} />
                 <Legend
                   verticalAlign="top"
                   height={36}
@@ -470,13 +470,13 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.revenue)}
+              {loading ? "—" : formatCurrency(totals.revenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.adSpend)}
+              {loading ? "—" : formatCurrency(totals.adSpend, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -517,7 +517,7 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
                     axisLine={false}
                     width={50}
                   />
-                  <Tooltip content={<ExpensesTooltip />} />
+                  <Tooltip content={<ExpensesTooltip currency={displayCurrency} />} />
                   <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} />
                   <Line
                     yAxisId="left"
@@ -549,13 +549,13 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
               <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
                 <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Revenue</p>
                 <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-                  {formatCurrency(totals.adRevenue)}
+                  {formatCurrency(totals.adRevenue, displayCurrency)}
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
                 <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
                 <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-                  {formatCurrency(totals.adSpend)}
+                  {formatCurrency(totals.adSpend, displayCurrency)}
                 </p>
               </div>
               <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -567,7 +567,7 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
               <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
                 <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Est. Payout</p>
                 <p className={`text-xl font-semibold ${totals.estimatedPayout >= 0 ? "text-orange-600 dark:text-orange-400" : "text-red-600 dark:text-red-400"}`}>
-                  {formatCurrency(totals.estimatedPayout)}
+                  {formatCurrency(totals.estimatedPayout, displayCurrency)}
                 </p>
               </div>
             </div>
@@ -647,8 +647,8 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
                         row.inventory
                       )}
                     </td>
-                    <td className="table-cell">{formatCurrency(row.valueCost)}</td>
-                    <td className="table-cell">{formatCurrency(row.valueRrp)}</td>
+                    <td className="table-cell">{formatCurrency(row.valueCost, displayCurrency)}</td>
+                    <td className="table-cell">{formatCurrency(row.valueRrp, displayCurrency)}</td>
                     <td className="table-cell">
                       {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
                     </td>
@@ -670,8 +670,8 @@ export function AmazonChart({ dateRange, groupBy, seriesConfig }: AmazonChartPro
                   <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
                   <td className="table-cell min-w-[180px]"></td>
                   <td className="table-cell">{inventoryRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
-                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueCost, 0))}</td>
-                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueCost, 0), displayCurrency)}</td>
+                  <td className="table-cell">{formatCurrency(inventoryRows.reduce((s, r) => s + r.valueRrp, 0), displayCurrency)}</td>
                   <td className="table-cell"></td>
                   <td className="table-cell"></td>
                   <td className="table-cell"></td>

@@ -132,10 +132,10 @@ function pct(val: number | null | undefined): string {
   return (val * 100).toFixed(1) + "%";
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
@@ -598,7 +598,7 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
 // ── Main page ──────────────────────────────────────────────
 
 export default function InventoryPage() {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [activeTab, setActiveTab] = useState<TabKey>("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
@@ -1877,10 +1877,10 @@ export default function InventoryPage() {
                             )}
                           </td>
                           {visibleInventoryCols.has("valueCost") && (
-                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueCost)}</td>
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueCost, displayCurrency)}</td>
                           )}
                           {visibleInventoryCols.has("valueRrp") && (
-                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp)}</td>
+                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp, displayCurrency)}</td>
                           )}
                           {visibleInventoryCols.has("runRate") && (
                             <td className="table-cell">
@@ -1940,10 +1940,10 @@ export default function InventoryPage() {
                           <td className="table-cell"></td>
                           <td className="table-cell">{totalRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
                           {visibleInventoryCols.has("valueCost") && (
-                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueCost, 0))}</td>
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueCost, 0), displayCurrency)}</td>
                           )}
                           {visibleInventoryCols.has("valueRrp") && (
-                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0), displayCurrency)}</td>
                           )}
                           {visibleInventoryCols.has("runRate") && <td className="table-cell"></td>}
                           {visibleInventoryCols.has("daysLeft") && <td className="table-cell"></td>}

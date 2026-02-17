@@ -65,15 +65,15 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function CustomTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   const shopify = payload.find((e) => e.name === "Shopify")?.value ?? 0;
   const amazon = payload.find((e) => e.name === "Amazon")?.value ?? 0;
@@ -94,7 +94,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(entry.value)}
+            {formatCurrency(entry.value, currency)}
           </span>
         </div>
       ))}
@@ -103,7 +103,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0 bg-zinc-900 dark:bg-zinc-100" />
           <span className="text-zinc-600 dark:text-zinc-400">Total Revenue:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(totalRevenue)}
+            {formatCurrency(totalRevenue, currency)}
           </span>
         </div>
       )}
@@ -112,7 +112,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0 bg-zinc-900/40 dark:bg-zinc-100/40" />
           <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(totalRevenue + totalForecast)}
+            {formatCurrency(totalRevenue + totalForecast, currency)}
           </span>
         </div>
       )}
@@ -121,7 +121,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function OverallChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
@@ -291,7 +291,7 @@ export function OverallChart({ controlsContainer }: { controlsContainer?: HTMLDi
                   axisLine={false}
                   width={50}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip currency={displayCurrency} />} />
                 <Legend
                   verticalAlign="top"
                   height={36}
@@ -357,25 +357,25 @@ export function OverallChart({ controlsContainer }: { controlsContainer?: HTMLDi
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.shopifyRevenue + totals.amazonRevenue)}
+              {loading ? "—" : formatCurrency(totals.shopifyRevenue + totals.amazonRevenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Shopify</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.shopifyRevenue)}
+              {loading ? "—" : formatCurrency(totals.shopifyRevenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Amazon</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.amazonRevenue)}
+              {loading ? "—" : formatCurrency(totals.amazonRevenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Net Cash In</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.netCashIn)}
+              {loading ? "—" : formatCurrency(totals.netCashIn, displayCurrency)}
             </p>
           </div>
         </div>

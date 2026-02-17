@@ -53,7 +53,7 @@ interface LapseFilter {
   customMax?: number;
 }
 
-const allColumns: ColumnDef[] = [
+function getAllColumns(displayCurrency: string): ColumnDef[] { return [
   {
     key: "name",
     label: "Customer",
@@ -68,7 +68,7 @@ const allColumns: ColumnDef[] = [
   { key: "email", label: "Email", defaultVisible: true, filterable: true },
   { key: "phone", label: "Phone", defaultVisible: false },
   { key: "ordersCount", label: "Orders", defaultVisible: true, filterable: true },
-  { key: "totalSpent", label: "Total Spent", defaultVisible: true, render: (v) => formatCurrency(v as string) },
+  { key: "totalSpent", label: "Total Spent", defaultVisible: true, render: (v) => formatCurrency(v as string, displayCurrency) },
   {
     key: "emailMarketingConsent",
     label: "Subscribed",
@@ -92,9 +92,9 @@ const allColumns: ColumnDef[] = [
     render: (v) => formatDate(v as string)
   },
   { key: "shopifyCustomerId", label: "Shopify ID", defaultVisible: false },
-];
+]; }
 
-const filterableColumns = allColumns.filter((c) => c.filterable);
+const filterableColumns = getAllColumns("USD").filter((c) => c.filterable);
 
 function formatDate(dateString: string | null): string {
   if (!dateString) return "-";
@@ -105,9 +105,16 @@ function formatDate(dateString: string | null): string {
   });
 }
 
-function formatCurrency(amount: string | null): string {
+const CURRENCY_SYMBOLS: Record<string, string> = {
+  GBP: "£", USD: "$", EUR: "€", CAD: "CA$", AUD: "A$", NZD: "NZ$",
+};
+function currencySymbol(currency: string): string {
+  return CURRENCY_SYMBOLS[currency?.toUpperCase()] ?? currency ?? "$";
+}
+
+function formatCurrency(amount: string | null, currency: string): string {
   if (!amount) return "-";
-  return `£${parseFloat(amount).toFixed(2)}`;
+  return `${currencySymbol(currency)}${parseFloat(amount).toFixed(2)}`;
 }
 
 function formatBoolean(value: boolean): React.ReactNode {
@@ -139,9 +146,11 @@ interface DbStats {
   lifecycle: { new: number; reorder: number; lapsed: number; lost: number };
 }
 
+const _defaultColumnDefs = getAllColumns("USD");
+
 function getInitialColumns(): Set<string> {
   if (typeof window === "undefined") {
-    return new Set(allColumns.filter((c) => c.defaultVisible).map((c) => c.key));
+    return new Set(_defaultColumnDefs.filter((c) => c.defaultVisible).map((c) => c.key));
   }
   const saved = localStorage.getItem(STORAGE_KEY);
   if (saved) {
@@ -151,11 +160,12 @@ function getInitialColumns(): Set<string> {
       // Invalid JSON, use defaults
     }
   }
-  return new Set(allColumns.filter((c) => c.defaultVisible).map((c) => c.key));
+  return new Set(_defaultColumnDefs.filter((c) => c.defaultVisible).map((c) => c.key));
 }
 
 export default function CustomersPage() {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
+  const allColumns = useMemo(() => getAllColumns(displayCurrency), [displayCurrency]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
@@ -814,7 +824,7 @@ export default function CustomersPage() {
             />
             <Scorecard
               title="LTV"
-              value={dbStats.avgTotalSpent != null ? `£${dbStats.avgTotalSpent.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
+              value={dbStats.avgTotalSpent != null ? `${currencySymbol(displayCurrency)}${dbStats.avgTotalSpent.toLocaleString("en-GB", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}` : "-"}
             />
             <Scorecard
               title="Avg Orders / Customer"
@@ -1084,7 +1094,7 @@ export default function CustomersPage() {
             </span>
             <div className="flex items-center gap-2">
               <button
-                onClick={() => setPage((p) => Math.max(1, p - 1))}
+                onClick={() => { setPage((p) => Math.max(1, p - 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 disabled={page === 1}
                 className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -1092,7 +1102,7 @@ export default function CustomersPage() {
               </button>
               <span>{page} / {Math.ceil(filteredCustomers.length / PAGE_SIZE)}</span>
               <button
-                onClick={() => setPage((p) => Math.min(Math.ceil(filteredCustomers.length / PAGE_SIZE), p + 1))}
+                onClick={() => { setPage((p) => Math.min(Math.ceil(filteredCustomers.length / PAGE_SIZE), p + 1)); window.scrollTo({ top: 0, behavior: "smooth" }); }}
                 disabled={page >= Math.ceil(filteredCustomers.length / PAGE_SIZE)}
                 className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
               >

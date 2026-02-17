@@ -79,10 +79,10 @@ type SortDir = "asc" | "desc";
 const ROW_HEIGHT = 45;
 const MAX_VISIBLE_ROWS = 8;
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 2,
   }).format(value);
 }
@@ -172,7 +172,7 @@ function DashboardSettingsPopover({
 }
 
 export function FacebookCampaignsTable({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [dateRange, setDateRange] = usePersistedDateRange(
     "dr-campaigns",
     () => presets.find((p) => p.label === "Today")!.getValue()
@@ -341,7 +341,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Revenue</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : formatCurrency(combinedTotals.revenue)}
+            {loading ? "—" : formatCurrency(combinedTotals.revenue, displayCurrency)}
           </p>
         </div>
         {showSessions && (
@@ -369,7 +369,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
           <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Ad Spend</p>
           <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-            {loading ? "—" : formatCurrency(combinedTotals.adSpend)}
+            {loading ? "—" : formatCurrency(combinedTotals.adSpend, displayCurrency)}
           </p>
         </div>
         <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -484,7 +484,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                   )}
                   {isVisible("adSpend") && (
                     <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.adSpend > 0 ? formatCurrency(row.adSpend) : "—"}
+                      {row.adSpend > 0 ? formatCurrency(row.adSpend, displayCurrency) : "—"}
                     </td>
                   )}
                   {isVisible("orders") && (
@@ -494,7 +494,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                   )}
                   {isVisible("revenue") && (
                     <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.revenue > 0 ? formatCurrency(row.revenue) : "—"}
+                      {row.revenue > 0 ? formatCurrency(row.revenue, displayCurrency) : "—"}
                     </td>
                   )}
                   {isVisible("roas") && (
@@ -504,7 +504,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                   )}
                   {isVisible("costPerResult") && (
                     <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.orders > 0 ? formatCurrency(row.costPerResult) : "—"}
+                      {row.orders > 0 ? formatCurrency(row.costPerResult, displayCurrency) : "—"}
                     </td>
                   )}
                 </tr>
@@ -522,7 +522,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
               Ad Spend
             </p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {formatCurrency(totals.adSpend)}
+              {formatCurrency(totals.adSpend, displayCurrency)}
             </p>
           </div>
           <div className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -530,7 +530,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
               Revenue
             </p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {formatCurrency(totals.revenue)}
+              {formatCurrency(totals.revenue, displayCurrency)}
             </p>
           </div>
           <div className="flex-1 rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -554,7 +554,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
               Cost per Result
             </p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {totals.orders > 0 ? formatCurrency(totals.costPerResult) : "—"}
+              {totals.orders > 0 ? formatCurrency(totals.costPerResult, displayCurrency) : "—"}
             </p>
           </div>
         </div>

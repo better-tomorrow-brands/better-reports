@@ -89,24 +89,24 @@ function formatAxisValue(value: number): string {
   return value.toString();
 }
 
-function formatCurrency(value: number): string {
+function formatCurrency(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 2,
   }).format(value);
 }
 
-function formatCurrencyInt(value: number): string {
+function formatCurrencyInt(value: number, currency: string): string {
   return new Intl.NumberFormat("en-GB", {
     style: "currency",
-    currency: "GBP",
+    currency,
     minimumFractionDigits: 0,
     maximumFractionDigits: 0,
   }).format(value);
 }
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string }) {
+function CustomTooltip({ active, payload, label, currency }: { active?: boolean; payload?: Array<{ name: string; value: number; color: string }>; label?: string; currency: string }) {
   if (!active || !payload?.length) return null;
   const revenue = payload.find((e) => e.name === "Revenue")?.value ?? 0;
   const forecast = payload.find((e) => e.name === "Forecast")?.value ?? 0;
@@ -119,7 +119,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: entry.color }} />
           <span className="text-zinc-600 dark:text-zinc-400">{entry.name}:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {entry.name === "Orders" ? entry.value : formatCurrency(entry.value)}
+            {entry.name === "Orders" ? entry.value : formatCurrency(entry.value, currency)}
           </span>
         </div>
       ))}
@@ -128,7 +128,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
           <span className="w-3 h-3 rounded-sm shrink-0" style={{ backgroundColor: visible.find((e) => e.name === "Revenue")?.color, opacity: 0.4 }} />
           <span className="text-zinc-600 dark:text-zinc-400">Forecast:</span>
           <span className="font-medium text-zinc-900 dark:text-zinc-100">
-            {formatCurrency(revenue + forecast)}
+            {formatCurrency(revenue + forecast, currency)}
           </span>
         </div>
       )}
@@ -137,7 +137,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDivElement | null }) {
-  const { apiFetch, currentOrg } = useOrg();
+  const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [dateRange, setDateRange] = useState<DateRange | undefined>(
     () => presets.find((p) => p.label === "Last 12 months")!.getValue()
   );
@@ -441,7 +441,7 @@ export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDi
                   axisLine={false}
                   width={50}
                 />
-                <Tooltip content={<CustomTooltip />} />
+                <Tooltip content={<CustomTooltip currency={displayCurrency} />} />
                 <Legend
                   verticalAlign="top"
                   height={36}
@@ -494,7 +494,7 @@ export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDi
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Revenue</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.revenue)}
+              {loading ? "—" : formatCurrency(totals.revenue, displayCurrency)}
             </p>
           </div>
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
@@ -506,7 +506,7 @@ export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDi
           <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 p-4">
             <p className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Net Cash In</p>
             <p className="text-xl font-semibold text-zinc-900 dark:text-zinc-100">
-              {loading ? "—" : formatCurrency(totals.netCashIn)}
+              {loading ? "—" : formatCurrency(totals.netCashIn, displayCurrency)}
             </p>
           </div>
         </div>
@@ -581,8 +581,8 @@ export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDi
                         row.inventory
                       )}
                     </td>
-                    <td className="table-cell">{formatCurrencyInt(row.valueCost)}</td>
-                    <td className="table-cell">{formatCurrencyInt(row.valueRrp)}</td>
+                    <td className="table-cell">{formatCurrencyInt(row.valueCost, displayCurrency)}</td>
+                    <td className="table-cell">{formatCurrencyInt(row.valueRrp, displayCurrency)}</td>
                     <td className="table-cell">
                       {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
                     </td>
@@ -604,8 +604,8 @@ export function ShopifyChart({ controlsContainer }: { controlsContainer?: HTMLDi
                   <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
                   <td className="table-cell min-w-[180px]"></td>
                   <td className="table-cell">{inventoryRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
-                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueCost, 0))}</td>
-                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueRrp, 0))}</td>
+                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueCost, 0), displayCurrency)}</td>
+                  <td className="table-cell">{formatCurrencyInt(inventoryRows.reduce((s, r) => s + r.valueRrp, 0), displayCurrency)}</td>
                   <td className="table-cell"></td>
                   <td className="table-cell"></td>
                   <td className="table-cell"></td>

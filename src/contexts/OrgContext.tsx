@@ -16,6 +16,8 @@ interface OrgContextValue {
   isLoading: boolean;
   /** fetch() wrapper that automatically injects X-Org-Id header */
   apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  /** Display currency code for the current org, e.g. "USD", "GBP" */
+  displayCurrency: string;
 }
 
 const OrgContext = createContext<OrgContextValue>({
@@ -24,6 +26,7 @@ const OrgContext = createContext<OrgContextValue>({
   setCurrentOrg: () => {},
   isLoading: true,
   apiFetch: (url, options) => fetch(url, options),
+  displayCurrency: "USD",
 });
 
 const STORAGE_KEY = "better-reports:org-id";
@@ -32,6 +35,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [currentOrg, setCurrentOrgState] = useState<Org | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [displayCurrency, setDisplayCurrency] = useState("USD");
 
   useEffect(() => {
     fetch("/api/organizations")
@@ -59,6 +63,17 @@ export function OrgProvider({ children }: { children: ReactNode }) {
     localStorage.setItem(STORAGE_KEY, String(org.id));
   }, []);
 
+  // Fetch display currency whenever the org changes
+  useEffect(() => {
+    if (!currentOrg) return;
+    fetch("/api/settings", { headers: { "X-Org-Id": String(currentOrg.id) } })
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => {
+        setDisplayCurrency(data?.preferences?.displayCurrency ?? "USD");
+      })
+      .catch(() => {});
+  }, [currentOrg]);
+
   const apiFetch = useCallback((url: string, options?: RequestInit): Promise<Response> => {
     return fetch(url, {
       ...options,
@@ -70,7 +85,7 @@ export function OrgProvider({ children }: { children: ReactNode }) {
   }, [currentOrg]);
 
   return (
-    <OrgContext.Provider value={{ orgs, currentOrg, setCurrentOrg, isLoading, apiFetch }}>
+    <OrgContext.Provider value={{ orgs, currentOrg, setCurrentOrg, isLoading, apiFetch, displayCurrency }}>
       {children}
     </OrgContext.Provider>
   );
