@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon, upsertPosthogAnalytics, getEnvCredentials } from '@/lib/posthog';
-import { appendDailyAnalytics } from '@/lib/sheets';
 import { getPosthogSettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
@@ -32,17 +31,13 @@ export async function GET(request: Request) {
     // Fetch from PostHog
     const analytics = await getDailyAnalytics(date, creds);
 
-    // Write to Google Sheets
-    const result = await appendDailyAnalytics(analytics);
-
-    // Write to Neon
+    // Write to DB
     await upsertPosthogAnalytics(analytics, orgId);
 
     return NextResponse.json({
       success: true,
       date,
       analytics,
-      sheetAction: result.action,
     });
   } catch (error) {
     console.error('PostHog analytics sync error:', error);
