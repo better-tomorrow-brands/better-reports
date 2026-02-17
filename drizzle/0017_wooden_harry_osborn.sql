@@ -1,1 +1,1 @@
-ALTER TABLE "orders" ADD COLUMN "currency" text DEFAULT 'USD';
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "currency" text DEFAULT 'USD';
