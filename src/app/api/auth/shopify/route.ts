@@ -11,9 +11,11 @@ const SCOPES =
   "read_orders,read_all_orders,read_products,read_analytics,write_customers,write_orders,write_discounts,write_price_rules";
 
 export async function GET(request: Request) {
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.better-tomorrow.co";
+
   const { userId } = await auth();
   if (!userId) {
-    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=unauthorized`);
   }
 
   const { searchParams } = new URL(request.url);
@@ -22,31 +24,23 @@ export async function GET(request: Request) {
   const orgId = orgIdStr ? Number(orgIdStr) : NaN;
 
   if (!shop || isNaN(orgId)) {
-    return NextResponse.json(
-      { error: "Missing required params: shop, orgId" },
-      { status: 400 }
-    );
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_params`);
   }
 
   // Verify user has access to this org
   try {
     await requireOrgAccess(orgId);
   } catch {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=forbidden`);
   }
 
   const shopifySettings = await getShopifySettings(orgId);
   if (!shopifySettings?.client_id || !shopifySettings?.client_secret) {
-    return NextResponse.json(
-      { error: "Shopify client_id and client_secret must be saved in settings before connecting" },
-      { status: 400 }
-    );
+    return NextResponse.redirect(`${appUrl}/settings?shopify=error&reason=missing_app_credentials`);
   }
 
   const nonce = randomBytes(16).toString("hex");
 
-  const appUrl =
-    process.env.NEXT_PUBLIC_APP_URL ?? "https://app.better-tomorrow.co";
   const redirectUri = `${appUrl}/api/auth/shopify/callback`;
 
   const oauthUrl = new URL(`https://${shop}/admin/oauth/authorize`);

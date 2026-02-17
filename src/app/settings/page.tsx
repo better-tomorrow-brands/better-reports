@@ -216,7 +216,20 @@ export default function SettingsPage() {
       window.history.replaceState({}, "", "/settings");
     } else if (shopifyParam === "error") {
       const reason = searchParams.get("reason") ?? "unknown";
-      setMessage({ type: "error", text: `Shopify connection failed (${reason}). Please try again.` });
+      const reasonMessages: Record<string, string> = {
+        missing_app_credentials: "Save your Client ID and Client Secret before connecting via OAuth.",
+        unauthorized: "You must be logged in to connect Shopify.",
+        forbidden: "You do not have access to this organisation.",
+        missing_params: "Missing required parameters. Please try again.",
+        missing_state: "Session expired — please try connecting again.",
+        state_mismatch: "Security check failed. Please try connecting again.",
+        invalid_hmac: "Shopify signature verification failed. Please try again.",
+        token_exchange: "Failed to exchange authorisation code with Shopify. Check your Client Secret.",
+        no_token: "Shopify did not return an access token. Please try again.",
+        missing_credentials: "App credentials missing. Please save Client ID and Secret first.",
+      };
+      const text = reasonMessages[reason] ?? `Shopify connection failed (${reason}). Please try again.`;
+      setMessage({ type: "error", text });
       setActiveTab("shopify");
       window.history.replaceState({}, "", "/settings");
     }
