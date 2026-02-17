@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
 import { getSessionsData, getTodayDateLondon } from '@/lib/shopify';
-import { upsertSessionsRow } from '@/lib/sheets';
 import { getShopifySettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
@@ -31,15 +30,11 @@ export async function GET(request: Request) {
     // Fetch from Shopify
     const { visitors, sessions } = await getSessionsData(date, shopifySettings);
 
-    // Write to Google Sheets
-    const result = await upsertSessionsRow({ date, visitors, sessions });
-
     return NextResponse.json({
       success: true,
       date,
       visitors,
       sessions,
-      sheetAction: result.action,
     });
   } catch (error) {
     console.error('Shopify sessions sync error:', error);

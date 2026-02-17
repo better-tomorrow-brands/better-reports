@@ -26,10 +26,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: 'PostHog not configured for this org' }, { status: 400 });
     }
 
-    // Count total events yesterday to verify data exists
-    const yesterday = new Date();
-    yesterday.setDate(yesterday.getDate() - 1);
-    const date = yesterday.toISOString().split('T')[0];
+    // Use provided date, or default to yesterday
+    const dateParam = url.searchParams.get('date');
+    let date: string;
+    if (dateParam) {
+      date = dateParam;
+    } else {
+      const yesterday = new Date();
+      yesterday.setDate(yesterday.getDate() - 1);
+      date = yesterday.toISOString().split('T')[0];
+    }
 
     const countQuery = `SELECT count() as total FROM events WHERE toDate(timestamp) = '${date}'`;
 

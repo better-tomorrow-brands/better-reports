@@ -1,19 +1,19 @@
 {
   "crons": [
     {
-      "path": "/api/cron/posthog-analytics",
+      "path": "/api/cron/posthog-analytics?orgId=1",
       "schedule": "5 0 * * *"
     },
     {
-      "path": "/api/cron/posthog-analytics?date=today",
+      "path": "/api/cron/posthog-analytics?orgId=1&date=today",
       "schedule": "0 * * * *"
     },
     {
-      "path": "/api/cron/facebook-ads",
+      "path": "/api/cron/facebook-ads?orgId=1",
       "schedule": "5 0 * * *"
     },
     {
-      "path": "/api/cron/facebook-ads?date=today",
+      "path": "/api/cron/facebook-ads?orgId=1&date=today",
       "schedule": "0 * * * *"
     },
     {

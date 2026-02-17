@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon, lookupUtmCampaignsFromDb, upsertFacebookAds } from '@/lib/facebook';
-import { syncFacebookAds } from '@/lib/sheets';
+
 import { getFacebookAdsSettings } from '@/lib/settings';
 
 export async function GET(request: Request) {
@@ -34,10 +34,7 @@ export async function GET(request: Request) {
     // Fetch from Facebook Marketing API
     const ads = await getDailyFacebookAds(date, fbSettings);
 
-    // Write to Google Sheets
-    const result = await syncFacebookAds(date, ads);
-
-    // Dual-write to Neon
+    // Write to DB
     const utmMap = await lookupUtmCampaignsFromDb();
     const adsWithUtm = ads.map((ad) => ({
       ...ad,
@@ -50,7 +47,6 @@ export async function GET(request: Request) {
       date,
       adsCount: ads.length,
       dbInserted,
-      ...result,
     });
   } catch (error) {
     console.error('Facebook ads sync error:', error);

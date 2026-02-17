@@ -1,6 +1,5 @@
 import { NextResponse } from 'next/server';
-import { getDailyFacebookAds } from '@/lib/facebook';
-import { appendFacebookAds } from '@/lib/sheets';
+import { getDailyFacebookAds, lookupUtmCampaignsFromDb, upsertFacebookAds } from '@/lib/facebook';
 import { getFacebookAdsSettings } from '@/lib/settings';
 import { requireOrgFromRequest, OrgAuthError } from '@/lib/org-auth';
 
@@ -37,38 +36,33 @@ export async function GET(request: Request) {
   const endDate = url.searchParams.get('end') || new Date().toISOString().split('T')[0];
 
   try {
-    const results: Array<{ date: string; adsCount: number; action: string }> = [];
+    const results: Array<{ date: string; adsCount: number; dbInserted: number }> = [];
 
-    // Generate all dates in range
     const start = new Date(startDate);
     const end = new Date(endDate);
+    const utmMap = await lookupUtmCampaignsFromDb();
 
     for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
       const date = d.toISOString().split('T')[0];
 
       try {
-        // Fetch from Facebook
         const ads = await getDailyFacebookAds(date, fbSettings);
+        const adsWithUtm = ads.map((ad) => ({
+          ...ad,
+          utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
+        }));
+        const dbInserted = await upsertFacebookAds(adsWithUtm, orgId);
 
-        // Append to sheets (no delete)
-        const result = await appendFacebookAds(ads);
-
-        results.push({
-          date,
-          adsCount: ads.length,
-          action: result.action,
-        });
-
+        results.push({ date, adsCount: ads.length, dbInserted });
         console.log(`Backfilled ${date}: ${ads.length} ads`);
 
-        // Small delay to avoid rate limits
         await new Promise((resolve) => setTimeout(resolve, 500));
       } catch (error) {
         console.error(`Failed to backfill ${date}:`, error);
         results.push({
           date,
           adsCount: 0,
-          action: `error: ${error instanceof Error ? error.message : 'unknown'}`,
+          dbInserted: 0,
         });
       }
     }
