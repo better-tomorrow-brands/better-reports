@@ -19,7 +19,7 @@ export async function POST(request: Request) {
 
     const result = await syncShopifyProducts(settings, orgId);
 
-    return NextResponse.json({ success: true, ...result });
+    return NextResponse.json({ success: true, synced: result.synced, skipped: result.skipped, deactivated: result.deactivated });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

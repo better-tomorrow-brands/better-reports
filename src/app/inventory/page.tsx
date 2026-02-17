@@ -175,7 +175,7 @@ const ALL_COLUMNS: ColDef[] = [
   { key: "cartonLengthCm", label: "Carton Length (cm)", defaultVisible: false },
   { key: "cartonHeightCm", label: "Carton Height (cm)", defaultVisible: false },
   { key: "cartonCbm", label: "Carton CBM", defaultVisible: false },
-  { key: "active", label: "Active", defaultVisible: false },
+  { key: "active", label: "Status", defaultVisible: true },
 ];
 
 const ALL_AMAZON_COLUMNS: ColDef[] = [
@@ -603,7 +603,8 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingProducts, setSyncingProducts] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ synced: number; skipped: number } | null>(null);
+  const [syncResult, setSyncResult] = useState<{ synced: number; skipped: number; deactivated: number } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
   const [search, setSearch] = useState("");
 
   // Inventory tab state
@@ -782,7 +783,7 @@ export default function InventoryPage() {
       const res = await apiFetch("/api/products/sync", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setSyncResult({ synced: data.synced, skipped: data.skipped });
+        setSyncResult({ synced: data.synced, skipped: data.skipped, deactivated: data.deactivated ?? 0 });
         // Reload products after sync
         const reloaded = await apiFetch("/api/products");
         if (reloaded.ok) setProducts(await reloaded.json());
@@ -1218,6 +1219,12 @@ export default function InventoryPage() {
   const filtered = useMemo(() => {
     let result = [...products];
 
+    // Status quick-filter (products tab only)
+    if (activeTab === "products" || activeTab === "amazon" || activeTab === "dtc") {
+      if (statusFilter === "active") result = result.filter((p) => p.active);
+      else if (statusFilter === "inactive") result = result.filter((p) => !p.active);
+    }
+
     // Multi-field filters
     if (filters.length > 0) {
       result = result.filter((p) =>
@@ -1262,7 +1269,7 @@ export default function InventoryPage() {
     });
 
     return result;
-  }, [products, filters, search, sortField, sortDirection, activeTab]);
+  }, [products, filters, search, sortField, sortDirection, activeTab, statusFilter]);
 
   // ── Build Product Database columns ───────────────────────
   const columns: Column<Product>[] = useMemo(() => {
@@ -1362,18 +1369,17 @@ export default function InventoryPage() {
     if (visibleCols.has("active")) {
       cols.push({
         key: "active",
-        label: "Active",
+        label: "Status",
         render: (_, row) => (
-          <button
-            onClick={() => saveField(row.id, "active", !row.active)}
-            className={`px-2 py-0.5 rounded text-xs font-medium cursor-pointer ${
+          <span
+            className={`px-2 py-0.5 rounded text-xs font-medium ${
               row.active
                 ? "bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400"
                 : "bg-zinc-100 text-zinc-500 dark:bg-zinc-800 dark:text-zinc-500"
             }`}
           >
-            {row.active ? "Yes" : "No"}
-          </button>
+            {row.active ? "Active" : "Inactive"}
+          </span>
         ),
       });
     }
@@ -1414,12 +1420,57 @@ export default function InventoryPage() {
     const sortFields = activeTab === "amazon" || activeTab === "dtc" ? channelSortFields : baseSortFields;
 
     return (
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-sm text-muted">
           {filtered.length === products.length
             ? products.length
             : `${filtered.length} of ${products.length}`} products
         </span>
+
+        {/* Status filter — products/amazon/dtc tabs */}
+        {(activeTab === "products" || activeTab === "amazon" || activeTab === "dtc") && (
+          <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+            {(["all", "active", "inactive"] as const).map((s) => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors capitalize ${
+                  statusFilter === s
+                    ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                    : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                }`}
+              >
+                {s === "all" ? "All" : s === "active" ? "Active" : "Inactive"}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Sync from Shopify — products tab only */}
+        {activeTab === "products" && (
+          <button
+            onClick={syncProductsFromShopify}
+            disabled={syncingProducts}
+            className="btn btn-secondary btn-sm"
+          >
+            {syncingProducts ? (
+              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              </svg>
+            ) : (
+              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              </svg>
+            )}
+            {syncingProducts ? "Syncing..." : "Sync"}
+          </button>
+        )}
+        {activeTab === "products" && syncResult && (
+          <span className="text-xs text-zinc-500">
+            {syncResult.synced} synced{syncResult.deactivated > 0 ? `, ${syncResult.deactivated} deactivated` : ""}
+          </span>
+        )}
 
         {/* Search */}
         <input
@@ -1630,26 +1681,12 @@ export default function InventoryPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Inventory</h1>
           {activeTab === "products" && (
-            <div className="flex items-center gap-2">
-              {syncResult && (
-                <span className="text-sm text-zinc-500">
-                  Synced {syncResult.synced} products
-                </span>
-              )}
-              <button
-                onClick={syncProductsFromShopify}
-                disabled={syncingProducts}
-                className="px-4 py-2 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-md font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 text-sm"
-              >
-                {syncingProducts ? "Syncing..." : "Sync from Shopify"}
-              </button>
-              <button
-                onClick={addProduct}
-                className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-sm"
-              >
-                Add Product
-              </button>
-            </div>
+            <button
+              onClick={addProduct}
+              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-sm"
+            >
+              Add Product
+            </button>
           )}
         </div>
 

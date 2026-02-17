@@ -83,6 +83,7 @@ export function getTodayDateLondon(): string {
 // ── Shopify Inventory Sync ─────────────────────────────────
 
 import { db } from "@/lib/db";
+import { eq, and, notInArray } from "drizzle-orm";
 import { inventorySnapshots, products } from "@/lib/db/schema";
 
 interface ShopifyInventoryItem {
@@ -227,11 +228,12 @@ interface ShopifyProductsResponse {
 export async function syncShopifyProducts(
   settings: ShopifySettings,
   orgId: number
-): Promise<{ synced: number; skipped: number }> {
+): Promise<{ synced: number; skipped: number; deactivated: number }> {
   let synced = 0;
   let skipped = 0;
   let cursor: string | null = null;
   let hasNextPage = true;
+  const syncedSkus: string[] = [];
 
   while (hasNextPage) {
     const afterClause = cursor ? `, after: "${cursor}"` : "";
@@ -286,22 +288,26 @@ export async function syncShopifyProducts(
         continue;
       }
 
+      const trimmedSku = sku.trim();
       await db
         .insert(products)
         .values({
           orgId,
-          sku: sku.trim(),
+          sku: trimmedSku,
           productName: product.title || null,
           unitBarcode: barcode || null,
+          active: true,
         })
         .onConflictDoUpdate({
           target: [products.orgId, products.sku],
           set: {
             productName: product.title || null,
             unitBarcode: barcode || null,
+            active: true,
             updatedAt: new Date(),
           },
         });
+      syncedSkus.push(trimmedSku);
       synced++;
     }
 
@@ -309,5 +315,21 @@ export async function syncShopifyProducts(
     cursor = variants.pageInfo.endCursor;
   }
 
-  return { synced, skipped };
+  // Mark any products not returned by Shopify as inactive
+  let deactivated = 0;
+  if (syncedSkus.length > 0) {
+    const result = await db
+      .update(products)
+      .set({ active: false, updatedAt: new Date() })
+      .where(
+        and(
+          eq(products.orgId, orgId),
+          notInArray(products.sku, syncedSkus)
+        )
+      )
+      .returning({ sku: products.sku });
+    deactivated = result.length;
+  }
+
+  return { synced, skipped, deactivated };
 }
