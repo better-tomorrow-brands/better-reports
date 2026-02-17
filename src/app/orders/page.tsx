@@ -261,6 +261,7 @@ function getInitialColumns(): Set<string> {
 export default function OrdersPage() {
   const { apiFetch, currentOrg } = useOrg();
   const [orders, setOrders] = useState<Order[]>([]);
+  const [displayCurrency, setDisplayCurrency] = useState("USD");
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [total, setTotal] = useState(0);
@@ -327,6 +328,12 @@ export default function OrdersPage() {
       .then((res) => res.json())
       .then((data) => {
         if (data.utmCampaigns) setUtmCampaignOptions(data.utmCampaigns);
+      })
+      .catch(() => {});
+    apiFetch("/api/settings")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.preferences?.displayCurrency) setDisplayCurrency(data.preferences.displayCurrency);
       })
       .catch(() => {});
   }, [apiFetch, currentOrg]);
@@ -629,9 +636,23 @@ export default function OrdersPage() {
   // Scorecard stats
   const stats = useMemo(() => {
     const totalOrders = filteredOrders.length;
-    const totalRevenue = filteredOrders.reduce((sum, order) => {
-      return sum + (order.total ? parseFloat(order.total) : 0);
-    }, 0);
+
+    // Group revenue by currency (fall back to displayCurrency for null)
+    const revenueByCurrency: Record<string, number> = {};
+    for (const order of filteredOrders) {
+      const c = (order.currency ?? displayCurrency).toUpperCase();
+      revenueByCurrency[c] = (revenueByCurrency[c] ?? 0) + (order.total ? parseFloat(order.total) : 0);
+    }
+    // Sort by total descending for display
+    const revenueGroups = Object.entries(revenueByCurrency).sort((a, b) => b[1] - a[1]);
+    const totalRevenue = revenueGroups.reduce((sum, [, v]) => sum + v, 0); // used for % change (single-currency case)
+    const primaryCurrency = revenueGroups[0]?.[0] ?? displayCurrency;
+    const isMixedCurrency = revenueGroups.length > 1;
+
+    const revenueDisplay = isMixedCurrency
+      ? revenueGroups.map(([c, v]) => `${currencySymbol(c)}${Math.round(v).toLocaleString("en-GB")}`).join(" · ")
+      : `${currencySymbol(primaryCurrency)}${Math.round(revenueGroups[0]?.[1] ?? 0).toLocaleString("en-GB")}`;
+
     const unfulfilled = filteredOrders.filter(
       (order) => !order.fulfillmentStatus || order.fulfillmentStatus === "unfulfilled"
     ).length;
@@ -644,24 +665,23 @@ export default function OrdersPage() {
       return sum + (order.total ? parseFloat(order.total) : 0);
     }, 0);
 
-    // Calculate percentage changes
     const ordersChange = prevTotalOrders > 0
       ? Math.round(((totalOrders - prevTotalOrders) / prevTotalOrders) * 100)
       : null;
-    const revenueChange = prevTotalRevenue > 0
+    const revenueChange = !isMixedCurrency && prevTotalRevenue > 0
       ? Math.round(((totalRevenue - prevTotalRevenue) / prevTotalRevenue) * 100)
       : null;
 
     return {
       totalOrders,
-      totalRevenue,
+      revenueDisplay,
       unfulfilled,
       newCustomers,
       repeatCustomers,
       ordersChange,
       revenueChange,
     };
-  }, [filteredOrders, previousPeriodOrders]);
+  }, [filteredOrders, previousPeriodOrders, displayCurrency]);
 
   if (loading) {
     return (
@@ -752,7 +772,7 @@ export default function OrdersPage() {
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
                 </svg>
               )}
-              {syncing ? "Syncing..." : "Sync"}
+              {syncing ? "Refreshing..." : "Refresh data"}
             </button>
             {syncMessage && (
               <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
@@ -908,7 +928,7 @@ export default function OrdersPage() {
         />
         <Scorecard
           title="Total Revenue"
-          value={`£${Math.round(stats.totalRevenue).toLocaleString("en-GB")}`}
+          value={stats.revenueDisplay}
           trend={dateRange?.from && dateRange?.to && stats.revenueChange !== null ? {
             value: stats.revenueChange,
             isPositive: stats.revenueChange >= 0,

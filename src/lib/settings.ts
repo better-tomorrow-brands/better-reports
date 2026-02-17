@@ -44,6 +44,20 @@ export interface LifecycleSettings {
   // Lost: > lapsedMaxDays
 }
 
+export interface PreferencesSettings {
+  displayCurrency: string; // e.g. "GBP", "USD"
+}
+
+export async function getPreferencesSettings(orgId: number): Promise<PreferencesSettings | null> {
+  const raw = await getSetting(orgId, "preferences");
+  if (!raw) return null;
+  try { return JSON.parse(raw) as PreferencesSettings; } catch { return null; }
+}
+
+export async function savePreferencesSettings(orgId: number, data: PreferencesSettings): Promise<void> {
+  await setSetting(orgId, "preferences", JSON.stringify(data));
+}
+
 export async function getSetting(orgId: number, key: string): Promise<string | null> {
   const rows = await db
     .select({ value: settings.value })

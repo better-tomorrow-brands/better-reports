@@ -83,6 +83,8 @@ export default function SettingsPage() {
     refresh_token: "",
     profile_id: "",
   });
+  const [displayCurrency, setDisplayCurrency] = useState("USD");
+  const [savingPreferences, setSavingPreferences] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
@@ -198,6 +200,9 @@ export default function SettingsPage() {
           const merged = { client_id: "", client_secret: "", refresh_token: "", profile_id: "", ...settingsData.amazon_ads };
           setAmazonAds(merged);
           setSavedAmazonAds(merged);
+        }
+        if (settingsData.preferences?.displayCurrency) {
+          setDisplayCurrency(settingsData.preferences.displayCurrency);
         }
         if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
         if (userData.role) setUserRole(userData.role);
@@ -1287,6 +1292,55 @@ export default function SettingsPage() {
             Personalise how the app looks and behaves for you.
           </p>
 
+          <div className="flex flex-col gap-5">
+            <div>
+              <label className="block text-sm font-medium mb-2">Display Currency</label>
+              <p className="text-xs text-zinc-400 mb-2">
+                Used as the fallback symbol for orders with no currency recorded. The currency symbol shown in reports and scorecards.
+              </p>
+              <select
+                value={displayCurrency}
+                onChange={(e) => setDisplayCurrency(e.target.value)}
+                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm w-48"
+              >
+                {[
+                  ["GBP", "£ GBP"],
+                  ["USD", "$ USD"],
+                  ["EUR", "€ EUR"],
+                  ["CAD", "CA$ CAD"],
+                  ["AUD", "A$ AUD"],
+                  ["NZD", "NZ$ NZD"],
+                  ["CHF", "CHF"],
+                  ["JPY", "¥ JPY"],
+                  ["SEK", "kr SEK"],
+                  ["NOK", "kr NOK"],
+                  ["DKK", "kr DKK"],
+                ].map(([code, label]) => (
+                  <option key={code} value={code}>{label}</option>
+                ))}
+              </select>
+              <button
+                onClick={async () => {
+                  setSavingPreferences(true);
+                  try {
+                    const res = await apiFetch("/api/settings", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({ preferences: { displayCurrency } }),
+                    });
+                    if (res.ok) setMessage({ type: "success", text: "Preferences saved." });
+                    else setMessage({ type: "error", text: "Failed to save preferences." });
+                  } finally {
+                    setSavingPreferences(false);
+                  }
+                }}
+                disabled={savingPreferences}
+                className="mt-3 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {savingPreferences ? "Saving..." : "Save"}
+              </button>
+            </div>
+
           <div>
             <label className="block text-sm font-medium mb-3">Appearance</label>
             <div className="flex gap-3">
@@ -1325,6 +1379,7 @@ export default function SettingsPage() {
                 ? "Always use the dark theme."
                 : "Always use the light theme."}
             </p>
+          </div>
           </div>
         </section>
       )}

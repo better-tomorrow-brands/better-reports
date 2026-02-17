@@ -5,6 +5,7 @@ import {
   getAmazonSettings, saveAmazonSettings,
   getAmazonAdsSettings, saveAmazonAdsSettings,
   getPosthogSettings, savePosthogSettings,
+  getPreferencesSettings, savePreferencesSettings,
 } from "@/lib/settings";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -12,12 +13,13 @@ export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
 
-    const [meta, shopify, amazon, amazonAds, posthog] = await Promise.all([
+    const [meta, shopify, amazon, amazonAds, posthog, preferences] = await Promise.all([
       getMetaSettings(orgId),
       getShopifySettings(orgId),
       getAmazonSettings(orgId),
       getAmazonAdsSettings(orgId),
       getPosthogSettings(orgId),
+      getPreferencesSettings(orgId),
     ]);
 
     // Mask tokens for display
@@ -75,7 +77,7 @@ export async function GET(request: Request) {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, posthog: maskedPosthog });
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, posthog: maskedPosthog, preferences: preferences ?? { displayCurrency: "USD" } });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -144,6 +146,10 @@ export async function POST(request: Request) {
         if (existing) body.posthog.api_key = existing.api_key;
       }
       await savePosthogSettings(orgId, body.posthog);
+    }
+
+    if (body.preferences) {
+      await savePreferencesSettings(orgId, body.preferences);
     }
 
     return NextResponse.json({ success: true });
