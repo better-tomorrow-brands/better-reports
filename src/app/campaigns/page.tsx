@@ -302,12 +302,12 @@ export default function CampaignsPage() {
   const fbColumnPickerRef = useRef<HTMLDivElement>(null);
   const FB_COLUMN_STORAGE_KEY = "campaigns-fb-visible-columns";
   const allFbColumnKeys: (keyof FbCampaign)[] = [
-    "campaign", "adGroup", "ad", "productName", "productUrl", "skuSuffix",
-    "skus", "discountCode", "utmSource", "utmMedium", "utmCampaign",
+    "campaign", "adGroup", "ad", "productName", "productUrl",
+    "discountCode", "utmSource", "utmMedium", "utmCampaign",
     "utmTerm", "productTemplate", "status",
   ];
   const defaultFbVisibleColumns = new Set<string>([
-    "campaign", "adGroup", "productName", "skus", "discountCode", "utmSource", "status",
+    "campaign", "adGroup", "productName", "discountCode", "utmSource", "status",
   ]);
   const [fbVisibleColumns, setFbVisibleColumns] = useState<Set<string>>(() => {
     if (typeof window === "undefined") return defaultFbVisibleColumns;
@@ -418,8 +418,6 @@ export default function CampaignsPage() {
     { key: "ad", label: "Ad" },
     { key: "productName", label: "Product" },
     { key: "productUrl", label: "Product URL" },
-    { key: "skuSuffix", label: "SKU Suffix" },
-    { key: "skus", label: "SKUs", className: "font-mono" },
     { key: "discountCode", label: "Discount" },
     { key: "utmSource", label: "UTM Source" },
     { key: "utmMedium", label: "UTM Medium" },
@@ -2352,26 +2350,6 @@ export default function CampaignsPage() {
                   />
                 </div>
 
-                <div>
-                  <label className="block text-sm font-medium mb-1">SKU Suffix</label>
-                  <input
-                    type="text"
-                    value={fbForm.skuSuffix}
-                    onChange={(e) => updateFbForm("skuSuffix", e.target.value)}
-                    placeholder="e.g. A"
-                    className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-medium mb-1">SKUs</label>
-                  <input
-                    type="text"
-                    value={fbForm.skus}
-                    onChange={(e) => updateFbForm("skus", e.target.value)}
-                    placeholder="Auto-filled from product"
-                    className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
-                  />
-                </div>
 
                 {/* Discount Code Dropdown */}
                 <div className="col-span-2 relative" ref={discountDropdownRef}>
