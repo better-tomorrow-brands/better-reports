@@ -83,7 +83,7 @@ export function getTodayDateLondon(): string {
 // ── Shopify Inventory Sync ─────────────────────────────────
 
 import { db } from "@/lib/db";
-import { inventorySnapshots } from "@/lib/db/schema";
+import { inventorySnapshots, products } from "@/lib/db/schema";
 
 interface ShopifyInventoryItem {
   sku: string;
@@ -202,4 +202,112 @@ export async function upsertShopifyInventory(
     upserted++;
   }
   return upserted;
+}
+
+// ── Shopify Product Sync ───────────────────────────────────
+
+interface ShopifyVariantNode {
+  sku: string | null;
+  barcode: string | null;
+  product: {
+    title: string;
+  };
+}
+
+interface ShopifyProductsResponse {
+  data?: {
+    productVariants: {
+      edges: Array<{ node: ShopifyVariantNode }>;
+      pageInfo: { hasNextPage: boolean; endCursor: string | null };
+    };
+  };
+  errors?: Array<{ message: string }>;
+}
+
+export async function syncShopifyProducts(
+  settings: ShopifySettings,
+  orgId: number
+): Promise<{ synced: number; skipped: number }> {
+  let synced = 0;
+  let skipped = 0;
+  let cursor: string | null = null;
+  let hasNextPage = true;
+
+  while (hasNextPage) {
+    const afterClause = cursor ? `, after: "${cursor}"` : "";
+    const query = `{
+      productVariants(first: 250${afterClause}) {
+        edges {
+          node {
+            sku
+            barcode
+            product {
+              title
+            }
+          }
+        }
+        pageInfo {
+          hasNextPage
+          endCursor
+        }
+      }
+    }`;
+
+    const response = await fetch(
+      `https://${settings.store_domain}/admin/api/${API_VERSION}/graphql.json`,
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Shopify-Access-Token": settings.access_token,
+        },
+        body: JSON.stringify({ query }),
+      }
+    );
+
+    if (!response.ok) {
+      const text = await response.text();
+      throw new Error(`Shopify GraphQL error (${response.status}): ${text.slice(0, 500)}`);
+    }
+
+    const result: ShopifyProductsResponse = await response.json();
+
+    if (result.errors?.length) {
+      throw new Error(`Shopify GraphQL errors: ${result.errors.map((e) => e.message).join(", ")}`);
+    }
+
+    const variants = result.data?.productVariants;
+    if (!variants) break;
+
+    for (const edge of variants.edges) {
+      const { sku, barcode, product } = edge.node;
+      if (!sku?.trim()) {
+        skipped++;
+        continue;
+      }
+
+      await db
+        .insert(products)
+        .values({
+          orgId,
+          sku: sku.trim(),
+          productName: product.title || null,
+          unitBarcode: barcode || null,
+        })
+        .onConflictDoUpdate({
+          target: [products.orgId, products.sku],
+          set: {
+            productName: product.title || null,
+            unitBarcode: barcode || null,
+            updatedAt: new Date(),
+          },
+        });
+      synced++;
+    }
+
+    hasNextPage = variants.pageInfo.hasNextPage;
+    cursor = variants.pageInfo.endCursor;
+  }
+
+  return { synced, skipped };
 }

@@ -602,6 +602,8 @@ export default function InventoryPage() {
   const [activeTab, setActiveTab] = useState<TabKey>("products");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
+  const [syncingProducts, setSyncingProducts] = useState(false);
+  const [syncResult, setSyncResult] = useState<{ synced: number; skipped: number } | null>(null);
   const [search, setSearch] = useState("");
 
   // Inventory tab state
@@ -770,6 +772,23 @@ export default function InventoryPage() {
     const res = await apiFetch(`/api/products?id=${id}`, { method: "DELETE" });
     if (res.ok) {
       setProducts((prev) => prev.filter((p) => p.id !== id));
+    }
+  }, [apiFetch]);
+
+  const syncProductsFromShopify = useCallback(async () => {
+    setSyncingProducts(true);
+    setSyncResult(null);
+    try {
+      const res = await apiFetch("/api/products/sync", { method: "POST" });
+      const data = await res.json();
+      if (res.ok) {
+        setSyncResult({ synced: data.synced, skipped: data.skipped });
+        // Reload products after sync
+        const reloaded = await apiFetch("/api/products");
+        if (reloaded.ok) setProducts(await reloaded.json());
+      }
+    } finally {
+      setSyncingProducts(false);
     }
   }, [apiFetch]);
 
@@ -1611,12 +1630,26 @@ export default function InventoryPage() {
         <div className="flex items-center justify-between mb-6">
           <h1 className="text-2xl font-bold">Inventory</h1>
           {activeTab === "products" && (
-            <button
-              onClick={addProduct}
-              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80"
-            >
-              Add Product
-            </button>
+            <div className="flex items-center gap-2">
+              {syncResult && (
+                <span className="text-sm text-zinc-500">
+                  Synced {syncResult.synced} products
+                </span>
+              )}
+              <button
+                onClick={syncProductsFromShopify}
+                disabled={syncingProducts}
+                className="px-4 py-2 border border-zinc-300 dark:border-zinc-600 text-zinc-700 dark:text-zinc-300 rounded-md font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50 text-sm"
+              >
+                {syncingProducts ? "Syncing..." : "Sync from Shopify"}
+              </button>
+              <button
+                onClick={addProduct}
+                className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-sm"
+              >
+                Add Product
+              </button>
+            </div>
           )}
         </div>
 
@@ -1663,7 +1696,7 @@ export default function InventoryPage() {
                 columns={columns}
                 data={filtered}
                 rowKey="id"
-                emptyMessage={search || filters.length > 0 ? "No products match your search." : "No products yet. Run the backfill to import."}
+                emptyMessage={search || filters.length > 0 ? "No products match your search." : "No products yet. Click \"Sync from Shopify\" to import."}
               />
             )}
           </div>
