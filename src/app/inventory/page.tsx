@@ -1721,7 +1721,7 @@ export default function InventoryPage() {
 
       <div className="page-content">
         {activeTab === "products" ? (
-          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
+          <div className="pt-4 flex flex-col flex-1 min-h-0 overflow-hidden">
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
@@ -1773,7 +1773,7 @@ export default function InventoryPage() {
             )}
           </div>
         ) : activeTab === "amazon" ? (
-          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
+          <div className="pt-4 flex flex-col flex-1 min-h-0 overflow-hidden">
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
@@ -1825,7 +1825,7 @@ export default function InventoryPage() {
             )}
           </div>
         ) : activeTab === "dtc" ? (
-          <div className="pt-4 flex flex-col flex-1 overflow-hidden">
+          <div className="pt-4 flex flex-col flex-1 min-h-0 overflow-hidden">
             {renderToolbar()}
             {renderFilterPills()}
             {loading ? (
