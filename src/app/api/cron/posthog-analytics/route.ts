@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDailyAnalytics, getYesterdayDateLondon, getTodayDateLondon, upsertPosthogAnalytics, getEnvCredentials } from '@/lib/posthog';
-import { getPosthogSettings } from '@/lib/settings';
+import { getPosthogSettings, getOrgsWithSetting } from '@/lib/settings';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -12,41 +12,34 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
-    // Check for date query param: "today" for hourly updates, default to yesterday for daily cron
-    const url = new URL(request.url);
-    const dateParam = url.searchParams.get('date');
-    const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
+  const url = new URL(request.url);
+  const dateParam = url.searchParams.get('date');
+  const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
 
-    const orgIdParam = url.searchParams.get('orgId');
-    if (!orgIdParam) {
-      return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
-    }
-    const orgId = parseInt(orgIdParam);
+  // Get all orgs with PostHog configured
+  const orgIds = await getOrgsWithSetting('posthog');
 
-    // Use org settings if saved, otherwise fall back to env vars
-    const phSettings = await getPosthogSettings(orgId);
-    const creds = phSettings ?? getEnvCredentials();
-
-    // Fetch from PostHog
-    const analytics = await getDailyAnalytics(date, creds);
-
-    // Write to DB
-    await upsertPosthogAnalytics(analytics, orgId);
-
-    return NextResponse.json({
-      success: true,
-      date,
-      analytics,
-    });
-  } catch (error) {
-    console.error('PostHog analytics sync error:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to sync PostHog analytics',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
+  // Fall back to env-var org if nothing in DB (legacy)
+  const envCreds = getEnvCredentials();
+  if (orgIds.length === 0 && envCreds.api_key) {
+    orgIds.push(1);
   }
+
+  const results: Array<{ orgId: number; status: string; error?: string }> = [];
+
+  for (const orgId of orgIds) {
+    try {
+      const phSettings = await getPosthogSettings(orgId);
+      const creds = phSettings ?? envCreds;
+      const analytics = await getDailyAnalytics(date, creds);
+      await upsertPosthogAnalytics(analytics, orgId);
+      results.push({ orgId, status: 'success' });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`PostHog sync failed for org ${orgId}:`, msg);
+      results.push({ orgId, status: 'error', error: msg });
+    }
+  }
+
+  return NextResponse.json({ success: true, date, results });
 }

@@ -1,7 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDailyFacebookAds, getTodayDateLondon, getYesterdayDateLondon, lookupUtmCampaignsFromDb, upsertFacebookAds } from '@/lib/facebook';
-
-import { getFacebookAdsSettings } from '@/lib/settings';
+import { getFacebookAdsSettings, getOrgsWithSetting } from '@/lib/settings';
 
 export async function GET(request: Request) {
   // Verify cron secret in production
@@ -13,49 +12,37 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
   }
 
-  try {
-    // Check for date query param: "today" for hourly updates, default to yesterday for daily cron
-    const url = new URL(request.url);
-    const dateParam = url.searchParams.get('date');
-    const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
+  const url = new URL(request.url);
+  const dateParam = url.searchParams.get('date');
+  const date = dateParam === 'today' ? getTodayDateLondon() : getYesterdayDateLondon();
 
-    const orgIdParam = url.searchParams.get('orgId');
-    if (!orgIdParam) {
-      return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
+  // Get all orgs with Facebook Ads configured
+  const orgIds = await getOrgsWithSetting('facebook_ads');
+
+  const results: Array<{ orgId: number; status: string; adsCount?: number; error?: string }> = [];
+  const utmMap = await lookupUtmCampaignsFromDb();
+
+  for (const orgId of orgIds) {
+    try {
+      const fbSettings = await getFacebookAdsSettings(orgId);
+      if (!fbSettings) {
+        results.push({ orgId, status: 'skipped', error: 'No settings found' });
+        continue;
+      }
+
+      const ads = await getDailyFacebookAds(date, fbSettings);
+      const adsWithUtm = ads.map((ad) => ({
+        ...ad,
+        utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
+      }));
+      const dbInserted = await upsertFacebookAds(adsWithUtm, orgId);
+      results.push({ orgId, status: 'success', adsCount: dbInserted });
+    } catch (error) {
+      const msg = error instanceof Error ? error.message : String(error);
+      console.error(`Facebook ads sync failed for org ${orgId}:`, msg);
+      results.push({ orgId, status: 'error', error: msg });
     }
-    const orgId = parseInt(orgIdParam);
-
-    // Load Facebook Ads credentials from per-org settings
-    const fbSettings = await getFacebookAdsSettings(orgId);
-    if (!fbSettings) {
-      return NextResponse.json({ error: 'Facebook Ads settings not configured for this org' }, { status: 400 });
-    }
-
-    // Fetch from Facebook Marketing API
-    const ads = await getDailyFacebookAds(date, fbSettings);
-
-    // Write to DB
-    const utmMap = await lookupUtmCampaignsFromDb();
-    const adsWithUtm = ads.map((ad) => ({
-      ...ad,
-      utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
-    }));
-    const dbInserted = await upsertFacebookAds(adsWithUtm, orgId);
-
-    return NextResponse.json({
-      success: true,
-      date,
-      adsCount: ads.length,
-      dbInserted,
-    });
-  } catch (error) {
-    console.error('Facebook ads sync error:', error);
-    return NextResponse.json(
-      {
-        error: 'Failed to sync Facebook ads',
-        details: error instanceof Error ? error.message : 'Unknown error',
-      },
-      { status: 500 }
-    );
   }
+
+  return NextResponse.json({ success: true, date, results });
 }

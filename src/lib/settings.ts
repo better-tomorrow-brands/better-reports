@@ -3,6 +3,14 @@ import { db } from "./db";
 import { settings, organizations } from "./db/schema";
 import { encrypt, decrypt } from "./crypto";
 
+export async function getOrgsWithSetting(key: string): Promise<number[]> {
+  const rows = await db
+    .selectDistinct({ orgId: settings.orgId })
+    .from(settings)
+    .where(eq(settings.key, key));
+  return rows.map((r) => r.orgId);
+}
+
 export interface MetaSettings {
   phone_number_id: string;
   waba_id: string;
