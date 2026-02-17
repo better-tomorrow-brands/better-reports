@@ -515,6 +515,101 @@ export default function SettingsPage() {
     );
   }
 
+  // ── CSV Import Section ────────────────────────────────────────────────────
+  function CsvImportSection({
+    orgId,
+    apiFetch,
+  }: {
+    orgId: number | undefined;
+    apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
+  }) {
+    const [file, setFile] = useState<File | null>(null);
+    const [importing, setImporting] = useState(false);
+    const [result, setResult] = useState<{ imported: number; failed: number; total: number } | null>(null);
+    const [error, setError] = useState<string | null>(null);
+
+    async function handleImport() {
+      if (!file || !orgId) return;
+      setImporting(true);
+      setResult(null);
+      setError(null);
+
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+
+        const res = await apiFetch("/api/orders/import-csv", {
+          method: "POST",
+          body: formData,
+        });
+        const data = await res.json();
+
+        if (!res.ok) {
+          setError(data.details || data.error || "Import failed");
+        } else {
+          setResult({ imported: data.imported, failed: data.failed, total: data.total });
+        }
+      } catch {
+        setError("Request failed");
+      } finally {
+        setImporting(false);
+      }
+    }
+
+    return (
+      <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+        <h2 className="text-lg font-semibold mb-1">Import Orders from CSV</h2>
+        <p className="text-sm text-zinc-500 mb-4">
+          Upload a Shopify orders CSV export to import historical orders beyond the 60-day API limit.
+          Export from Shopify Admin → Orders → Export → All orders.
+        </p>
+
+        <div className="flex flex-col gap-4">
+          <div>
+            <label className="block text-sm font-medium mb-2">CSV File</label>
+            <div className="flex items-center gap-3">
+              <label className="cursor-pointer px-4 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800">
+                Choose file
+                <input
+                  type="file"
+                  accept=".csv,text/csv"
+                  className="hidden"
+                  onChange={(e) => {
+                    setFile(e.target.files?.[0] ?? null);
+                    setResult(null);
+                    setError(null);
+                  }}
+                />
+              </label>
+              <span className="text-sm text-zinc-500">
+                {file ? file.name : "No file selected"}
+              </span>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <button
+              onClick={handleImport}
+              disabled={!file || importing}
+              className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50 w-40"
+            >
+              {importing ? "Importing..." : "Import Orders"}
+            </button>
+            {result && (
+              <span className="text-sm text-green-600 dark:text-green-400">
+                {result.imported.toLocaleString()} of {result.total.toLocaleString()} orders imported
+                {result.failed > 0 && ` (${result.failed} failed)`}
+              </span>
+            )}
+            {error && (
+              <span className="text-sm text-red-600 dark:text-red-400">Error: {error}</span>
+            )}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   // ── Backfill Section ──────────────────────────────────────────────────────
   function BackfillSection({
     orgId,
@@ -803,6 +898,11 @@ export default function SettingsPage() {
           {/* Data Backfill - Super Admin Only */}
           {userRole === "super_admin" && (
             <BackfillSection orgId={currentOrg?.id} apiFetch={apiFetch} />
+          )}
+
+          {/* CSV Import - Super Admin Only */}
+          {userRole === "super_admin" && (
+            <CsvImportSection orgId={currentOrg?.id} apiFetch={apiFetch} />
           )}
 
           {/* Lifecycle Settings - Super Admin Only */}
