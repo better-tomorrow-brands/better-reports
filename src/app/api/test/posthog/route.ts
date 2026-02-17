@@ -1,11 +1,23 @@
 import { NextResponse } from 'next/server';
-import { requireOrgFromRequest, OrgAuthError } from '@/lib/org-auth';
 import { getPosthogSettings } from '@/lib/settings';
 import { getEnvCredentials } from '@/lib/posthog';
 
 export async function GET(request: Request) {
   try {
-    const { orgId } = await requireOrgFromRequest(request);
+    const authHeader = request.headers.get('authorization');
+    if (
+      process.env.CRON_SECRET &&
+      authHeader !== `Bearer ${process.env.CRON_SECRET}`
+    ) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    const url = new URL(request.url);
+    const orgIdParam = url.searchParams.get('orgId');
+    if (!orgIdParam) {
+      return NextResponse.json({ error: 'orgId query param required' }, { status: 400 });
+    }
+    const orgId = parseInt(orgIdParam);
 
     const phSettings = await getPosthogSettings(orgId);
     const creds = phSettings ?? getEnvCredentials();
@@ -63,9 +75,6 @@ export async function GET(request: Request) {
       raw_count: countData,
     });
   } catch (error) {
-    if (error instanceof OrgAuthError) {
-      return NextResponse.json({ error: error.message }, { status: error.status });
-    }
     return NextResponse.json(
       { error: error instanceof Error ? error.message : 'Unknown error' },
       { status: 500 }
