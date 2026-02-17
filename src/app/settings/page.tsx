@@ -619,16 +619,17 @@ export default function SettingsPage() {
     apiFetch: (url: string, options?: RequestInit) => Promise<Response>;
   }) {
     const [startDate, setStartDate] = useState("2025-01-01");
-    const [ordersState, setOrdersState] = useState<{ running: boolean; count: number; done: boolean; error: string | null }>({ running: false, count: 0, done: false, error: null });
-    const [customersState, setCustomersState] = useState<{ running: boolean; count: number; done: boolean; error: string | null }>({ running: false, count: 0, done: false, error: null });
+    const [ordersState, setOrdersState] = useState<{ running: boolean; count: number; failed: number; done: boolean; error: string | null }>({ running: false, count: 0, failed: 0, done: false, error: null });
+    const [customersState, setCustomersState] = useState<{ running: boolean; count: number; failed: number; done: boolean; error: string | null }>({ running: false, count: 0, failed: 0, done: false, error: null });
 
     async function runBackfill(type: "orders" | "customers") {
       if (!orgId) return;
       const setState = type === "orders" ? setOrdersState : setCustomersState;
-      setState({ running: true, count: 0, done: false, error: null });
+      setState({ running: true, count: 0, failed: 0, done: false, error: null });
 
       let cursor: string | null = null;
       let total = 0;
+      let totalFailed = 0;
 
       try {
         while (true) {
@@ -644,14 +645,15 @@ export default function SettingsPage() {
 
           const data = await res.json();
           total += data.upserted ?? 0;
-          setState({ running: true, count: total, done: false, error: null });
+          totalFailed += data.failed ?? 0;
+          setState({ running: true, count: total, failed: totalFailed, done: false, error: null });
 
           if (!data.hasNextPage) break;
           cursor = data.endCursor;
         }
-        setState({ running: false, count: total, done: true, error: null });
+        setState({ running: false, count: total, failed: totalFailed, done: true, error: null });
       } catch (err) {
-        setState({ running: false, count: total, done: false, error: err instanceof Error ? err.message : String(err) });
+        setState({ running: false, count: total, failed: totalFailed, done: false, error: err instanceof Error ? err.message : String(err) });
       }
     }
 
@@ -688,9 +690,13 @@ export default function SettingsPage() {
                     {state.running ? `Importing...` : `Backfill ${label}`}
                   </button>
                   <span className="text-sm text-zinc-500">
-                    {state.running && `${state.count.toLocaleString()} ${label.toLowerCase()} imported`}
-                    {state.done && <span className="text-green-600 dark:text-green-400">{state.count.toLocaleString()} {label.toLowerCase()} imported</span>}
-                    {state.error && <span className="text-red-600 dark:text-red-400">Error: {state.error}</span>}
+                    {state.running && `${state.count.toLocaleString()} ${label.toLowerCase()} imported${state.failed > 0 ? ` (${state.failed} failed)` : ""}`}
+                    {state.done && (
+                      <span className={state.failed > 0 ? "text-amber-600 dark:text-amber-400" : "text-green-600 dark:text-green-400"}>
+                        {state.count.toLocaleString()} {label.toLowerCase()} imported{state.failed > 0 ? `, ${state.failed} failed` : ""}
+                      </span>
+                    )}
+                    {state.error && <span className="text-red-600 dark:text-red-400">Error: {state.error}{state.count > 0 ? ` (${state.count} imported before failure)` : ""}</span>}
                   </span>
                 </div>
               );
