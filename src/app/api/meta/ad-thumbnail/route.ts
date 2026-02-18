@@ -60,18 +60,21 @@ export async function GET(request: Request) {
       try {
         const imgUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${settings.ad_account_id}/adimages`);
         imgUrl.searchParams.set("hashes[]", imageHash);
-        imgUrl.searchParams.set("fields", "url");
+        imgUrl.searchParams.set("fields", "url,url_128,width,height");
         imgUrl.searchParams.set("access_token", settings.access_token);
         const iRes = await fetch(imgUrl.toString());
         if (iRes.ok) {
           const iData = await iRes.json();
           const imgEntry = iData?.data?.[0];
+          // url_128 is larger than thumbnail; url is the original upload
           if (imgEntry?.url) fullUrl = imgEntry.url;
+          else if (imgEntry?.url_128) fullUrl = imgEntry.url_128;
         }
       } catch { /* fall through */ }
     }
 
-    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl });
+    const debug = process.env.NODE_ENV === "development";
+    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl, ...(debug ? { _raw: data } : {}) });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
