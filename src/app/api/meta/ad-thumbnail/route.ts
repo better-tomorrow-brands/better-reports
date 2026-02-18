@@ -73,8 +73,16 @@ export async function GET(request: Request) {
       } catch { /* fall through */ }
     }
 
-    const debug = process.env.NODE_ENV === "development";
-    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl, ...(debug ? { _raw: data } : {}) });
+    // Strip the stp size hint from the CDN URL — Meta CDN often serves original resolution without it
+    if (fullUrl) {
+      try {
+        const u = new URL(fullUrl);
+        u.searchParams.delete("stp");
+        fullUrl = u.toString();
+      } catch { /* keep original */ }
+    }
+
+    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
