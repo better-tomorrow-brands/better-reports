@@ -77,29 +77,93 @@ const METRIC_COLS: { key: keyof AdSetRow | keyof AdCreativeRow; label: string; f
   { key: "costPerLandingPageView", label: "Cost/LP View",        fmt: (v) => `$${v.toFixed(2)}` },
 ];
 
+// ─── Lightbox ─────────────────────────────────────────────────────────────────
+
+function Lightbox({ fullUrl, videoId, onClose }: { fullUrl: string | null; videoId: string | null; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [onClose]);
+
+  return (
+    <div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
+      onClick={onClose}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 right-4 text-white/70 hover:text-white text-3xl leading-none"
+        aria-label="Close"
+      >
+        ×
+      </button>
+      <div
+        className="max-w-3xl max-h-[90vh] flex items-center justify-center p-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {videoId ? (
+          <video
+            src={`https://www.facebook.com/video/embed?video_id=${videoId}`}
+            controls
+            className="max-w-full max-h-[80vh] rounded-lg"
+          />
+        ) : fullUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={fullUrl}
+            alt="Ad creative"
+            className="max-w-full max-h-[80vh] rounded-lg object-contain"
+          />
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
 // ─── Ad thumbnail component ───────────────────────────────────────────────────
 
 function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string) => Promise<Response> }) {
-  const [url, setUrl] = useState<string | null | "loading">("loading");
+  const [thumbnailUrl, setThumbnailUrl] = useState<string | null | "loading">("loading");
+  const [fullUrl, setFullUrl] = useState<string | null>(null);
+  const [videoId, setVideoId] = useState<string | null>(null);
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
     apiFetch(`/api/meta/ad-thumbnail?adId=${encodeURIComponent(adId)}`)
       .then((r) => r.json())
-      .then((d) => { if (!cancelled) setUrl(d.thumbnailUrl ?? null); })
-      .catch(() => { if (!cancelled) setUrl(null); });
+      .then((d) => {
+        if (!cancelled) {
+          setThumbnailUrl(d.thumbnailUrl ?? null);
+          setFullUrl(d.fullUrl ?? null);
+          setVideoId(d.videoId ?? null);
+        }
+      })
+      .catch(() => { if (!cancelled) setThumbnailUrl(null); });
     return () => { cancelled = true; };
   }, [adId, apiFetch]);
 
-  if (url === "loading") {
+  if (thumbnailUrl === "loading") {
     return <div className="w-16 h-16 rounded bg-zinc-100 dark:bg-zinc-800 animate-pulse shrink-0" />;
   }
-  if (!url) {
+  if (!thumbnailUrl) {
     return <div className="w-16 h-16 rounded bg-zinc-100 dark:bg-zinc-800 shrink-0 flex items-center justify-center text-zinc-300 dark:text-zinc-600 text-xs">No img</div>;
   }
   return (
-    // eslint-disable-next-line @next/next/no-img-element
-    <img src={url} alt="Ad thumbnail" className="w-16 h-16 rounded object-cover shrink-0 border border-zinc-200 dark:border-zinc-700" />
+    <>
+      <button
+        onClick={() => setLightboxOpen(true)}
+        className="shrink-0 rounded overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-zinc-400"
+        title="Click to enlarge"
+      >
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src={thumbnailUrl} alt="Ad thumbnail" className="w-16 h-16 object-cover" />
+      </button>
+      {lightboxOpen && (
+        <Lightbox fullUrl={fullUrl} videoId={videoId} onClose={() => setLightboxOpen(false)} />
+      )}
+    </>
   );
 }
 

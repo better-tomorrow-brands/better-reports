@@ -25,18 +25,20 @@ export async function GET(request: Request) {
     }
 
     const graphUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${adId}`);
-    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url}");
+    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id}");
     graphUrl.searchParams.set("access_token", settings.access_token);
 
     const res = await fetch(graphUrl.toString());
     if (!res.ok) {
-      return NextResponse.json({ thumbnailUrl: null });
+      return NextResponse.json({ thumbnailUrl: null, fullUrl: null, videoId: null });
     }
 
     const data = await res.json();
     const thumbnailUrl = data?.creative?.thumbnail_url || data?.creative?.image_url || null;
+    const fullUrl = data?.creative?.image_url || data?.creative?.thumbnail_url || null;
+    const videoId = data?.creative?.video_id || null;
 
-    return NextResponse.json({ thumbnailUrl });
+    return NextResponse.json({ thumbnailUrl, fullUrl, videoId });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
