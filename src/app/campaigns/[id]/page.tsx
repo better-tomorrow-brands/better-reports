@@ -120,7 +120,8 @@ function Lightbox({ fullUrl, videoSourceUrl, apiFetch, onClose }: {
         ×
       </button>
       <div
-        className="max-w-3xl max-h-[90vh] flex items-center justify-center p-4"
+        className="flex items-center justify-center p-4"
+        style={{ maxWidth: "min(90vw, 1080px)", maxHeight: "90vh" }}
         onClick={(e) => e.stopPropagation()}
       >
         {videoSourceUrl ? (

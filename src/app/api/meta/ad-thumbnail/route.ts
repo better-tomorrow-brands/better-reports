@@ -73,7 +73,7 @@ export async function GET(request: Request) {
       } catch { /* fall through */ }
     }
 
-    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl, _sameUrl: thumbnailUrl === fullUrl });
+    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
