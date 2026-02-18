@@ -112,7 +112,7 @@ function Lightbox({ fullUrl, videoSourceUrl, onClose }: { fullUrl: string | null
         ) : fullUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={fullUrl}
+            src={`/api/meta/image-proxy?url=${encodeURIComponent(fullUrl)}`}
             alt="Ad creative"
             className="max-w-full max-h-[80vh] rounded-lg object-contain"
           />
