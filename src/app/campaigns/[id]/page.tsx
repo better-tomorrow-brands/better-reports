@@ -224,7 +224,7 @@ export default function CampaignDetailPage() {
     setAdsetsLoading(true);
     const params = new URLSearchParams({ from, to });
     if (campaign.metaCampaignId) params.set("campaignId", campaign.metaCampaignId);
-    if (campaign.utmCampaign) params.set("utmCampaign", campaign.utmCampaign);
+    else if (campaign.utmCampaign) params.set("utmCampaign", campaign.utmCampaign);
 
     try {
       const res = await apiFetch(`/api/reports/facebook-adsets?${params.toString()}`);
