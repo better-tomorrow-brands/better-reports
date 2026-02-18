@@ -1431,7 +1431,7 @@ export default function SettingsPage() {
                 {fbBackfilling ? "Syncing..." : "Run Sync"}
               </button>
               {fbBackfillResult && (
-                <span className={`text-sm ${fbBackfillResult.startsWith("Error") || fbBackfillResult === "Request failed" ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"}`}>
+                <span className={`text-sm ${fbBackfillResult.startsWith("Error") || fbBackfillResult === "Request failed" ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>
                   {fbBackfillResult}
                 </span>
               )}
@@ -1465,7 +1465,7 @@ export default function SettingsPage() {
               {backfillingCampaignIds ? "Running..." : "Run Backfill"}
             </button>
             {campaignIdBackfillResult && (
-              <span className="text-sm text-zinc-500 dark:text-zinc-400">{campaignIdBackfillResult}</span>
+              <span className={`text-sm ${campaignIdBackfillResult.toLowerCase().includes("fail") || campaignIdBackfillResult === "Request failed" ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"}`}>{campaignIdBackfillResult}</span>
             )}
           </div>
         </section>
