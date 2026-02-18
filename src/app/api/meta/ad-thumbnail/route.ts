@@ -37,20 +37,25 @@ export async function GET(request: Request) {
     const creative = data?.creative;
     const thumbnailUrl = creative?.thumbnail_url || creative?.image_url || null;
     const videoId = creative?.video_id || null;
-    const spec = creative?.object_story_spec;
+    const creativeId = creative?.id || null;
 
-    let fullUrl: string | null = creative?.image_url || creative?.thumbnail_url || null;
+    let fullUrl: string | null = thumbnailUrl;
     let videoSourceUrl: string | null = null;
 
-    // Try to pull full-res image from object_story_spec first
-    if (spec) {
-      const specImageUrl =
-        spec?.link_data?.image_url ||
-        spec?.link_data?.picture ||
-        spec?.photo_data?.url ||
-        spec?.video_data?.image_url ||
-        null;
-      if (specImageUrl) fullUrl = specImageUrl;
+    // Fetch a larger thumbnail by calling the creative directly with size params
+    if (creativeId) {
+      try {
+        const fullThumbUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${creativeId}`);
+        fullThumbUrl.searchParams.set("fields", "thumbnail_url");
+        fullThumbUrl.searchParams.set("thumbnail_width", "1080");
+        fullThumbUrl.searchParams.set("thumbnail_height", "1080");
+        fullThumbUrl.searchParams.set("access_token", settings.access_token);
+        const tRes = await fetch(fullThumbUrl.toString());
+        if (tRes.ok) {
+          const tData = await tRes.json();
+          if (tData?.thumbnail_url) fullUrl = tData.thumbnail_url;
+        }
+      } catch { /* fall through */ }
     }
 
     if (videoId) {
