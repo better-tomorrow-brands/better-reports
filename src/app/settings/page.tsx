@@ -117,6 +117,10 @@ export default function SettingsPage() {
   const [savingFacebookAds, setSavingFacebookAds] = useState(false);
   const [backfillingCampaignIds, setBackfillingCampaignIds] = useState(false);
   const [campaignIdBackfillResult, setCampaignIdBackfillResult] = useState<string | null>(null);
+  const [fbBackfillStart, setFbBackfillStart] = useState("");
+  const [fbBackfillEnd, setFbBackfillEnd] = useState("");
+  const [fbBackfilling, setFbBackfilling] = useState(false);
+  const [fbBackfillResult, setFbBackfillResult] = useState<string | null>(null);
   const [savingPosthog, setSavingPosthog] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
@@ -1365,6 +1369,74 @@ export default function SettingsPage() {
           >
             {savingFacebookAds ? "Saving..." : "Save"}
           </button>
+        </section>
+
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+          <h2 className="text-lg font-semibold mb-1">Sync Facebook Ads</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Pull Facebook Ads data for a date range directly from the Meta API and store it in the database.
+          </p>
+          <div className="flex flex-col gap-4">
+            <div className="flex gap-3 items-end">
+              <div>
+                <label className="block text-sm font-medium mb-1">Start Date</label>
+                <input
+                  type="date"
+                  value={fbBackfillStart}
+                  onChange={(e) => setFbBackfillStart(e.target.value)}
+                  className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">End Date</label>
+                <input
+                  type="date"
+                  value={fbBackfillEnd}
+                  onChange={(e) => setFbBackfillEnd(e.target.value)}
+                  className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3">
+              <button
+                onClick={async () => {
+                  setFbBackfilling(true);
+                  setFbBackfillResult(null);
+                  try {
+                    const res = await apiFetch("/api/backfill/facebook", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json" },
+                      body: JSON.stringify({
+                        start: fbBackfillStart || undefined,
+                        end: fbBackfillEnd || undefined,
+                      }),
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                      setFbBackfillResult(
+                        `Done — ${data.daysProcessed} days, ${data.totalAds} ads fetched, ${data.totalInserted} rows upserted.`
+                      );
+                    } else {
+                      setFbBackfillResult(`Error: ${data.error ?? "Unknown error"}`);
+                    }
+                  } catch {
+                    setFbBackfillResult("Request failed");
+                  } finally {
+                    setFbBackfilling(false);
+                  }
+                }}
+                disabled={fbBackfilling}
+                className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {fbBackfilling ? "Syncing..." : "Run Sync"}
+              </button>
+              {fbBackfillResult && (
+                <span className={`text-sm ${fbBackfillResult.startsWith("Error") || fbBackfillResult === "Request failed" ? "text-red-600 dark:text-red-400" : "text-zinc-500 dark:text-zinc-400"}`}>
+                  {fbBackfillResult}
+                </span>
+              )}
+            </div>
+          </div>
         </section>
 
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">

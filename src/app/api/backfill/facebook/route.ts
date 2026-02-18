@@ -5,6 +5,65 @@ import { requireOrgFromRequest, OrgAuthError } from '@/lib/org-auth';
 
 export const maxDuration = 300; // 5 minutes for Vercel
 
+/**
+ * POST /api/backfill/facebook — UI-triggered backfill (org auth, no cron secret needed)
+ * Body: { start: "YYYY-MM-DD", end: "YYYY-MM-DD" }
+ */
+export async function POST(request: Request) {
+  try {
+    const { orgId } = await requireOrgFromRequest(request);
+
+    const fbSettings = await getFacebookAdsSettings(orgId);
+    if (!fbSettings) {
+      return NextResponse.json({ error: 'Facebook Ads settings not configured for this org' }, { status: 400 });
+    }
+
+    const body = await request.json().catch(() => ({}));
+    const startDate: string = body.start || '2025-01-01';
+    const endDate: string = body.end || new Date().toISOString().split('T')[0];
+
+    const results: Array<{ date: string; adsCount: number; dbInserted: number }> = [];
+    const start = new Date(startDate);
+    const end = new Date(endDate);
+    const utmMap = await lookupUtmCampaignsFromDb();
+
+    for (let d = new Date(start); d <= end; d.setDate(d.getDate() + 1)) {
+      const date = d.toISOString().split('T')[0];
+      try {
+        const ads = await getDailyFacebookAds(date, fbSettings);
+        const adsWithUtm = ads.map((ad) => ({
+          ...ad,
+          utm_campaign: utmMap.get(ad.adset.toLowerCase()) || "",
+        }));
+        const dbInserted = await upsertFacebookAds(adsWithUtm, orgId);
+        results.push({ date, adsCount: ads.length, dbInserted });
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      } catch (error) {
+        console.error(`Failed to backfill ${date}:`, error);
+        results.push({ date, adsCount: 0, dbInserted: 0 });
+      }
+    }
+
+    const totalAds = results.reduce((s, r) => s + r.adsCount, 0);
+    const totalInserted = results.reduce((s, r) => s + r.dbInserted, 0);
+
+    return NextResponse.json({
+      success: true,
+      startDate,
+      endDate,
+      daysProcessed: results.length,
+      totalAds,
+      totalInserted,
+    });
+  } catch (error) {
+    if (error instanceof OrgAuthError) {
+      return NextResponse.json({ error: error.message }, { status: error.status });
+    }
+    console.error('Facebook backfill POST error:', error);
+    return NextResponse.json({ error: 'Failed to backfill Facebook ads' }, { status: 500 });
+  }
+}
+
 export async function GET(request: Request) {
   // Verify cron secret in production
   const authHeader = request.headers.get('authorization');
