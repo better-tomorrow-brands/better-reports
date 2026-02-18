@@ -615,6 +615,7 @@ export default function InventoryPage() {
   const [inventoryItems, setInventoryItems] = useState<InventoryItem[]>([]);
   const [inventoryDate, setInventoryDate] = useState<string>("");
   const [inventoryLoading, setInventoryLoading] = useState(false);
+  const [shipbobEnabled, setShipbobEnabled] = useState(false);
 
   // Sort
   const [sortField, setSortField] = useState<SortField>("sku");
@@ -733,6 +734,7 @@ export default function InventoryPage() {
         const data = await res.json();
         setInventoryItems(data.items);
         setInventoryDate(data.date);
+        setShipbobEnabled(data.shipbobEnabled ?? false);
       }
     } finally {
       setInventoryLoading(false);
@@ -966,7 +968,7 @@ export default function InventoryPage() {
       const shopifyRate = shopifySold > 0 ? shopifySold / forecastDays : null;
       const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
       const whQty = item.warehouseQty ?? 0;
-      const sbQty = item.shipbobQty ?? 0;
+      const sbQty = shipbobEnabled ? (item.shipbobQty ?? 0) : 0;
       const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty + sbQty;
       const totalSold = shopifySold + amazonSold;
       const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
@@ -1025,20 +1027,22 @@ export default function InventoryPage() {
       });
 
       // ShipBob row (DTC fulfillment — uses shopify run rate as proxy)
-      const shipbobDaysLeft = shopifyRate ? Math.floor(sbQty / shopifyRate) : null;
-      rows.push({
-        sku: item.sku,
-        productName: item.productName,
-        channel: "ShipBob",
-        inventory: sbQty,
-        valueCost: sbQty * lc,
-        valueRrp: sbQty * (item.dtcRrp ?? 0),
-        runRate: shopifyRate,
-        daysLeft: shipbobDaysLeft,
-        oosDate: shipbobDaysLeft !== null ? format(addDays(new Date(), shipbobDaysLeft), "dd MMM yyyy") : null,
-        isFirstInGroup: false,
-        sourceItem: item,
-      });
+      if (shipbobEnabled) {
+        const shipbobDaysLeft = shopifyRate ? Math.floor(sbQty / shopifyRate) : null;
+        rows.push({
+          sku: item.sku,
+          productName: item.productName,
+          channel: "ShipBob",
+          inventory: sbQty,
+          valueCost: sbQty * lc,
+          valueRrp: sbQty * (item.dtcRrp ?? 0),
+          runRate: shopifyRate,
+          daysLeft: shipbobDaysLeft,
+          oosDate: shipbobDaysLeft !== null ? format(addDays(new Date(), shipbobDaysLeft), "dd MMM yyyy") : null,
+          isFirstInGroup: false,
+          sourceItem: item,
+        });
+      }
 
       // Warehouse row
       rows.push({
@@ -1056,7 +1060,7 @@ export default function InventoryPage() {
       });
     }
     return rows;
-  }, [inventoryItems, shopifyUnits, amazonUnits, forecastDays]);
+  }, [inventoryItems, shopifyUnits, amazonUnits, forecastDays, shipbobEnabled]);
 
   // ── Filter grouped rows by column visibility ────────────
   const filteredGroupedRows = useMemo(() => {
@@ -1064,7 +1068,7 @@ export default function InventoryPage() {
       if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty")) return false;
       if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty")) return false;
       if (row.channel === "Warehouse" && !visibleInventoryCols.has("warehouseQty")) return false;
-      if (row.channel === "ShipBob" && !visibleInventoryCols.has("shipbobQty")) return false;
+      if (row.channel === "ShipBob" && (!shipbobEnabled || !visibleInventoryCols.has("shipbobQty"))) return false;
       if (row.channel === "Total" && !visibleInventoryCols.has("totalQty")) return false;
       return true;
     });
@@ -1075,7 +1079,7 @@ export default function InventoryPage() {
       seenSkus.add(row.sku);
       return isFirst !== row.isFirstInGroup ? { ...row, isFirstInGroup: isFirst } : row;
     });
-  }, [groupedRows, visibleInventoryCols]);
+  }, [groupedRows, visibleInventoryCols, shipbobEnabled]);
 
   // ── Forecast burn-down chart data ──────────────────────
   const forecastChartData = useMemo(() => {
@@ -1095,10 +1099,10 @@ export default function InventoryPage() {
         inventory = item.amazonQty ?? 0;
         sold = amazonUnits[item.sku] ?? 0;
       } else if (forecastChannelFilter === "shopify") {
-        inventory = (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
+        inventory = (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
         sold = shopifyUnits[item.sku] ?? 0;
       } else {
-        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
+        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
         sold = (amazonUnits[item.sku] ?? 0) + (shopifyUnits[item.sku] ?? 0);
       }
 
@@ -1120,7 +1124,7 @@ export default function InventoryPage() {
       data,
       skus: skuInfo.map((s) => ({ sku: s.sku, name: s.name })),
     };
-  }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays]);
+  }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays, shipbobEnabled]);
 
   // ── Unit Sales fetch ──────────────────────────────────
   const fetchUnitSales = useCallback(async () => {
@@ -1184,16 +1188,16 @@ export default function InventoryPage() {
       if (unitSalesChannel === "amazon") {
         inventoryHeld += item.amazonQty ?? 0;
       } else if (unitSalesChannel === "shopify") {
-        inventoryHeld += (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
+        inventoryHeld += (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
       } else {
-        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
+        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
       }
     }
 
     const daysRemaining = dailyRunRate > 0 ? Math.floor(inventoryHeld / dailyRunRate) : null;
 
     return { total, dailyRunRate, inventoryHeld, daysRemaining };
-  }, [unitSalesData, inventoryItems, unitSalesSkuFilter, unitSalesChannel]);
+  }, [unitSalesData, inventoryItems, unitSalesSkuFilter, unitSalesChannel, shipbobEnabled]);
 
   // ── Filter helpers ───────────────────────────────────────
   function getDisplayValue(val: unknown): string {
@@ -1962,7 +1966,7 @@ export default function InventoryPage() {
                   {showInventoryColPicker && (
                     <div className="dropdown right-0 mt-2 w-56 max-h-[70vh] overflow-y-auto">
                       <div className="p-2">
-                        {ALL_INVENTORY_COLUMNS.map((col) => (
+                        {ALL_INVENTORY_COLUMNS.filter((col) => col.key !== "shipbobQty" || shipbobEnabled).map((col) => (
                           <label
                             key={col.key}
                             className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
@@ -2177,18 +2181,20 @@ export default function InventoryPage() {
                         min={0}
                       />
                     </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">ShipBob Qty</label>
-                      <input
-                        type="number"
-                        value={editShipBobQty}
-                        onChange={(e) => setEditShipBobQty(e.target.value)}
-                        className="input w-full"
-                        min={0}
-                      />
-                    </div>
+                    {shipbobEnabled && (
+                      <div>
+                        <label className="block text-sm font-medium mb-1">ShipBob Qty</label>
+                        <input
+                          type="number"
+                          value={editShipBobQty}
+                          onChange={(e) => setEditShipBobQty(e.target.value)}
+                          className="input w-full"
+                          min={0}
+                        />
+                      </div>
+                    )}
                     <div className="text-sm text-zinc-500">
-                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0) + (Number(editShipBobQty) || 0)}</span>
+                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0) + (shipbobEnabled ? (Number(editShipBobQty) || 0) : 0)}</span>
                     </div>
                   </div>
                   <div className="filter-modal-footer">

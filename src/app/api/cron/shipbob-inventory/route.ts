@@ -30,6 +30,10 @@ export async function GET(request: Request) {
         results.push({ orgId, status: 'skipped', error: 'No settings found' });
         continue;
       }
+      if (!settings.enabled) {
+        results.push({ orgId, status: 'skipped', error: 'ShipBob integration not enabled' });
+        continue;
+      }
 
       const items = await fetchShipBobInventory(settings);
       const upserted = await upsertShipBobInventory(items, snapshotDate, orgId);

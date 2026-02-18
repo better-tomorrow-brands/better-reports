@@ -24,6 +24,9 @@ export async function POST(request: Request) {
     if (!settings) {
       return NextResponse.json({ error: 'ShipBob not configured for this org' }, { status: 400 });
     }
+    if (!settings.enabled) {
+      return NextResponse.json({ error: 'ShipBob integration is not enabled for this org' }, { status: 400 });
+    }
 
     const timestamp = new Date();
     const items = await fetchShipBobInventory(settings);

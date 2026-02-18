@@ -3,7 +3,7 @@ import { db } from "@/lib/db";
 import { inventorySnapshots, products, syncLogs } from "@/lib/db/schema";
 import { eq, and } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
-import { getShopifySettings } from "@/lib/settings";
+import { getShopifySettings, getShipBobSettings } from "@/lib/settings";
 import { fetchShopifyInventory, upsertShopifyInventory } from "@/lib/shopify";
 
 function today(): string {
@@ -60,7 +60,10 @@ export async function GET(request: Request) {
       dtcRrp: r.dtcRrp ? Number(r.dtcRrp) : 0,
     }));
 
-    return NextResponse.json({ date, items: result });
+    const shipbobSettings = await getShipBobSettings(orgId);
+    const shipbobEnabled = shipbobSettings?.enabled ?? false;
+
+    return NextResponse.json({ date, items: result, shipbobEnabled });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

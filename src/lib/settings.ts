@@ -51,7 +51,8 @@ export interface PosthogSettings {
 }
 
 export interface ShipBobSettings {
-  pat: string; // Personal Access Token
+  pat: string;      // Personal Access Token
+  enabled: boolean; // Whether the integration is active for this org
 }
 
 export interface LifecycleSettings {
@@ -158,7 +159,8 @@ export async function savePosthogSettings(orgId: number, posthog: PosthogSetting
 export async function getShipBobSettings(orgId: number): Promise<ShipBobSettings | null> {
   const raw = await getSetting(orgId, "shipbob");
   if (!raw) return null;
-  return JSON.parse(raw);
+  const parsed = JSON.parse(raw) as Partial<ShipBobSettings>;
+  return { pat: parsed.pat ?? "", enabled: parsed.enabled ?? false };
 }
 
 export async function saveShipBobSettings(orgId: number, data: ShipBobSettings): Promise<void> {

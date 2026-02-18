@@ -11,6 +11,7 @@ type SettingsTab =
   | "meta"
   | "posthog"
   | "amazon"
+  | "logistics"
   | "expenses"
   | "preferences";
 
@@ -61,6 +62,7 @@ interface AmazonAdsForm {
 
 interface ShipBobForm {
   pat: string;
+  enabled: boolean;
 }
 
 export default function SettingsPage() {
@@ -106,7 +108,7 @@ export default function SettingsPage() {
     access_token: "",
     ad_account_id: "",
   });
-  const [shipbob, setShipbob] = useState<ShipBobForm>({ pat: "" });
+  const [shipbob, setShipbob] = useState<ShipBobForm>({ pat: "", enabled: false });
   const [displayCurrency, setDisplayCurrency] = useState("USD");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -168,7 +170,7 @@ export default function SettingsPage() {
     access_token: "",
     ad_account_id: "",
   });
-  const [savedShipbob, setSavedShipbob] = useState<ShipBobForm>({ pat: "" });
+  const [savedShipbob, setSavedShipbob] = useState<ShipBobForm>({ pat: "", enabled: false });
 
   // Which locked fields are currently unlocked for editing / have their value revealed
   const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
@@ -278,8 +280,8 @@ export default function SettingsPage() {
     });
     setFacebookAds({ access_token: "", ad_account_id: "" });
     setSavedFacebookAds({ access_token: "", ad_account_id: "" });
-    setShipbob({ pat: "" });
-    setSavedShipbob({ pat: "" });
+    setShipbob({ pat: "", enabled: false });
+    setSavedShipbob({ pat: "", enabled: false });
     setEditingFields(new Set());
     setVisibleFields(new Set());
 
@@ -676,7 +678,7 @@ export default function SettingsPage() {
   const hasAmazonAdsChanges = (
     Object.keys(amazonAds) as (keyof AmazonAdsForm)[]
   ).some((k) => amazonAds[k] !== savedAmazonAds[k]);
-  const hasShipBobChanges = shipbob.pat !== savedShipbob.pat;
+  const hasShipBobChanges = shipbob.pat !== savedShipbob.pat || shipbob.enabled !== savedShipbob.enabled;
 
   // Reusable locked-input component
   function LockedInput({
@@ -1059,14 +1061,16 @@ export default function SettingsPage() {
       ? `${window.location.origin}/api/webhooks/shopify/orders`
       : "https://app.better-tomorrow.co/api/webhooks/shopify/orders";
 
-  const tabs: { key: SettingsTab; label: string }[] = [
+  const allTabs: { key: SettingsTab; label: string; superAdminOnly?: boolean }[] = [
     { key: "shopify", label: "Shopify" },
     { key: "meta", label: "Meta" },
     { key: "posthog", label: "PostHog" },
     { key: "amazon", label: "Amazon" },
+    { key: "logistics", label: "Logistics", superAdminOnly: true },
     { key: "expenses", label: "Expenses" },
     { key: "preferences", label: "Preferences" },
   ];
+  const tabs = allTabs.filter((t) => !t.superAdminOnly || userRole === "super_admin");
 
   return (
     <div className="max-w-2xl mx-auto p-6">
@@ -1208,41 +1212,6 @@ export default function SettingsPage() {
           {/* CSV Import - Super Admin Only */}
           {userRole === "super_admin" && (
             <CsvImportSection orgId={currentOrg?.id} apiFetch={apiFetch} />
-          )}
-
-          {/* ShipBob Integration - Super Admin Only */}
-          {userRole === "super_admin" && (
-            <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
-              <h2 className="text-lg font-semibold mb-1">ShipBob</h2>
-              <p className="text-sm text-zinc-500 mb-4">
-                Connect ShipBob to sync fulfilment inventory snapshots. Only configure for organisations using ShipBob as a 3PL.
-              </p>
-
-              <div className="flex flex-col gap-4">
-                <LockedInput
-                  fieldKey="shipbob.pat"
-                  label="Personal Access Token"
-                  value={shipbob.pat}
-                  savedValue={savedShipbob.pat}
-                  onChange={(v) => setShipbob({ ...shipbob, pat: v })}
-                  placeholder="ShipBob PAT from developer settings"
-                  helpText={
-                    <>
-                      Generate a token in ShipBob Developer Portal → Personal Access Tokens. Requires inventory read access.
-                    </>
-                  }
-                  mono
-                />
-              </div>
-
-              <button
-                onClick={handleSaveShipBob}
-                disabled={savingShipbob || !hasShipBobChanges}
-                className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
-              >
-                {savingShipbob ? "Saving..." : "Save"}
-              </button>
-            </section>
           )}
 
           {/* Lifecycle Settings - Super Admin Only */}
@@ -1718,6 +1687,64 @@ export default function SettingsPage() {
                 {amazonAdsTestResult.message}
               </div>
             )}
+          </section>
+        </div>
+      )}
+
+      {/* ── Logistics Tab (Super Admin Only) ───────── */}
+      {activeTab === "logistics" && (
+        <div className="flex flex-col gap-6">
+          <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+            <h2 className="text-lg font-semibold mb-1">ShipBob</h2>
+            <p className="text-sm text-zinc-500 mb-5">
+              Connect ShipBob as a 3PL integration to sync fulfilment inventory snapshots. Only enable for organisations using ShipBob.
+            </p>
+
+            {/* Enable toggle */}
+            <label className="flex items-center gap-3 cursor-pointer mb-5">
+              <div
+                onClick={() => setShipbob({ ...shipbob, enabled: !shipbob.enabled })}
+                className={`relative w-10 h-6 rounded-full transition-colors flex-shrink-0 ${
+                  shipbob.enabled ? "bg-zinc-900 dark:bg-zinc-100" : "bg-zinc-300 dark:bg-zinc-600"
+                }`}
+              >
+                <span
+                  className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white dark:bg-zinc-900 transition-transform ${
+                    shipbob.enabled ? "translate-x-4" : "translate-x-0"
+                  }`}
+                />
+              </div>
+              <div>
+                <p className="text-sm font-medium">Enable ShipBob integration</p>
+                <p className="text-xs text-zinc-400">
+                  When enabled, inventory page shows ShipBob quantities and the daily sync cron runs for this org.
+                </p>
+              </div>
+            </label>
+
+            {/* PAT — only shown when enabled */}
+            {shipbob.enabled && (
+              <div className="flex flex-col gap-4">
+                <LockedInput
+                  fieldKey="shipbob.pat"
+                  label="Personal Access Token"
+                  value={shipbob.pat}
+                  savedValue={savedShipbob.pat}
+                  onChange={(v) => setShipbob({ ...shipbob, pat: v })}
+                  placeholder="ShipBob PAT from developer settings"
+                  helpText="Generate in ShipBob Developer Portal → Personal Access Tokens. Requires inventory read access."
+                  mono
+                />
+              </div>
+            )}
+
+            <button
+              onClick={handleSaveShipBob}
+              disabled={savingShipbob || !hasShipBobChanges}
+              className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+            >
+              {savingShipbob ? "Saving..." : "Save"}
+            </button>
           </section>
         </div>
       )}
