@@ -154,7 +154,7 @@ function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string)
     <>
       <button
         onClick={() => setLightboxOpen(true)}
-        className="shrink-0 rounded overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-zinc-400"
+        className="shrink-0 rounded overflow-hidden border border-zinc-200 dark:border-zinc-700 hover:opacity-80 transition-opacity focus:outline-none focus:ring-2 focus:ring-zinc-400 cursor-pointer"
         title="Click to enlarge"
       >
         {/* eslint-disable-next-line @next/next/no-img-element */}

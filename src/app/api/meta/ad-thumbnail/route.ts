@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     const graphUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${adId}`);
-    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id}");
+    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id,image_crops,object_story_spec}");
     graphUrl.searchParams.set("access_token", settings.access_token);
 
     const res = await fetch(graphUrl.toString());
@@ -34,9 +34,24 @@ export async function GET(request: Request) {
     }
 
     const data = await res.json();
-    const thumbnailUrl = data?.creative?.thumbnail_url || data?.creative?.image_url || null;
-    const fullUrl = data?.creative?.image_url || data?.creative?.thumbnail_url || null;
-    const videoId = data?.creative?.video_id || null;
+    const creative = data?.creative;
+    const thumbnailUrl = creative?.thumbnail_url || creative?.image_url || null;
+    const videoId = creative?.video_id || null;
+
+    // For video ads, fetch a larger thumbnail from the video object
+    let fullUrl: string | null = creative?.image_url || creative?.thumbnail_url || null;
+    if (videoId) {
+      try {
+        const videoUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${videoId}`);
+        videoUrl.searchParams.set("fields", "picture");
+        videoUrl.searchParams.set("access_token", settings.access_token);
+        const vRes = await fetch(videoUrl.toString());
+        if (vRes.ok) {
+          const vData = await vRes.json();
+          if (vData?.picture) fullUrl = vData.picture;
+        }
+      } catch { /* fall through to thumbnail */ }
+    }
 
     return NextResponse.json({ thumbnailUrl, fullUrl, videoId });
   } catch (error) {
