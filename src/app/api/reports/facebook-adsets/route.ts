@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
 import { facebookAds } from "@/lib/db/schema";
-import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
+import { sql, gte, lte, and, or, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 /**
@@ -26,9 +26,13 @@ export async function GET(request: Request) {
       );
     }
 
-    const campaignFilter = campaignId && campaignId !== ""
-      ? eq(facebookAds.campaignId, campaignId)
-      : eq(facebookAds.utmCampaign, utmCampaign!);
+    // OR both filters when both are provided so either match works
+    const campaignFilter =
+      campaignId && campaignId !== "" && utmCampaign && utmCampaign !== ""
+        ? or(eq(facebookAds.campaignId, campaignId), eq(facebookAds.utmCampaign, utmCampaign))!
+        : campaignId && campaignId !== ""
+        ? eq(facebookAds.campaignId, campaignId)
+        : eq(facebookAds.utmCampaign, utmCampaign!);
 
     const rows = await db
       .select({

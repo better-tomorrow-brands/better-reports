@@ -219,11 +219,12 @@ export default function CampaignDetailPage() {
     const to = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
     if (!from || !to) return;
 
+    if (!campaign.metaCampaignId && !campaign.utmCampaign) return; // no filter available
+
     setAdsetsLoading(true);
     const params = new URLSearchParams({ from, to });
     if (campaign.metaCampaignId) params.set("campaignId", campaign.metaCampaignId);
-    else if (campaign.utmCampaign) params.set("utmCampaign", campaign.utmCampaign);
-    else return; // no filter available
+    if (campaign.utmCampaign) params.set("utmCampaign", campaign.utmCampaign);
 
     try {
       const res = await apiFetch(`/api/reports/facebook-adsets?${params.toString()}`);
