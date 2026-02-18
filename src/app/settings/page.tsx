@@ -115,6 +115,8 @@ export default function SettingsPage() {
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingFacebookAds, setSavingFacebookAds] = useState(false);
+  const [backfillingCampaignIds, setBackfillingCampaignIds] = useState(false);
+  const [campaignIdBackfillResult, setCampaignIdBackfillResult] = useState<string | null>(null);
   const [savingPosthog, setSavingPosthog] = useState(false);
   const [savingShopify, setSavingShopify] = useState(false);
   const [savingLifecycle, setSavingLifecycle] = useState(false);
@@ -1363,6 +1365,37 @@ export default function SettingsPage() {
           >
             {savingFacebookAds ? "Saving..." : "Save"}
           </button>
+        </section>
+
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+          <h2 className="text-lg font-semibold mb-1">Backfill Campaign IDs</h2>
+          <p className="text-sm text-zinc-500 mb-4">
+            Populates the Meta Campaign ID on existing ad data rows by matching UTM campaign strings to your campaign mappings. Run this once after adding Meta Campaign IDs to your campaigns.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              onClick={async () => {
+                setBackfillingCampaignIds(true);
+                setCampaignIdBackfillResult(null);
+                try {
+                  const res = await apiFetch("/api/backfill/facebook-utm", { method: "POST" });
+                  const data = await res.json();
+                  setCampaignIdBackfillResult(data.message ?? (res.ok ? "Done" : "Failed"));
+                } catch {
+                  setCampaignIdBackfillResult("Request failed");
+                } finally {
+                  setBackfillingCampaignIds(false);
+                }
+              }}
+              disabled={backfillingCampaignIds}
+              className="px-4 py-2 border border-zinc-300 dark:border-zinc-600 rounded-md text-sm font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {backfillingCampaignIds ? "Running..." : "Run Backfill"}
+            </button>
+            {campaignIdBackfillResult && (
+              <span className="text-sm text-zinc-500 dark:text-zinc-400">{campaignIdBackfillResult}</span>
+            )}
+          </div>
         </section>
 
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
