@@ -641,9 +641,6 @@ export default function InventoryPage() {
   const [showInventoryColPicker, setShowInventoryColPicker] = useState(false);
   const inventoryColPickerRef = useRef<HTMLDivElement>(null);
 
-  // DTC default filter — auto-apply Doogood brand on first visit
-  const dtcFilterApplied = useRef(false);
-
   // ── Click-outside handler ────────────────────────────────
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
@@ -697,16 +694,16 @@ export default function InventoryPage() {
     localStorage.setItem(INVENTORY_COLUMN_STORAGE_KEY, JSON.stringify([...newSet]));
   }
 
-  // ── DTC default filter ──────────────────────────────────
+  // ── Reset state when org changes ────────────────────────
   useEffect(() => {
-    if (activeTab === "dtc" && !dtcFilterApplied.current) {
-      dtcFilterApplied.current = true;
-      const hasBrandFilter = filters.some((f) => f.key === "brand");
-      if (!hasBrandFilter) {
-        setFilters((prev) => [...prev, { key: "brand", label: "Brand", values: new Set(["Doogood"]) }]);
-      }
-    }
-  }, [activeTab, filters]);
+    setFilters([]);
+    setProducts([]);
+    setInventoryItems([]);
+    setInventoryDate("");
+    setShipbobEnabled(false);
+    setPage(1);
+    setSearch("");
+  }, [currentOrg?.id]);
 
   // ── Fetch products ───────────────────────────────────────
   const fetchProducts = useCallback(async () => {
