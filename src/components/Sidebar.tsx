@@ -8,7 +8,6 @@ import { PanelLeftClose, PanelLeftOpen, ChevronDown, Check, Building2 } from "lu
 import { useOrg, Org } from "@/contexts/OrgContext";
 
 const navLinks = [
-  { href: "/", label: "Dashboard" },
   { href: "/reports", label: "Reports" },
   { href: "/orders", label: "Orders", adminOnly: true },
   { href: "/customers", label: "Customers", adminOnly: true },

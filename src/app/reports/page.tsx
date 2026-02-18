@@ -17,6 +17,7 @@ import {
 import { ShopifyChart } from "@/components/reports/ShopifyChart";
 import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
+import { OverallChart } from "@/components/reports/OverallChart";
 import { SessionsChart } from "@/components/reports/SessionsChart";
 import { TrafficChart } from "@/components/reports/TrafficChart";
 import { EcommerceChart } from "@/components/reports/EcommerceChart";
@@ -174,7 +175,10 @@ export default function ReportsPage() {
         ) : activeTab === "facebook-ads" ? (
           <FacebookAdsChart controlsContainer={controlsEl} />
         ) : activeTab === "campaigns" ? (
-          <FacebookCampaignsTable controlsContainer={controlsEl} />
+          <>
+            <OverallChart controlsContainer={null} />
+            <FacebookCampaignsTable controlsContainer={controlsEl} />
+          </>
         ) : activeTab === "sessions" ? (
           <SessionsChart controlsContainer={controlsEl} />
         ) : activeTab === "traffic" ? (
