@@ -25,23 +25,25 @@ export async function GET(request: Request) {
     }
 
     const graphUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${adId}`);
-    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id,image_crops,object_story_spec}");
+    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,image_hash,video_id}");
     graphUrl.searchParams.set("access_token", settings.access_token);
 
     const res = await fetch(graphUrl.toString());
     if (!res.ok) {
-      return NextResponse.json({ thumbnailUrl: null, fullUrl: null, videoId: null });
+      return NextResponse.json({ thumbnailUrl: null, fullUrl: null, videoId: null, videoSourceUrl: null });
     }
 
     const data = await res.json();
     const creative = data?.creative;
     const thumbnailUrl = creative?.thumbnail_url || creative?.image_url || null;
     const videoId = creative?.video_id || null;
+    const imageHash = creative?.image_hash || null;
 
-    // For video ads, fetch a larger thumbnail from the video object
     let fullUrl: string | null = creative?.image_url || creative?.thumbnail_url || null;
     let videoSourceUrl: string | null = null;
+
     if (videoId) {
+      // Video ad — fetch direct MP4 source and poster
       try {
         const videoUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${videoId}`);
         videoUrl.searchParams.set("fields", "source,picture");
@@ -52,7 +54,21 @@ export async function GET(request: Request) {
           if (vData?.source) videoSourceUrl = vData.source;
           if (vData?.picture) fullUrl = vData.picture;
         }
-      } catch { /* fall through to thumbnail */ }
+      } catch { /* fall through */ }
+    } else if (imageHash) {
+      // Image ad — fetch full-res URL via ad account images API
+      try {
+        const imgUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${settings.ad_account_id}/adimages`);
+        imgUrl.searchParams.set("hashes[]", imageHash);
+        imgUrl.searchParams.set("fields", "url");
+        imgUrl.searchParams.set("access_token", settings.access_token);
+        const iRes = await fetch(imgUrl.toString());
+        if (iRes.ok) {
+          const iData = await iRes.json();
+          const imgEntry = iData?.data?.[0];
+          if (imgEntry?.url) fullUrl = imgEntry.url;
+        }
+      } catch { /* fall through */ }
     }
 
     return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl });
