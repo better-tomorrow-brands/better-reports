@@ -136,7 +136,8 @@ function Lightbox({ fullUrl, videoSourceUrl, apiFetch, onClose }: {
           <img
             src={blobUrl}
             alt="Ad creative"
-            className="max-w-full max-h-[80vh] rounded-lg object-contain"
+            className="rounded-lg"
+            style={{ maxHeight: "90vh", maxWidth: "90vw" }}
           />
         ) : (
           <div className="w-16 h-16 rounded bg-zinc-700 animate-pulse" />
