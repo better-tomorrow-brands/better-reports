@@ -59,6 +59,10 @@ interface AmazonAdsForm {
   profile_id: string;
 }
 
+interface ShipBobForm {
+  pat: string;
+}
+
 export default function SettingsPage() {
   const { apiFetch, currentOrg } = useOrg();
   const { theme, setTheme } = useTheme();
@@ -102,6 +106,7 @@ export default function SettingsPage() {
     access_token: "",
     ad_account_id: "",
   });
+  const [shipbob, setShipbob] = useState<ShipBobForm>({ pat: "" });
   const [displayCurrency, setDisplayCurrency] = useState("USD");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
@@ -113,6 +118,7 @@ export default function SettingsPage() {
   const [savingLifecycle, setSavingLifecycle] = useState(false);
   const [savingAmazon, setSavingAmazon] = useState(false);
   const [savingAmazonAds, setSavingAmazonAds] = useState(false);
+  const [savingShipbob, setSavingShipbob] = useState(false);
   const [testingAmazon, setTestingAmazon] = useState(false);
   const [testingAmazonAds, setTestingAmazonAds] = useState(false);
   const [amazonTestResult, setAmazonTestResult] = useState<{
@@ -162,6 +168,7 @@ export default function SettingsPage() {
     access_token: "",
     ad_account_id: "",
   });
+  const [savedShipbob, setSavedShipbob] = useState<ShipBobForm>({ pat: "" });
 
   // Which locked fields are currently unlocked for editing / have their value revealed
   const [editingFields, setEditingFields] = useState<Set<string>>(new Set());
@@ -271,6 +278,8 @@ export default function SettingsPage() {
     });
     setFacebookAds({ access_token: "", ad_account_id: "" });
     setSavedFacebookAds({ access_token: "", ad_account_id: "" });
+    setShipbob({ pat: "" });
+    setSavedShipbob({ pat: "" });
     setEditingFields(new Set());
     setVisibleFields(new Set());
 
@@ -325,6 +334,10 @@ export default function SettingsPage() {
         if (settingsData.facebook_ads) {
           setFacebookAds(settingsData.facebook_ads);
           setSavedFacebookAds(settingsData.facebook_ads);
+        }
+        if (settingsData.shipbob) {
+          setShipbob(settingsData.shipbob);
+          setSavedShipbob(settingsData.shipbob);
         }
         if (settingsData.preferences?.displayCurrency) {
           setDisplayCurrency(settingsData.preferences.displayCurrency);
@@ -600,6 +613,35 @@ export default function SettingsPage() {
     }
   }
 
+  async function handleSaveShipBob() {
+    setSavingShipbob(true);
+    setMessage(null);
+    try {
+      const res = await apiFetch("/api/settings", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ shipbob }),
+      });
+      const data = await res.json();
+      if (res.ok) {
+        setMessage({ type: "success", text: "ShipBob settings saved" });
+        const reload = await apiFetch("/api/settings");
+        const reloaded = await reload.json();
+        if (reloaded.shipbob) {
+          setShipbob(reloaded.shipbob);
+          setSavedShipbob(reloaded.shipbob);
+        }
+        resetFieldStates("shipbob.");
+      } else {
+        setMessage({ type: "error", text: data.details || data.error });
+      }
+    } catch {
+      setMessage({ type: "error", text: "Failed to save settings" });
+    } finally {
+      setSavingShipbob(false);
+    }
+  }
+
   async function handleTestAmazonAds() {
     setTestingAmazonAds(true);
     setAmazonAdsTestResult(null);
@@ -634,6 +676,7 @@ export default function SettingsPage() {
   const hasAmazonAdsChanges = (
     Object.keys(amazonAds) as (keyof AmazonAdsForm)[]
   ).some((k) => amazonAds[k] !== savedAmazonAds[k]);
+  const hasShipBobChanges = shipbob.pat !== savedShipbob.pat;
 
   // Reusable locked-input component
   function LockedInput({
@@ -1165,6 +1208,41 @@ export default function SettingsPage() {
           {/* CSV Import - Super Admin Only */}
           {userRole === "super_admin" && (
             <CsvImportSection orgId={currentOrg?.id} apiFetch={apiFetch} />
+          )}
+
+          {/* ShipBob Integration - Super Admin Only */}
+          {userRole === "super_admin" && (
+            <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+              <h2 className="text-lg font-semibold mb-1">ShipBob</h2>
+              <p className="text-sm text-zinc-500 mb-4">
+                Connect ShipBob to sync fulfilment inventory snapshots. Only configure for organisations using ShipBob as a 3PL.
+              </p>
+
+              <div className="flex flex-col gap-4">
+                <LockedInput
+                  fieldKey="shipbob.pat"
+                  label="Personal Access Token"
+                  value={shipbob.pat}
+                  savedValue={savedShipbob.pat}
+                  onChange={(v) => setShipbob({ ...shipbob, pat: v })}
+                  placeholder="ShipBob PAT from developer settings"
+                  helpText={
+                    <>
+                      Generate a token in ShipBob Developer Portal → Personal Access Tokens. Requires inventory read access.
+                    </>
+                  }
+                  mono
+                />
+              </div>
+
+              <button
+                onClick={handleSaveShipBob}
+                disabled={savingShipbob || !hasShipBobChanges}
+                className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+              >
+                {savingShipbob ? "Saving..." : "Save"}
+              </button>
+            </section>
           )}
 
           {/* Lifecycle Settings - Super Admin Only */}

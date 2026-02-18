@@ -5,8 +5,9 @@ import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 /**
- * GET /api/reports/facebook-ad-creatives?from=&to=&campaign=&adset=
+ * GET /api/reports/facebook-ad-creatives?from=&to=&campaignId=&adsetId=&adset=
  * Returns all individual ads (creatives) under a given campaign + adset, aggregated over the date range.
+ * Filters by campaignId + adsetId (preferred) or falls back to utmCampaign + adset name.
  */
 export async function GET(request: Request) {
   try {
@@ -15,15 +16,35 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
-    const campaign = url.searchParams.get("campaign");
+    const campaignId = url.searchParams.get("campaignId");
+    const utmCampaign = url.searchParams.get("utmCampaign");
+    const adsetId = url.searchParams.get("adsetId");
     const adset = url.searchParams.get("adset");
 
-    if (!from || !to || !campaign || !adset) {
+    if (!from || !to || !adset) {
       return NextResponse.json(
-        { error: "from, to, campaign, and adset query params are required" },
+        { error: "from, to, and adset query params are required" },
         { status: 400 }
       );
     }
+
+    const campaignFilter = campaignId && campaignId !== ""
+      ? eq(facebookAds.campaignId, campaignId)
+      : utmCampaign
+      ? eq(facebookAds.utmCampaign, utmCampaign)
+      : undefined;
+
+    const adsetFilter = adsetId && adsetId !== ""
+      ? eq(facebookAds.adsetId, adsetId)
+      : eq(facebookAds.adset, adset);
+
+    const conditions = [
+      eq(facebookAds.orgId, orgId),
+      adsetFilter,
+      gte(facebookAds.date, from),
+      lte(facebookAds.date, to),
+      ...(campaignFilter ? [campaignFilter] : []),
+    ];
 
     const rows = await db
       .select({
@@ -37,15 +58,7 @@ export async function GET(request: Request) {
         reach: sum(facebookAds.reach).as("reach"),
       })
       .from(facebookAds)
-      .where(
-        and(
-          eq(facebookAds.orgId, orgId),
-          eq(facebookAds.campaign, campaign),
-          eq(facebookAds.adset, adset),
-          gte(facebookAds.date, from),
-          lte(facebookAds.date, to)
-        )
-      )
+      .where(and(...conditions))
       .groupBy(facebookAds.ad)
       .orderBy(sql`SUM(${facebookAds.spend}) DESC`);
 
@@ -76,7 +89,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ campaign, adset, from, to, rows: result });
+    return NextResponse.json({ campaignId, utmCampaign, adsetId, adset, from, to, rows: result });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

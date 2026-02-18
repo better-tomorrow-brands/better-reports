@@ -7,6 +7,7 @@ import {
   getFacebookAdsSettings, saveFacebookAdsSettings,
   getPosthogSettings, savePosthogSettings,
   getPreferencesSettings, savePreferencesSettings,
+  getShipBobSettings, saveShipBobSettings,
 } from "@/lib/settings";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
@@ -14,7 +15,7 @@ export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
 
-    const [meta, shopify, amazon, amazonAds, facebookAds, posthog, preferences] = await Promise.all([
+    const [meta, shopify, amazon, amazonAds, facebookAds, posthog, preferences, shipbob] = await Promise.all([
       getMetaSettings(orgId),
       getShopifySettings(orgId),
       getAmazonSettings(orgId),
@@ -22,6 +23,7 @@ export async function GET(request: Request) {
       getFacebookAdsSettings(orgId),
       getPosthogSettings(orgId),
       getPreferencesSettings(orgId),
+      getShipBobSettings(orgId),
     ]);
 
     // Mask tokens for display
@@ -88,7 +90,16 @@ export async function GET(request: Request) {
         }
       : null;
 
-    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, facebook_ads: maskedFacebookAds, posthog: maskedPosthog, preferences: preferences ?? { displayCurrency: "USD" } });
+    const maskedShipBob = shipbob
+      ? {
+          ...shipbob,
+          pat: shipbob.pat
+            ? `${shipbob.pat.slice(0, 10)}...${shipbob.pat.slice(-4)}`
+            : "",
+        }
+      : null;
+
+    return NextResponse.json({ meta: maskedMeta, shopify: maskedShopify, amazon: maskedAmazon, amazon_ads: maskedAmazonAds, facebook_ads: maskedFacebookAds, posthog: maskedPosthog, preferences: preferences ?? { displayCurrency: "USD" }, shipbob: maskedShipBob });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
@@ -165,6 +176,14 @@ export async function POST(request: Request) {
         if (existing) body.posthog.api_key = existing.api_key;
       }
       await savePosthogSettings(orgId, body.posthog);
+    }
+
+    if (body.shipbob) {
+      if (body.shipbob.pat?.includes("...")) {
+        const existing = await getShipBobSettings(orgId);
+        if (existing) body.shipbob.pat = existing.pat;
+      }
+      await saveShipBobSettings(orgId, body.shipbob);
     }
 
     if (body.preferences) {

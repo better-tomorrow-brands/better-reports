@@ -43,6 +43,7 @@ function loadColumnConfig(): ColumnConfig[] {
 interface CampaignRow {
   campaign: string;
   utmCampaign: string;
+  campaignId: string;
   adSpend: number;
   orders: number;
   revenue: number;
@@ -294,36 +295,42 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
     fetchData();
   }, [fetchData]);
 
-  const toggleCampaign = useCallback(async (campaignName: string) => {
-    const isExpanding = !expandedCampaigns.has(campaignName);
+  const toggleCampaign = useCallback(async (row: CampaignRow) => {
+    // Use campaignId as cache key when available, fall back to utmCampaign
+    const cacheKey = row.campaignId || row.utmCampaign;
+    const isExpanding = !expandedCampaigns.has(cacheKey);
     setExpandedCampaigns((prev) => {
       const next = new Set(prev);
-      if (isExpanding) next.add(campaignName); else next.delete(campaignName);
+      if (isExpanding) next.add(cacheKey); else next.delete(cacheKey);
       return next;
     });
 
-    if (isExpanding && !adsetData.has(campaignName) && dateRange?.from && dateRange?.to) {
-      setLoadingAdsets((prev) => new Set(prev).add(campaignName));
+    if (isExpanding && !adsetData.has(cacheKey) && dateRange?.from && dateRange?.to) {
+      setLoadingAdsets((prev) => new Set(prev).add(cacheKey));
       try {
         const from = format(dateRange.from, "yyyy-MM-dd");
         const to = format(dateRange.to, "yyyy-MM-dd");
-        const res = await apiFetch(
-          `/api/reports/facebook-adsets?from=${from}&to=${to}&campaign=${encodeURIComponent(campaignName)}`
-        );
+        const params = new URLSearchParams({ from, to });
+        if (row.campaignId) {
+          params.set("campaignId", row.campaignId);
+        } else {
+          params.set("utmCampaign", row.utmCampaign);
+        }
+        const res = await apiFetch(`/api/reports/facebook-adsets?${params}`);
         if (res.ok) {
           const json = await res.json();
-          setAdsetData((prev) => new Map(prev).set(campaignName, json.rows));
+          setAdsetData((prev) => new Map(prev).set(cacheKey, json.rows));
         }
       } catch (err) {
         console.error("Failed to fetch ad sets:", err);
       } finally {
-        setLoadingAdsets((prev) => { const next = new Set(prev); next.delete(campaignName); return next; });
+        setLoadingAdsets((prev) => { const next = new Set(prev); next.delete(cacheKey); return next; });
       }
     }
   }, [expandedCampaigns, adsetData, dateRange, apiFetch]);
 
-  const toggleAdset = useCallback(async (campaignName: string, adsetName: string) => {
-    const key = `${campaignName}|${adsetName}`;
+  const toggleAdset = useCallback(async (row: CampaignRow, adset: AdSetRow) => {
+    const key = `${row.campaignId || row.utmCampaign}|${adset.adsetId || adset.adset}`;
     const isExpanding = !expandedAdsets.has(key);
     setExpandedAdsets((prev) => {
       const next = new Set(prev);
@@ -336,9 +343,11 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
       try {
         const from = format(dateRange.from, "yyyy-MM-dd");
         const to = format(dateRange.to, "yyyy-MM-dd");
-        const res = await apiFetch(
-          `/api/reports/facebook-ad-creatives?from=${from}&to=${to}&campaign=${encodeURIComponent(campaignName)}&adset=${encodeURIComponent(adsetName)}`
-        );
+        const params = new URLSearchParams({ from, to, adset: adset.adset });
+        if (row.campaignId) params.set("campaignId", row.campaignId);
+        else if (row.utmCampaign) params.set("utmCampaign", row.utmCampaign);
+        if (adset.adsetId) params.set("adsetId", adset.adsetId);
+        const res = await apiFetch(`/api/reports/facebook-ad-creatives?${params}`);
         if (res.ok) {
           const json = await res.json();
           setAdCreativeData((prev) => new Map(prev).set(key, json.rows));
@@ -589,9 +598,10 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
             </thead>
             <tbody>
               {sortedRows.map((row, i) => {
-                const isExpanded = expandedCampaigns.has(row.campaign);
-                const isLoadingAdsets = loadingAdsets.has(row.campaign);
-                const adsets = adsetData.get(row.campaign) ?? [];
+                const cacheKey = row.campaignId || row.utmCampaign;
+                const isExpanded = expandedCampaigns.has(cacheKey);
+                const isLoadingAdsets = loadingAdsets.has(cacheKey);
+                const adsets = adsetData.get(cacheKey) ?? [];
 
                 return (
                   <>
@@ -599,7 +609,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                     <tr
                       key={`campaign-${i}`}
                       className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 cursor-pointer ${isExpanded ? "bg-zinc-50 dark:bg-zinc-800/20" : ""}`}
-                      onClick={() => toggleCampaign(row.campaign)}
+                      onClick={() => toggleCampaign(row)}
                     >
                       <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">
                         <div className="flex items-center">
@@ -656,7 +666,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                           </tr>
                         ) : (
                           adsets.map((adset, j) => {
-                            const adsetKey = `${row.campaign}|${adset.adset}`;
+                            const adsetKey = `${row.campaignId || row.utmCampaign}|${adset.adsetId || adset.adset}`;
                             const isAdsetExpanded = expandedAdsets.has(adsetKey);
                             const isLoadingCreatives = loadingAdCreatives.has(adsetKey);
                             const creatives = adCreativeData.get(adsetKey) ?? [];
@@ -667,7 +677,7 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
                                 <tr
                                   key={`adset-${i}-${j}`}
                                   className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-pointer ${isAdsetExpanded ? "bg-blue-50/20 dark:bg-blue-900/5" : "bg-zinc-50/50 dark:bg-zinc-800/10"}`}
-                                  onClick={(e) => { e.stopPropagation(); toggleAdset(row.campaign, adset.adset); }}
+                                  onClick={(e) => { e.stopPropagation(); toggleAdset(row, adset); }}
                                 >
                                   <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300" style={{ paddingLeft: 32 }}>
                                     <div className="flex items-center">

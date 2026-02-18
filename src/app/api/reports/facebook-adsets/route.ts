@@ -5,8 +5,9 @@ import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 /**
- * GET /api/reports/facebook-adsets?from=&to=&campaign=
- * Returns all ad sets under a given campaign name, aggregated over the date range.
+ * GET /api/reports/facebook-adsets?from=&to=&campaignId=
+ * Returns all ad sets under a given campaign, aggregated over the date range.
+ * Filters by campaignId (preferred) or falls back to utmCampaign.
  */
 export async function GET(request: Request) {
   try {
@@ -15,14 +16,19 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
-    const campaign = url.searchParams.get("campaign");
+    const campaignId = url.searchParams.get("campaignId");
+    const utmCampaign = url.searchParams.get("utmCampaign");
 
-    if (!from || !to || !campaign) {
+    if (!from || !to || (!campaignId && !utmCampaign)) {
       return NextResponse.json(
-        { error: "from, to, and campaign query params are required" },
+        { error: "from, to, and campaignId (or utmCampaign) query params are required" },
         { status: 400 }
       );
     }
+
+    const campaignFilter = campaignId && campaignId !== ""
+      ? eq(facebookAds.campaignId, campaignId)
+      : eq(facebookAds.utmCampaign, utmCampaign!);
 
     const rows = await db
       .select({
@@ -39,7 +45,7 @@ export async function GET(request: Request) {
       .where(
         and(
           eq(facebookAds.orgId, orgId),
-          eq(facebookAds.campaign, campaign),
+          campaignFilter,
           gte(facebookAds.date, from),
           lte(facebookAds.date, to)
         )
@@ -70,7 +76,7 @@ export async function GET(request: Request) {
       };
     });
 
-    return NextResponse.json({ campaign, from, to, rows: result });
+    return NextResponse.json({ campaignId, utmCampaign, from, to, rows: result });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

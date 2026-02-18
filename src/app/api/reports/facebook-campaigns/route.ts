@@ -32,6 +32,7 @@ export async function GET(request: Request) {
         .select({
           utmCampaign: facebookAds.utmCampaign,
           adset: sql<string>`MIN(${facebookAds.adset})`.as("adset"),
+          campaignId: sql<string>`MIN(${facebookAds.campaignId})`.as("campaign_id"),
           adSpend: sum(facebookAds.spend).as("ad_spend"),
         })
         .from(facebookAds)
@@ -125,6 +126,7 @@ export async function GET(request: Request) {
       rows.push({
         campaign: campaignNameMap.get(utm) || fb.adset || "",
         utmCampaign: utm,
+        campaignId: fb.campaignId || "",
         adSpend: Math.round(adSpend * 100) / 100,
         orders: orderCount,
         revenue: Math.round(revenue * 100) / 100,
@@ -140,6 +142,7 @@ export async function GET(request: Request) {
       rows.push({
         campaign: campaignNameMap.get(utm) || "",
         utmCampaign: utm,
+        campaignId: "",
         adSpend: 0,
         orders: o.orders,
         revenue: Math.round(o.revenue * 100) / 100,
