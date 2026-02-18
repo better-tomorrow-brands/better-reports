@@ -276,6 +276,18 @@ export default function CampaignDetailPage() {
 
       {/* Content */}
       <div className="page-content">
+        {/* Missing Meta Campaign ID warning */}
+        {!campaignLoading && campaign && !campaign.metaCampaignId && (
+          <div className="mb-4 flex items-start gap-2.5 px-4 py-3 rounded-lg bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 text-amber-800 dark:text-amber-300 text-sm">
+            <svg className="w-4 h-4 mt-0.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            <span>
+              <strong>Meta Campaign ID not set.</strong> Open this campaign in the Campaigns list, click Edit, and add the numeric campaign ID from Meta Ads Manager. Without it, ad set data cannot be loaded.
+            </span>
+          </div>
+        )}
+
         {campaignLoading ? (
           <div className="space-y-2 pt-4">
             {[...Array(3)].map((_, i) => (

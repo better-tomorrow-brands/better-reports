@@ -435,6 +435,19 @@ export default function CampaignsPage() {
       render: (value) => <StatusBadge status={value as string | null} type="fb" />,
     },
     {
+      key: "metaCampaignId",
+      label: "",
+      render: (value) =>
+        !value ? (
+          <span title="Meta Campaign ID missing — drill-down will not work" className="inline-flex items-center gap-1 text-xs text-amber-600 dark:text-amber-400 whitespace-nowrap">
+            <svg className="w-3.5 h-3.5 shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01M10.29 3.86L1.82 18a2 2 0 001.71 3h16.94a2 2 0 001.71-3L13.71 3.86a2 2 0 00-3.42 0z" />
+            </svg>
+            No ID
+          </span>
+        ) : null,
+    },
+    {
       key: "actions",
       label: "",
       render: (_, row) => (
@@ -909,6 +922,10 @@ export default function CampaignsPage() {
 
   async function handleFbSubmit(e: React.FormEvent) {
     e.preventDefault();
+    if (!fbForm.metaCampaignId.trim()) {
+      setFbError("Meta Campaign ID is required. Find it in Meta Ads Manager.");
+      return;
+    }
     setFbSaving(true);
 
     try {
@@ -1955,7 +1972,7 @@ export default function CampaignsPage() {
               </div>
             ) : (
               <Table
-                columns={fbColumns.filter((c) => fbVisibleColumns.has(String(c.key)) || c.key === "actions")}
+                columns={fbColumns.filter((c) => fbVisibleColumns.has(String(c.key)) || c.key === "actions" || c.key === "metaCampaignId")}
                 data={filteredFbCampaigns}
                 rowKey="id"
                 emptyMessage="No campaigns yet. Add your first campaign to enable order attribution."
@@ -2520,15 +2537,22 @@ export default function CampaignsPage() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-medium mb-1">Meta Campaign ID</label>
+                  <label className="block text-sm font-medium mb-1">
+                    Meta Campaign ID
+                    <span className="text-red-500 ml-1">*</span>
+                  </label>
                   <input
                     type="text"
                     value={fbForm.metaCampaignId}
                     onChange={(e) => updateFbForm("metaCampaignId", e.target.value)}
                     placeholder="e.g. 120213458693850498"
-                    className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
+                    className={`w-full border rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono ${
+                      !fbForm.metaCampaignId.trim()
+                        ? "border-amber-400 dark:border-amber-500"
+                        : "border-zinc-300 dark:border-zinc-700"
+                    }`}
                   />
-                  <p className="text-xs text-zinc-400 mt-1">The numeric campaign ID from Meta Ads Manager. Used to link ad spend data to this campaign mapping.</p>
+                  <p className="text-xs text-zinc-400 mt-1">Required. The numeric campaign ID from Meta Ads Manager. Used to link ad spend data to this campaign mapping.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Product Template</label>
