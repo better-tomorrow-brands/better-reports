@@ -1,0 +1,1 @@
+ALTER TABLE "campaigns_fcb" ADD COLUMN "meta_campaign_id" text;

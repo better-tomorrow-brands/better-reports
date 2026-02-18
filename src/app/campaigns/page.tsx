@@ -23,6 +23,7 @@ interface FbCampaign {
   utmCampaign: string | null;
   utmTerm: string | null;
   productTemplate: string | null;
+  metaCampaignId: string | null;
   status: string | null;
 }
 
@@ -71,6 +72,7 @@ interface FbFormData {
   utmCampaign: string;
   utmTerm: string;
   productTemplate: string;
+  metaCampaignId: string;
   status: string;
 }
 
@@ -164,6 +166,7 @@ const emptyFbForm: FbFormData = {
   utmCampaign: "",
   utmTerm: "",
   productTemplate: "",
+  metaCampaignId: "",
   status: "active",
 };
 
@@ -973,6 +976,7 @@ export default function CampaignsPage() {
         utmCampaign: campaign.utmCampaign || "",
         utmTerm: campaign.utmTerm || "",
         productTemplate: campaign.productTemplate || "",
+        metaCampaignId: campaign.metaCampaignId || "",
         status: campaign.status || "active",
       });
       setProductSearch(campaign.productName || "");
@@ -2511,6 +2515,17 @@ export default function CampaignsPage() {
                     placeholder="e.g. Beige Hero"
                     className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
                   />
+                </div>
+                <div className="col-span-2">
+                  <label className="block text-sm font-medium mb-1">Meta Campaign ID</label>
+                  <input
+                    type="text"
+                    value={fbForm.metaCampaignId}
+                    onChange={(e) => updateFbForm("metaCampaignId", e.target.value)}
+                    placeholder="e.g. 120213458693850498"
+                    className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm font-mono"
+                  />
+                  <p className="text-xs text-zinc-400 mt-1">The numeric campaign ID from Meta Ads Manager. Used to link ad spend data to this campaign mapping.</p>
                 </div>
                 <div>
                   <label className="block text-sm font-medium mb-1">Product Template</label>

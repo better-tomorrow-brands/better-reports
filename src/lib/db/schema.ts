@@ -190,6 +190,7 @@ export const campaignsFcb = pgTable("campaigns_fcb", {
   utmCampaign: text("utm_campaign"),
   utmTerm: text("utm_term"),
   productTemplate: text("product_template"),
+  metaCampaignId: text("meta_campaign_id"),
   status: text("status").default("active"),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

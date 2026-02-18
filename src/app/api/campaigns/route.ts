@@ -49,6 +49,7 @@ export async function POST(request: Request) {
         utmCampaign: body.utmCampaign || null,
         utmTerm: body.utmTerm || null,
         productTemplate: body.productTemplate || null,
+        metaCampaignId: body.metaCampaignId || null,
         status: body.status || "active",
       })
       .returning();
@@ -92,6 +93,7 @@ export async function PUT(request: Request) {
         utmCampaign: data.utmCampaign || null,
         utmTerm: data.utmTerm || null,
         productTemplate: data.productTemplate || null,
+        metaCampaignId: data.metaCampaignId || null,
         status: data.status || "active",
         updatedAt: new Date(),
       })
