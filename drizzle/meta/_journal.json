@@ -127,6 +127,13 @@
       "when": 1771323527071,
       "tag": "0017_wooden_harry_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "7",
+      "when": 1771374832987,
+      "tag": "0018_last_slipstream",
+      "breakpoints": true
     }
   ]
 }

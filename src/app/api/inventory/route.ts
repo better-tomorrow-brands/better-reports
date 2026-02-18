@@ -21,6 +21,7 @@ export async function GET(request: Request) {
         amazonQty: inventorySnapshots.amazonQty,
         warehouseQty: inventorySnapshots.warehouseQty,
         shopifyQty: inventorySnapshots.shopifyQty,
+        shipbobQty: inventorySnapshots.shipbobQty,
         productName: products.productName,
         brand: products.brand,
         asin: products.asin,
@@ -52,7 +53,8 @@ export async function GET(request: Request) {
       amazonQty: r.amazonQty ?? 0,
       warehouseQty: r.warehouseQty ?? 0,
       shopifyQty: r.shopifyQty ?? 0,
-      totalQty: (r.amazonQty ?? 0) + (r.warehouseQty ?? 0) + (r.shopifyQty ?? 0),
+      shipbobQty: r.shipbobQty ?? 0,
+      totalQty: (r.amazonQty ?? 0) + (r.warehouseQty ?? 0) + (r.shopifyQty ?? 0) + (r.shipbobQty ?? 0),
       landedCost: r.landedCost ? Number(r.landedCost) : 0,
       amazonRrp: r.amazonRrp ? Number(r.amazonRrp) : 0,
       dtcRrp: r.dtcRrp ? Number(r.dtcRrp) : 0,
@@ -73,11 +75,12 @@ export async function PUT(request: Request) {
     const { orgId } = await requireOrgFromRequest(request);
 
     const body = await request.json();
-    const { sku, amazonQty, warehouseQty, shopifyQty } = body as {
+    const { sku, amazonQty, warehouseQty, shopifyQty, shipbobQty } = body as {
       sku: string;
       amazonQty?: number;
       warehouseQty?: number;
       shopifyQty?: number;
+      shipbobQty?: number;
     };
 
     if (!sku) {
@@ -90,6 +93,7 @@ export async function PUT(request: Request) {
     if (amazonQty !== undefined) set.amazonQty = amazonQty;
     if (warehouseQty !== undefined) set.warehouseQty = warehouseQty;
     if (shopifyQty !== undefined) set.shopifyQty = shopifyQty;
+    if (shipbobQty !== undefined) set.shipbobQty = shipbobQty;
 
     await db
       .insert(inventorySnapshots)
@@ -100,13 +104,14 @@ export async function PUT(request: Request) {
         amazonQty: amazonQty ?? 0,
         warehouseQty: warehouseQty ?? 0,
         shopifyQty: shopifyQty ?? 0,
+        shipbobQty: shipbobQty ?? 0,
       })
       .onConflictDoUpdate({
         target: [inventorySnapshots.orgId, inventorySnapshots.sku, inventorySnapshots.date],
         set,
       });
 
-    return NextResponse.json({ success: true, sku, date, amazonQty, warehouseQty, shopifyQty });
+    return NextResponse.json({ success: true, sku, date, amazonQty, warehouseQty, shopifyQty, shipbobQty });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

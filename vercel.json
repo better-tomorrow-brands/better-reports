@@ -43,6 +43,10 @@
     {
       "path": "/api/cron/amazon?job=orders&orgId=1",
       "schedule": "15 * * * *"
+    },
+    {
+      "path": "/api/cron/shipbob-inventory",
+      "schedule": "0 10 * * *"
     }
   ]
 }

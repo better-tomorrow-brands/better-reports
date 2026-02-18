@@ -50,6 +50,38 @@ interface CampaignRow {
   costPerResult: number;
 }
 
+interface AdSetRow {
+  adsetId: string;
+  adset: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  purchases: number;
+  purchaseValue: number;
+  roas: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  costPerPurchase: number;
+  reach: number;
+}
+
+interface AdCreativeRow {
+  adId: string;
+  ad: string;
+  spend: number;
+  impressions: number;
+  clicks: number;
+  purchases: number;
+  purchaseValue: number;
+  roas: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  costPerPurchase: number;
+  reach: number;
+}
+
 interface Totals {
   shopifyRevenue: number;
   shopifyOrders: number;
@@ -106,6 +138,20 @@ function SortIcon({ direction }: { direction: SortDir | null }) {
         fill="currentColor"
         opacity={direction === "desc" ? 1 : 0.3}
       />
+    </svg>
+  );
+}
+
+function ChevronIcon({ open }: { open: boolean }) {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      className={`inline-block mr-1.5 transition-transform flex-shrink-0 ${open ? "rotate-90" : ""}`}
+    >
+      <path d="M4 2L8 6L4 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" />
     </svg>
   );
 }
@@ -185,6 +231,14 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
   const [sortKey, setSortKey] = useState<SortKey>("roas");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
+  // Drill-down state
+  const [expandedCampaigns, setExpandedCampaigns] = useState<Set<string>>(new Set());
+  const [adsetData, setAdsetData] = useState<Map<string, AdSetRow[]>>(new Map());
+  const [loadingAdsets, setLoadingAdsets] = useState<Set<string>>(new Set());
+  const [expandedAdsets, setExpandedAdsets] = useState<Set<string>>(new Set());
+  const [adCreativeData, setAdCreativeData] = useState<Map<string, AdCreativeRow[]>>(new Map());
+  const [loadingAdCreatives, setLoadingAdCreatives] = useState<Set<string>>(new Set());
+
   useEffect(() => {
     setColumns(loadColumnConfig());
     setFilter(loadOverallFilter());
@@ -212,6 +266,11 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
   const fetchData = useCallback(async () => {
     if (!dateRange?.from || !dateRange?.to || !currentOrg) return;
     setLoading(true);
+    // Reset drill-down state when date range changes
+    setExpandedCampaigns(new Set());
+    setAdsetData(new Map());
+    setExpandedAdsets(new Set());
+    setAdCreativeData(new Map());
     try {
       const from = format(dateRange.from, "yyyy-MM-dd");
       const to = format(dateRange.to, "yyyy-MM-dd");
@@ -234,6 +293,63 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  const toggleCampaign = useCallback(async (campaignName: string) => {
+    const isExpanding = !expandedCampaigns.has(campaignName);
+    setExpandedCampaigns((prev) => {
+      const next = new Set(prev);
+      if (isExpanding) next.add(campaignName); else next.delete(campaignName);
+      return next;
+    });
+
+    if (isExpanding && !adsetData.has(campaignName) && dateRange?.from && dateRange?.to) {
+      setLoadingAdsets((prev) => new Set(prev).add(campaignName));
+      try {
+        const from = format(dateRange.from, "yyyy-MM-dd");
+        const to = format(dateRange.to, "yyyy-MM-dd");
+        const res = await apiFetch(
+          `/api/reports/facebook-adsets?from=${from}&to=${to}&campaign=${encodeURIComponent(campaignName)}`
+        );
+        if (res.ok) {
+          const json = await res.json();
+          setAdsetData((prev) => new Map(prev).set(campaignName, json.rows));
+        }
+      } catch (err) {
+        console.error("Failed to fetch ad sets:", err);
+      } finally {
+        setLoadingAdsets((prev) => { const next = new Set(prev); next.delete(campaignName); return next; });
+      }
+    }
+  }, [expandedCampaigns, adsetData, dateRange, apiFetch]);
+
+  const toggleAdset = useCallback(async (campaignName: string, adsetName: string) => {
+    const key = `${campaignName}|${adsetName}`;
+    const isExpanding = !expandedAdsets.has(key);
+    setExpandedAdsets((prev) => {
+      const next = new Set(prev);
+      if (isExpanding) next.add(key); else next.delete(key);
+      return next;
+    });
+
+    if (isExpanding && !adCreativeData.has(key) && dateRange?.from && dateRange?.to) {
+      setLoadingAdCreatives((prev) => new Set(prev).add(key));
+      try {
+        const from = format(dateRange.from, "yyyy-MM-dd");
+        const to = format(dateRange.to, "yyyy-MM-dd");
+        const res = await apiFetch(
+          `/api/reports/facebook-ad-creatives?from=${from}&to=${to}&campaign=${encodeURIComponent(campaignName)}&adset=${encodeURIComponent(adsetName)}`
+        );
+        if (res.ok) {
+          const json = await res.json();
+          setAdCreativeData((prev) => new Map(prev).set(key, json.rows));
+        }
+      } catch (err) {
+        console.error("Failed to fetch ad creatives:", err);
+      } finally {
+        setLoadingAdCreatives((prev) => { const next = new Set(prev); next.delete(key); return next; });
+      }
+    }
+  }, [expandedAdsets, adCreativeData, dateRange, apiFetch]);
 
   const sortedRows = useMemo(() => {
     const sorted = [...rows].sort((a, b) => {
@@ -309,6 +425,9 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
     `${align === "left" ? "text-left" : "text-right"} px-4 py-3 font-medium text-zinc-600 dark:text-zinc-400 cursor-pointer select-none group whitespace-nowrap bg-zinc-50 dark:bg-zinc-800/50`;
 
   const scrollMaxHeight = ROW_HEIGHT * MAX_VISIBLE_ROWS;
+
+  // Number of visible columns (for colSpan in sub-rows)
+  const visibleColCount = 1 + DEFAULT_COLUMNS.filter((c) => isVisible(c.key)).length;
 
   return (
     <div className="pt-4">
@@ -469,46 +588,202 @@ export function FacebookCampaignsTable({ controlsContainer }: { controlsContaine
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((row, i) => (
-                <tr
-                  key={i}
-                  className="border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30"
-                >
-                  <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">
-                    {row.campaign || "—"}
-                  </td>
-                  {isVisible("utmCampaign") && (
-                    <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
-                      {row.utmCampaign || "—"}
-                    </td>
-                  )}
-                  {isVisible("adSpend") && (
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.adSpend > 0 ? formatCurrency(row.adSpend, displayCurrency) : "—"}
-                    </td>
-                  )}
-                  {isVisible("orders") && (
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.orders}
-                    </td>
-                  )}
-                  {isVisible("revenue") && (
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.revenue > 0 ? formatCurrency(row.revenue, displayCurrency) : "—"}
-                    </td>
-                  )}
-                  {isVisible("roas") && (
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.adSpend > 0 ? row.roas.toFixed(2) : "—"}
-                    </td>
-                  )}
-                  {isVisible("costPerResult") && (
-                    <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
-                      {row.orders > 0 ? formatCurrency(row.costPerResult, displayCurrency) : "—"}
-                    </td>
-                  )}
-                </tr>
-              ))}
+              {sortedRows.map((row, i) => {
+                const isExpanded = expandedCampaigns.has(row.campaign);
+                const isLoadingAdsets = loadingAdsets.has(row.campaign);
+                const adsets = adsetData.get(row.campaign) ?? [];
+
+                return (
+                  <>
+                    {/* Campaign row */}
+                    <tr
+                      key={`campaign-${i}`}
+                      className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-zinc-50 dark:hover:bg-zinc-800/30 cursor-pointer ${isExpanded ? "bg-zinc-50 dark:bg-zinc-800/20" : ""}`}
+                      onClick={() => toggleCampaign(row.campaign)}
+                    >
+                      <td className="px-4 py-3 text-zinc-900 dark:text-zinc-100">
+                        <div className="flex items-center">
+                          <ChevronIcon open={isExpanded} />
+                          <span>{row.campaign || "—"}</span>
+                        </div>
+                      </td>
+                      {isVisible("utmCampaign") && (
+                        <td className="px-4 py-3 text-zinc-600 dark:text-zinc-400">
+                          {row.utmCampaign || "—"}
+                        </td>
+                      )}
+                      {isVisible("adSpend") && (
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
+                          {row.adSpend > 0 ? formatCurrency(row.adSpend, displayCurrency) : "—"}
+                        </td>
+                      )}
+                      {isVisible("orders") && (
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
+                          {row.orders}
+                        </td>
+                      )}
+                      {isVisible("revenue") && (
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
+                          {row.revenue > 0 ? formatCurrency(row.revenue, displayCurrency) : "—"}
+                        </td>
+                      )}
+                      {isVisible("roas") && (
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
+                          {row.adSpend > 0 ? row.roas.toFixed(2) : "—"}
+                        </td>
+                      )}
+                      {isVisible("costPerResult") && (
+                        <td className="px-4 py-3 text-right text-zinc-900 dark:text-zinc-100">
+                          {row.orders > 0 ? formatCurrency(row.costPerResult, displayCurrency) : "—"}
+                        </td>
+                      )}
+                    </tr>
+
+                    {/* Ad set sub-rows */}
+                    {isExpanded && (
+                      <>
+                        {isLoadingAdsets ? (
+                          <tr key={`loading-adsets-${i}`} className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10">
+                            <td colSpan={visibleColCount} className="px-8 py-2 text-xs text-zinc-400">
+                              Loading ad sets...
+                            </td>
+                          </tr>
+                        ) : adsets.length === 0 ? (
+                          <tr key={`empty-adsets-${i}`} className="border-b border-zinc-100 dark:border-zinc-800 bg-zinc-50/50 dark:bg-zinc-800/10">
+                            <td colSpan={visibleColCount} className="px-8 py-2 text-xs text-zinc-400">
+                              No ad sets found
+                            </td>
+                          </tr>
+                        ) : (
+                          adsets.map((adset, j) => {
+                            const adsetKey = `${row.campaign}|${adset.adset}`;
+                            const isAdsetExpanded = expandedAdsets.has(adsetKey);
+                            const isLoadingCreatives = loadingAdCreatives.has(adsetKey);
+                            const creatives = adCreativeData.get(adsetKey) ?? [];
+
+                            return (
+                              <>
+                                {/* Ad set row */}
+                                <tr
+                                  key={`adset-${i}-${j}`}
+                                  className={`border-b border-zinc-100 dark:border-zinc-800 hover:bg-blue-50/30 dark:hover:bg-blue-900/10 cursor-pointer ${isAdsetExpanded ? "bg-blue-50/20 dark:bg-blue-900/5" : "bg-zinc-50/50 dark:bg-zinc-800/10"}`}
+                                  onClick={(e) => { e.stopPropagation(); toggleAdset(row.campaign, adset.adset); }}
+                                >
+                                  <td className="px-4 py-2.5 text-zinc-700 dark:text-zinc-300" style={{ paddingLeft: 32 }}>
+                                    <div className="flex items-center">
+                                      <ChevronIcon open={isAdsetExpanded} />
+                                      <span className="text-xs font-medium">{adset.adset || "—"}</span>
+                                    </div>
+                                  </td>
+                                  {isVisible("utmCampaign") && (
+                                    <td className="px-4 py-2.5 text-xs text-zinc-500 dark:text-zinc-400">
+                                      <span className="text-xs text-zinc-400">{adset.impressions.toLocaleString()} impr · {adset.ctr.toFixed(1)}% CTR</span>
+                                    </td>
+                                  )}
+                                  {isVisible("adSpend") && (
+                                    <td className="px-4 py-2.5 text-right text-xs text-zinc-700 dark:text-zinc-300">
+                                      {adset.spend > 0 ? formatCurrency(adset.spend, displayCurrency) : "—"}
+                                    </td>
+                                  )}
+                                  {isVisible("orders") && (
+                                    <td className="px-4 py-2.5 text-right text-xs text-zinc-700 dark:text-zinc-300">
+                                      {adset.purchases}
+                                    </td>
+                                  )}
+                                  {isVisible("revenue") && (
+                                    <td className="px-4 py-2.5 text-right text-xs text-zinc-700 dark:text-zinc-300">
+                                      {adset.purchaseValue > 0 ? formatCurrency(adset.purchaseValue, displayCurrency) : "—"}
+                                    </td>
+                                  )}
+                                  {isVisible("roas") && (
+                                    <td className="px-4 py-2.5 text-right text-xs text-zinc-700 dark:text-zinc-300">
+                                      {adset.spend > 0 ? adset.roas.toFixed(2) : "—"}
+                                    </td>
+                                  )}
+                                  {isVisible("costPerResult") && (
+                                    <td className="px-4 py-2.5 text-right text-xs text-zinc-700 dark:text-zinc-300">
+                                      {adset.purchases > 0 ? formatCurrency(adset.costPerPurchase, displayCurrency) : "—"}
+                                    </td>
+                                  )}
+                                </tr>
+
+                                {/* Ad creative sub-rows */}
+                                {isAdsetExpanded && (
+                                  <>
+                                    {isLoadingCreatives ? (
+                                      <tr key={`loading-creatives-${i}-${j}`} className="border-b border-zinc-100 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-900/5">
+                                        <td colSpan={visibleColCount} className="py-2 text-xs text-zinc-400" style={{ paddingLeft: 56 }}>
+                                          Loading ads...
+                                        </td>
+                                      </tr>
+                                    ) : creatives.length === 0 ? (
+                                      <tr key={`empty-creatives-${i}-${j}`} className="border-b border-zinc-100 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-900/5">
+                                        <td colSpan={visibleColCount} className="py-2 text-xs text-zinc-400" style={{ paddingLeft: 56 }}>
+                                          No ads found
+                                        </td>
+                                      </tr>
+                                    ) : (
+                                      creatives.map((creative, k) => (
+                                        <tr
+                                          key={`creative-${i}-${j}-${k}`}
+                                          className="border-b border-zinc-100 dark:border-zinc-800 bg-blue-50/10 dark:bg-blue-900/5 hover:bg-blue-50/20 dark:hover:bg-blue-900/10"
+                                        >
+                                          <td className="py-2 text-zinc-600 dark:text-zinc-400" style={{ paddingLeft: 56 }}>
+                                            <div className="flex items-center gap-2">
+                                              {/* Creative thumbnail placeholder — adId stored for future direct API calls */}
+                                              <div className="w-6 h-6 rounded bg-zinc-200 dark:bg-zinc-700 flex-shrink-0 flex items-center justify-center">
+                                                <svg width="10" height="10" viewBox="0 0 10 10" fill="none">
+                                                  <rect x="1" y="1" width="8" height="8" rx="1" stroke="currentColor" strokeWidth="1" className="text-zinc-400" />
+                                                  <path d="M1 7L3.5 4.5L5.5 6.5L7 5L9 7" stroke="currentColor" strokeWidth="1" strokeLinecap="round" className="text-zinc-400" />
+                                                </svg>
+                                              </div>
+                                              <span className="text-xs truncate max-w-[200px]" title={creative.ad}>{creative.ad || "—"}</span>
+                                            </div>
+                                          </td>
+                                          {isVisible("utmCampaign") && (
+                                            <td className="px-4 py-2 text-xs text-zinc-400">
+                                              {creative.impressions.toLocaleString()} impr · {creative.ctr.toFixed(1)}% CTR
+                                            </td>
+                                          )}
+                                          {isVisible("adSpend") && (
+                                            <td className="px-4 py-2 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                                              {creative.spend > 0 ? formatCurrency(creative.spend, displayCurrency) : "—"}
+                                            </td>
+                                          )}
+                                          {isVisible("orders") && (
+                                            <td className="px-4 py-2 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                                              {creative.purchases}
+                                            </td>
+                                          )}
+                                          {isVisible("revenue") && (
+                                            <td className="px-4 py-2 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                                              {creative.purchaseValue > 0 ? formatCurrency(creative.purchaseValue, displayCurrency) : "—"}
+                                            </td>
+                                          )}
+                                          {isVisible("roas") && (
+                                            <td className="px-4 py-2 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                                              {creative.spend > 0 ? creative.roas.toFixed(2) : "—"}
+                                            </td>
+                                          )}
+                                          {isVisible("costPerResult") && (
+                                            <td className="px-4 py-2 text-right text-xs text-zinc-600 dark:text-zinc-400">
+                                              {creative.purchases > 0 ? formatCurrency(creative.costPerPurchase, displayCurrency) : "—"}
+                                            </td>
+                                          )}
+                                        </tr>
+                                      ))
+                                    )}
+                                  </>
+                                )}
+                              </>
+                            );
+                          })
+                        )}
+                      </>
+                    )}
+                  </>
+                );
+              })}
             </tbody>
           </table>
         </div>

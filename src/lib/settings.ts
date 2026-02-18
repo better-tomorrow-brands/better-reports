@@ -50,6 +50,10 @@ export interface PosthogSettings {
   host: string; // e.g. eu.posthog.com
 }
 
+export interface ShipBobSettings {
+  pat: string; // Personal Access Token
+}
+
 export interface LifecycleSettings {
   newMaxDays: number;      // New: ≤ this many days (default 30)
   reorderMaxDays: number;  // Due Reorder: newMaxDays+1 to this (default 60)
@@ -149,6 +153,16 @@ export async function getPosthogSettings(orgId: number): Promise<PosthogSettings
 
 export async function savePosthogSettings(orgId: number, posthog: PosthogSettings): Promise<void> {
   await setSetting(orgId, "posthog", JSON.stringify(posthog));
+}
+
+export async function getShipBobSettings(orgId: number): Promise<ShipBobSettings | null> {
+  const raw = await getSetting(orgId, "shipbob");
+  if (!raw) return null;
+  return JSON.parse(raw);
+}
+
+export async function saveShipBobSettings(orgId: number, data: ShipBobSettings): Promise<void> {
+  await setSetting(orgId, "shipbob", JSON.stringify(data));
 }
 
 export const DEFAULT_LIFECYCLE_SETTINGS: LifecycleSettings = {

@@ -100,8 +100,11 @@ export async function POST(request: Request) {
 
         rows.push({
           date,
+          campaign_id: "",
           campaign: cols[0]?.trim() || "",
+          adset_id: "",
           adset: cols[2]?.trim() || "",
+          ad_id: "",
           ad: cols[3]?.trim() || "",
           utm_campaign: cols[4]?.trim() || "",
           reach: Number(cols[7]) || 0,

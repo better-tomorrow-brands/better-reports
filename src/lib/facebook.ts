@@ -6,8 +6,11 @@ import type { FacebookAdsSettings } from "@/lib/settings";
 const API_VERSION = 'v21.0';
 
 interface FacebookAdInsight {
+  campaign_id: string;
   campaign_name: string;
+  adset_id: string;
   adset_name: string;
+  ad_id: string;
   ad_name: string;
   date_start: string;
   date_stop: string;
@@ -38,8 +41,11 @@ interface FacebookInsightsResponse {
 
 export interface FacebookAdRow {
   date: string;
+  campaign_id: string;
   campaign: string;
+  adset_id: string;
   adset: string;
+  ad_id: string;
   ad: string;
   utm_campaign: string;
   spend: number;
@@ -62,8 +68,11 @@ export async function getDailyFacebookAds(date: string, settings: FacebookAdsSet
   }
 
   const fields = [
+    'campaign_id',
     'campaign_name',
+    'adset_id',
     'adset_name',
+    'ad_id',
     'ad_name',
     'spend',
     'impressions',
@@ -133,10 +142,13 @@ export async function getDailyFacebookAds(date: string, settings: FacebookAdsSet
 
       allRows.push({
         date,
+        campaign_id: row.campaign_id || '',
         campaign: row.campaign_name || '',
+        adset_id: row.adset_id || '',
         adset: row.adset_name || '',
+        ad_id: row.ad_id || '',
         ad: row.ad_name || '',
-        utm_campaign: '', // Will be populated from Campaigns sheet lookup
+        utm_campaign: '', // Will be populated from Campaigns table lookup
         spend: Math.round(spend * 100) / 100,
         impressions: Number(row.impressions) || 0,
         reach: Number(row.reach) || 0,
@@ -185,8 +197,11 @@ export async function upsertFacebookAds(rows: FacebookAdRow[], orgId: number): P
     const batch = rows.slice(i, i + BATCH_SIZE).map((row) => ({
       orgId,
       date: row.date,
+      campaignId: row.campaign_id,
       campaign: row.campaign,
+      adsetId: row.adset_id,
       adset: row.adset,
+      adId: row.ad_id,
       ad: row.ad,
       utmCampaign: row.utm_campaign,
       spend: row.spend,
@@ -209,6 +224,9 @@ export async function upsertFacebookAds(rows: FacebookAdRow[], orgId: number): P
       .onConflictDoUpdate({
         target: [facebookAds.orgId, facebookAds.date, facebookAds.campaign, facebookAds.adset, facebookAds.ad],
         set: {
+          campaignId: sql`excluded.campaign_id`,
+          adsetId: sql`excluded.adset_id`,
+          adId: sql`excluded.ad_id`,
           utmCampaign: sql`excluded.utm_campaign`,
           spend: sql`excluded.spend`,
           impressions: sql`excluded.impressions`,

@@ -62,6 +62,7 @@ interface InventoryItem {
   amazonQty: number;
   warehouseQty: number;
   shopifyQty: number;
+  shipbobQty: number;
   totalQty: number;
   landedCost: number;
   amazonRrp: number;
@@ -222,6 +223,7 @@ const ALL_INVENTORY_COLUMNS: ColDef[] = [
   { key: "amazonQty", label: "Amazon Qty", defaultVisible: true },
   { key: "shopifyQty", label: "Shopify Qty", defaultVisible: true },
   { key: "warehouseQty", label: "Warehouse Qty", defaultVisible: true },
+  { key: "shipbobQty", label: "ShipBob Qty", defaultVisible: true },
   { key: "totalQty", label: "Total Qty", defaultVisible: true },
   { key: "valueCost", label: "Value (Cost)", defaultVisible: true },
   { key: "valueRrp", label: "Value (RRP)", defaultVisible: true },
@@ -870,6 +872,7 @@ export default function InventoryPage() {
   const [editAmazonQty, setEditAmazonQty] = useState("");
   const [editShopifyQty, setEditShopifyQty] = useState("");
   const [editWarehouseQty, setEditWarehouseQty] = useState("");
+  const [editShipBobQty, setEditShipBobQty] = useState("");
   const [savingInventory, setSavingInventory] = useState(false);
 
   const openInventoryModal = useCallback((item: InventoryItem) => {
@@ -877,6 +880,7 @@ export default function InventoryPage() {
     setEditAmazonQty(String(item.amazonQty));
     setEditShopifyQty(String(item.shopifyQty));
     setEditWarehouseQty(String(item.warehouseQty));
+    setEditShipBobQty(String(item.shipbobQty));
   }, []);
 
   const saveInventory = useCallback(async () => {
@@ -885,17 +889,18 @@ export default function InventoryPage() {
     const amazonQty = Number(editAmazonQty) || 0;
     const shopifyQty = Number(editShopifyQty) || 0;
     const warehouseQty = Number(editWarehouseQty) || 0;
+    const shipbobQty = Number(editShipBobQty) || 0;
     try {
       const res = await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, shopifyQty, warehouseQty }),
+        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, shopifyQty, warehouseQty, shipbobQty }),
       });
       if (res.ok) {
         setInventoryItems((prev) =>
           prev.map((item) =>
             item.sku === editingInventory.sku
-              ? { ...item, amazonQty, shopifyQty, warehouseQty, totalQty: amazonQty + shopifyQty + warehouseQty }
+              ? { ...item, amazonQty, shopifyQty, warehouseQty, shipbobQty, totalQty: amazonQty + shopifyQty + warehouseQty + shipbobQty }
               : item
           )
         );
@@ -904,7 +909,7 @@ export default function InventoryPage() {
     } finally {
       setSavingInventory(false);
     }
-  }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, apiFetch]);
+  }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, editShipBobQty, apiFetch]);
 
   // ── Forecast tab state ──────────────────────────────────
   const [forecastSkuFilter, setForecastSkuFilter] = useState<ForecastSkuFilter>("all");
@@ -932,7 +937,7 @@ export default function InventoryPage() {
       await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: p.sku, amazonQty: 0, shopifyQty: 0, warehouseQty: 0 }),
+        body: JSON.stringify({ sku: p.sku, amazonQty: 0, shopifyQty: 0, warehouseQty: 0, shipbobQty: 0 }),
       });
     }
     fetchInventoryData();
@@ -942,7 +947,7 @@ export default function InventoryPage() {
   type ChannelRow = {
     sku: string;
     productName: string | null;
-    channel: "Total" | "Amazon" | "Shopify" | "Warehouse";
+    channel: "Total" | "Amazon" | "Shopify" | "ShipBob" | "Warehouse";
     inventory: number;
     valueCost: number;
     valueRrp: number;
@@ -961,7 +966,8 @@ export default function InventoryPage() {
       const shopifyRate = shopifySold > 0 ? shopifySold / forecastDays : null;
       const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
       const whQty = item.warehouseQty ?? 0;
-      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty;
+      const sbQty = item.shipbobQty ?? 0;
+      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty + sbQty;
       const totalSold = shopifySold + amazonSold;
       const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
       const lc = item.landedCost ?? 0;
@@ -1018,6 +1024,22 @@ export default function InventoryPage() {
         sourceItem: item,
       });
 
+      // ShipBob row (DTC fulfillment — uses shopify run rate as proxy)
+      const shipbobDaysLeft = shopifyRate ? Math.floor(sbQty / shopifyRate) : null;
+      rows.push({
+        sku: item.sku,
+        productName: item.productName,
+        channel: "ShipBob",
+        inventory: sbQty,
+        valueCost: sbQty * lc,
+        valueRrp: sbQty * (item.dtcRrp ?? 0),
+        runRate: shopifyRate,
+        daysLeft: shipbobDaysLeft,
+        oosDate: shipbobDaysLeft !== null ? format(addDays(new Date(), shipbobDaysLeft), "dd MMM yyyy") : null,
+        isFirstInGroup: false,
+        sourceItem: item,
+      });
+
       // Warehouse row
       rows.push({
         sku: item.sku,
@@ -1042,6 +1064,7 @@ export default function InventoryPage() {
       if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty")) return false;
       if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty")) return false;
       if (row.channel === "Warehouse" && !visibleInventoryCols.has("warehouseQty")) return false;
+      if (row.channel === "ShipBob" && !visibleInventoryCols.has("shipbobQty")) return false;
       if (row.channel === "Total" && !visibleInventoryCols.has("totalQty")) return false;
       return true;
     });
@@ -1072,10 +1095,10 @@ export default function InventoryPage() {
         inventory = item.amazonQty ?? 0;
         sold = amazonUnits[item.sku] ?? 0;
       } else if (forecastChannelFilter === "shopify") {
-        inventory = item.shopifyQty ?? 0;
+        inventory = (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
         sold = shopifyUnits[item.sku] ?? 0;
       } else {
-        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
         sold = (amazonUnits[item.sku] ?? 0) + (shopifyUnits[item.sku] ?? 0);
       }
 
@@ -1161,9 +1184,9 @@ export default function InventoryPage() {
       if (unitSalesChannel === "amazon") {
         inventoryHeld += item.amazonQty ?? 0;
       } else if (unitSalesChannel === "shopify") {
-        inventoryHeld += item.shopifyQty ?? 0;
+        inventoryHeld += (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
       } else {
-        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0);
+        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (item.shipbobQty ?? 0);
       }
     }
 
@@ -2049,7 +2072,7 @@ export default function InventoryPage() {
                                     : row.daysLeft < 30
                                       ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
                                       : ""
-                                  : (row.channel === "Total" || row.channel === "Shopify")
+                                  : (row.channel === "Total" || row.channel === "Shopify" || row.channel === "ShipBob")
                                     ? row.daysLeft < 90
                                       ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
                                       : row.daysLeft <= 150
@@ -2154,8 +2177,18 @@ export default function InventoryPage() {
                         min={0}
                       />
                     </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">ShipBob Qty</label>
+                      <input
+                        type="number"
+                        value={editShipBobQty}
+                        onChange={(e) => setEditShipBobQty(e.target.value)}
+                        className="input w-full"
+                        min={0}
+                      />
+                    </div>
                     <div className="text-sm text-zinc-500">
-                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0)}</span>
+                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0) + (Number(editShipBobQty) || 0)}</span>
                     </div>
                   </div>
                   <div className="filter-modal-footer">
