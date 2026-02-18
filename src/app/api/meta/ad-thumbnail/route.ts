@@ -48,7 +48,6 @@ export async function GET(request: Request) {
         const fullThumbUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${creativeId}`);
         fullThumbUrl.searchParams.set("fields", "thumbnail_url");
         fullThumbUrl.searchParams.set("thumbnail_width", "1080");
-        fullThumbUrl.searchParams.set("thumbnail_height", "1920"); // tall enough for portrait; Meta preserves aspect ratio
         fullThumbUrl.searchParams.set("access_token", settings.access_token);
         const tRes = await fetch(fullThumbUrl.toString());
         if (tRes.ok) {
