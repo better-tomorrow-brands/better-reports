@@ -23,9 +23,16 @@ export async function GET(request: Request) {
       return NextResponse.json({ error: "Disallowed domain" }, { status: 403 });
     }
 
-    const res = await fetch(imageUrl, {
+    // Strip the stp crop/size hint — Meta CDN serves the original resolution without it
+    let fetchUrl = imageUrl;
+    try {
+      const u = new URL(imageUrl);
+      u.searchParams.delete("stp");
+      fetchUrl = u.toString();
+    } catch { /* keep original */ }
+
+    const res = await fetch(fetchUrl, {
       headers: {
-        // Mimic a browser request so Meta CDN doesn't block us
         "User-Agent": "Mozilla/5.0 (compatible; better-reports/1.0)",
         "Referer": "https://www.facebook.com/",
       },
