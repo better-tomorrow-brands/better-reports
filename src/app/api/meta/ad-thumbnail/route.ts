@@ -40,20 +40,22 @@ export async function GET(request: Request) {
 
     // For video ads, fetch a larger thumbnail from the video object
     let fullUrl: string | null = creative?.image_url || creative?.thumbnail_url || null;
+    let videoSourceUrl: string | null = null;
     if (videoId) {
       try {
         const videoUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${videoId}`);
-        videoUrl.searchParams.set("fields", "picture");
+        videoUrl.searchParams.set("fields", "source,picture");
         videoUrl.searchParams.set("access_token", settings.access_token);
         const vRes = await fetch(videoUrl.toString());
         if (vRes.ok) {
           const vData = await vRes.json();
+          if (vData?.source) videoSourceUrl = vData.source;
           if (vData?.picture) fullUrl = vData.picture;
         }
       } catch { /* fall through to thumbnail */ }
     }
 
-    return NextResponse.json({ thumbnailUrl, fullUrl, videoId });
+    return NextResponse.json({ thumbnailUrl, fullUrl, videoId, videoSourceUrl });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

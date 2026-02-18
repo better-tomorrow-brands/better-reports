@@ -79,7 +79,7 @@ const METRIC_COLS: { key: keyof AdSetRow | keyof AdCreativeRow; label: string; f
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
-function Lightbox({ fullUrl, videoId, onClose }: { fullUrl: string | null; videoId: string | null; onClose: () => void }) {
+function Lightbox({ fullUrl, videoSourceUrl, onClose }: { fullUrl: string | null; videoSourceUrl: string | null; onClose: () => void }) {
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
@@ -102,10 +102,11 @@ function Lightbox({ fullUrl, videoId, onClose }: { fullUrl: string | null; video
         className="max-w-3xl max-h-[90vh] flex items-center justify-center p-4"
         onClick={(e) => e.stopPropagation()}
       >
-        {videoId ? (
+        {videoSourceUrl ? (
           <video
-            src={`https://www.facebook.com/video/embed?video_id=${videoId}`}
+            src={videoSourceUrl}
             controls
+            autoPlay
             className="max-w-full max-h-[80vh] rounded-lg"
           />
         ) : fullUrl ? (
@@ -126,7 +127,7 @@ function Lightbox({ fullUrl, videoId, onClose }: { fullUrl: string | null; video
 function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string) => Promise<Response> }) {
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null | "loading">("loading");
   const [fullUrl, setFullUrl] = useState<string | null>(null);
-  const [videoId, setVideoId] = useState<string | null>(null);
+  const [videoSourceUrl, setVideoSourceUrl] = useState<string | null>(null);
   const [lightboxOpen, setLightboxOpen] = useState(false);
 
   useEffect(() => {
@@ -137,7 +138,7 @@ function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string)
         if (!cancelled) {
           setThumbnailUrl(d.thumbnailUrl ?? null);
           setFullUrl(d.fullUrl ?? null);
-          setVideoId(d.videoId ?? null);
+          setVideoSourceUrl(d.videoSourceUrl ?? null);
         }
       })
       .catch(() => { if (!cancelled) setThumbnailUrl(null); });
@@ -161,7 +162,7 @@ function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string)
         <img src={thumbnailUrl} alt="Ad thumbnail" className="w-16 h-16 object-cover" />
       </button>
       {lightboxOpen && (
-        <Lightbox fullUrl={fullUrl} videoId={videoId} onClose={() => setLightboxOpen(false)} />
+        <Lightbox fullUrl={fullUrl} videoSourceUrl={videoSourceUrl} onClose={() => setLightboxOpen(false)} />
       )}
     </>
   );
