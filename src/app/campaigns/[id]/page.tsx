@@ -79,12 +79,33 @@ const METRIC_COLS: { key: keyof AdSetRow | keyof AdCreativeRow; label: string; f
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
-function Lightbox({ fullUrl, videoSourceUrl, onClose }: { fullUrl: string | null; videoSourceUrl: string | null; onClose: () => void }) {
+function Lightbox({ fullUrl, videoSourceUrl, apiFetch, onClose }: {
+  fullUrl: string | null;
+  videoSourceUrl: string | null;
+  apiFetch: (url: string) => Promise<Response>;
+  onClose: () => void;
+}) {
+  const [blobUrl, setBlobUrl] = useState<string | null>(null);
+
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
   }, [onClose]);
+
+  // Fetch image through apiFetch (which sends org headers) and create a blob URL
+  useEffect(() => {
+    if (!fullUrl || videoSourceUrl) return;
+    let objectUrl: string | null = null;
+    apiFetch(`/api/meta/image-proxy?url=${encodeURIComponent(fullUrl)}`)
+      .then((r) => r.blob())
+      .then((blob) => {
+        objectUrl = URL.createObjectURL(blob);
+        setBlobUrl(objectUrl);
+      })
+      .catch(() => setBlobUrl(null));
+    return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
+  }, [fullUrl, videoSourceUrl, apiFetch]);
 
   return (
     <div
@@ -109,14 +130,16 @@ function Lightbox({ fullUrl, videoSourceUrl, onClose }: { fullUrl: string | null
             autoPlay
             className="max-w-full max-h-[80vh] rounded-lg"
           />
-        ) : fullUrl ? (
+        ) : blobUrl ? (
           // eslint-disable-next-line @next/next/no-img-element
           <img
-            src={`/api/meta/image-proxy?url=${encodeURIComponent(fullUrl)}`}
+            src={blobUrl}
             alt="Ad creative"
             className="max-w-full max-h-[80vh] rounded-lg object-contain"
           />
-        ) : null}
+        ) : (
+          <div className="w-16 h-16 rounded bg-zinc-700 animate-pulse" />
+        )}
       </div>
     </div>
   );
@@ -162,7 +185,7 @@ function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string)
         <img src={thumbnailUrl} alt="Ad thumbnail" className="w-16 h-16 object-cover" />
       </button>
       {lightboxOpen && (
-        <Lightbox fullUrl={fullUrl} videoSourceUrl={videoSourceUrl} onClose={() => setLightboxOpen(false)} />
+        <Lightbox fullUrl={fullUrl} videoSourceUrl={videoSourceUrl} apiFetch={apiFetch} onClose={() => setLightboxOpen(false)} />
       )}
     </>
   );
