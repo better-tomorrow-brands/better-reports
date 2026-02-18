@@ -8,9 +8,11 @@ import { PanelLeftClose, PanelLeftOpen, ChevronDown, Check, Building2 } from "lu
 import { useOrg, Org } from "@/contexts/OrgContext";
 
 const navLinks = [
+  { href: "/", label: "Dashboard" },
   { href: "/reports", label: "Reports" },
   { href: "/orders", label: "Orders", adminOnly: true },
   { href: "/customers", label: "Customers", adminOnly: true },
+  { href: "/products", label: "Products", adminOnly: true },
   { href: "/inventory", label: "Inventory", adminOnly: true },
   { href: "/campaigns", label: "Campaigns", adminOnly: true },
   { href: "/users", label: "Users", adminOnly: true },
@@ -141,7 +143,9 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex flex-col gap-1 px-3 text-sm flex-1">
         {visibleLinks.map((link) => {
-          const isActive = pathname === link.href || pathname.startsWith(link.href + "/");
+          const isActive = link.href === "/"
+            ? pathname === "/"
+            : pathname === link.href || pathname.startsWith(link.href + "/");
           return (
             <Link
               key={link.href}

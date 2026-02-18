@@ -22,6 +22,7 @@ interface FacebookAdInsight {
   cpc?: string;
   cpm?: string;
   ctr?: string;
+  inline_link_clicks?: string;
   actions?: Array<{ action_type: string; value: string }>;
   action_values?: Array<{ action_type: string; value: string }>;
   cost_per_action_type?: Array<{ action_type: string; value: string }>;
@@ -60,6 +61,10 @@ export interface FacebookAdRow {
   cost_per_purchase: number;
   purchase_value: number;
   roas: number;
+  link_clicks: number;
+  shop_clicks: number;
+  landing_page_views: number;
+  cost_per_landing_page_view: number;
 }
 
 export async function getDailyFacebookAds(date: string, settings: FacebookAdsSettings): Promise<FacebookAdRow[]> {
@@ -82,6 +87,7 @@ export async function getDailyFacebookAds(date: string, settings: FacebookAdsSet
     'cpc',
     'cpm',
     'ctr',
+    'inline_link_clicks',
     'actions',
     'action_values',
     'cost_per_action_type',
@@ -137,6 +143,27 @@ export async function getDailyFacebookAds(date: string, settings: FacebookAdsSet
       );
       const costPerPurchaseNum = costPerPurchase ? Number(costPerPurchase.value) : 0;
 
+      // Extract link clicks (inline_link_clicks field)
+      const linkClicksNum = Number(row.inline_link_clicks) || 0;
+
+      // Extract shop clicks (fb_pixel_initiate_checkout or add_to_cart as proxy)
+      const shopClicksAction = row.actions?.find(
+        (a) => a.action_type === 'initiate_checkout'
+      );
+      const shopClicksNum = shopClicksAction ? Number(shopClicksAction.value) : 0;
+
+      // Extract landing page views from actions
+      const landingPageViewsAction = row.actions?.find(
+        (a) => a.action_type === 'landing_page_view'
+      );
+      const landingPageViewsNum = landingPageViewsAction ? Number(landingPageViewsAction.value) : 0;
+
+      // Cost per landing page view
+      const costPerLpvAction = row.cost_per_action_type?.find(
+        (a) => a.action_type === 'landing_page_view'
+      );
+      const costPerLpvNum = costPerLpvAction ? Number(costPerLpvAction.value) : 0;
+
       const spend = Number(row.spend) || 0;
       const roas = spend > 0 ? purchaseValueNum / spend : 0;
 
@@ -161,6 +188,10 @@ export async function getDailyFacebookAds(date: string, settings: FacebookAdsSet
         cost_per_purchase: Math.round(costPerPurchaseNum * 100) / 100,
         purchase_value: Math.round(purchaseValueNum * 100) / 100,
         roas: Math.round(roas * 100) / 100,
+        link_clicks: linkClicksNum,
+        shop_clicks: shopClicksNum,
+        landing_page_views: landingPageViewsNum,
+        cost_per_landing_page_view: Math.round(costPerLpvNum * 100) / 100,
       });
     }
 
@@ -216,6 +247,10 @@ export async function upsertFacebookAds(rows: FacebookAdRow[], orgId: number): P
       costPerPurchase: row.cost_per_purchase,
       purchaseValue: row.purchase_value,
       roas: row.roas,
+      linkClicks: row.link_clicks,
+      shopClicks: row.shop_clicks,
+      landingPageViews: row.landing_page_views,
+      costPerLandingPageView: row.cost_per_landing_page_view,
     }));
 
     await db
@@ -240,6 +275,10 @@ export async function upsertFacebookAds(rows: FacebookAdRow[], orgId: number): P
           costPerPurchase: sql`excluded.cost_per_purchase`,
           purchaseValue: sql`excluded.purchase_value`,
           roas: sql`excluded.roas`,
+          linkClicks: sql`excluded.link_clicks`,
+          shopClicks: sql`excluded.shop_clicks`,
+          landingPageViews: sql`excluded.landing_page_views`,
+          costPerLandingPageView: sql`excluded.cost_per_landing_page_view`,
         },
       });
 

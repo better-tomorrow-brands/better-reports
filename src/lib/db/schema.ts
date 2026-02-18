@@ -352,6 +352,10 @@ export const facebookAds = pgTable("facebook_ads", {
   costPerPurchase: real("cost_per_purchase").notNull().default(0),
   purchaseValue: real("purchase_value").notNull().default(0),
   roas: real("roas").notNull().default(0),
+  linkClicks: integer("link_clicks").notNull().default(0),
+  shopClicks: integer("shop_clicks").notNull().default(0),
+  landingPageViews: integer("landing_page_views").notNull().default(0),
+  costPerLandingPageView: real("cost_per_landing_page_view").notNull().default(0),
 }, (table) => [
   uniqueIndex("facebook_ads_org_date_campaign_adset_ad_idx")
     .on(table.orgId, table.date, table.campaign, table.adset, table.ad),

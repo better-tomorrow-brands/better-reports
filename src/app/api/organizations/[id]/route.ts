@@ -21,6 +21,36 @@ async function requireSuperAdmin(): Promise<string> {
   return userId;
 }
 
+// GET /api/organizations/[id] — fetch single org
+export async function GET(
+  _request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireSuperAdmin();
+    const { id } = await params;
+    const orgId = parseInt(id);
+    if (isNaN(orgId)) return NextResponse.json({ error: "Invalid id" }, { status: 400 });
+
+    const [org] = await db
+      .select()
+      .from(organizations)
+      .where(eq(organizations.id, orgId))
+      .limit(1);
+
+    if (!org) return NextResponse.json({ error: "Org not found" }, { status: 404 });
+
+    return NextResponse.json({ org });
+  } catch (error: unknown) {
+    const e = error as { message?: string; status?: number };
+    if (e.status === 401 || e.status === 403) {
+      return NextResponse.json({ error: e.message }, { status: e.status });
+    }
+    console.error("GET /api/organizations/[id] error:", error);
+    return NextResponse.json({ error: "Failed to fetch org" }, { status: 500 });
+  }
+}
+
 // PATCH /api/organizations/[id] — rename org
 export async function PATCH(
   request: Request,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useRef, useMemo } from "react";
+import { useRouter } from "next/navigation";
 import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
@@ -232,6 +233,7 @@ function StatusBadge({ status, type }: { status: string | null; type: "fb" | "wa
 // ── Main Component ─────────────────────────────────────
 
 export default function CampaignsPage() {
+  const router = useRouter();
   const { apiFetch, currentOrg, displayCurrency } = useOrg();
   const [activeTab, setActiveTab] = useState<"facebook" | "whatsapp" | "manual">("facebook");
 
@@ -1957,6 +1959,7 @@ export default function CampaignsPage() {
                 data={filteredFbCampaigns}
                 rowKey="id"
                 emptyMessage="No campaigns yet. Add your first campaign to enable order attribution."
+                onRowClick={(row) => router.push(`/campaigns/${row.id}`)}
               />
             )}
           </div>

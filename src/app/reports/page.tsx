@@ -15,7 +15,6 @@ import {
   groupByLabels,
 } from "@/components/reports/AmazonChart";
 import { ShopifyChart } from "@/components/reports/ShopifyChart";
-import { OverallChart } from "@/components/reports/OverallChart";
 import { FacebookAdsChart } from "@/components/reports/FacebookAdsChart";
 import { FacebookCampaignsTable } from "@/components/reports/FacebookCampaignsTable";
 import { SessionsChart } from "@/components/reports/SessionsChart";
@@ -24,8 +23,6 @@ import { EcommerceChart } from "@/components/reports/EcommerceChart";
 
 const tabs = [
   { key: "campaigns", label: "Dashboard" },
-  { key: "cashflow", label: "Cashflow" },
-  { key: "overall", label: "Overall" },
   { key: "amazon", label: "Amazon" },
   { key: "shopify", label: "Shopify" },
   { key: "facebook-ads", label: "Facebook Ads" },
@@ -170,9 +167,7 @@ export default function ReportsPage() {
       </div>
 
       <div className="page-content">
-        {activeTab === "overall" ? (
-          <OverallChart controlsContainer={controlsEl} />
-        ) : activeTab === "amazon" ? (
+        {activeTab === "amazon" ? (
           <AmazonChart dateRange={dateRange} groupBy={groupBy} seriesConfig={seriesConfig} />
         ) : activeTab === "shopify" ? (
           <ShopifyChart controlsContainer={controlsEl} />

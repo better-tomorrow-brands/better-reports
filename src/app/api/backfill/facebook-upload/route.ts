@@ -119,6 +119,10 @@ export async function POST(request: Request) {
           ctr: Number(cols[20]) || 0,
           roas,
           purchase_value: Math.round(roas * spend * 100) / 100,
+          link_clicks: 0,
+          shop_clicks: 0,
+          landing_page_views: 0,
+          cost_per_landing_page_view: 0,
         });
       } catch (error) {
         parseErrors++;

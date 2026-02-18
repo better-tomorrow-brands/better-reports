@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useRouter } from "next/navigation";
 import { useOrg } from "@/contexts/OrgContext";
 
 interface OrgRow {
@@ -19,6 +20,7 @@ interface OrgMember {
 
 export default function OrganizationsPage() {
   const { apiFetch } = useOrg();
+  const router = useRouter();
 
   const [allOrgs, setAllOrgs] = useState<OrgRow[]>([]);
   const [orgsLoading, setOrgsLoading] = useState(true);
@@ -293,7 +295,12 @@ export default function OrganizationsPage() {
                   ) : (
                     <>
                       <div>
-                        <span className="text-sm font-medium text-zinc-900 dark:text-zinc-100">{org.name}</span>
+                        <button
+                          onClick={() => router.push(`/organizations/${org.id}`)}
+                          className="text-sm font-medium text-zinc-900 dark:text-zinc-100 hover:underline"
+                        >
+                          {org.name}
+                        </button>
                         <span className="text-xs text-zinc-400 ml-2">{org.slug}</span>
                       </div>
                       <div className="flex items-center gap-1">
