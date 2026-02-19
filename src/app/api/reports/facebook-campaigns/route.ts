@@ -1,9 +1,14 @@
 import { NextResponse } from "next/server";
 import { db } from "@/lib/db";
-import { orders, facebookAds, campaignsFcb, posthogAnalytics, amazonSalesTraffic, amazonOrders, products } from "@/lib/db/schema";
-import { sql, gte, lte, and, eq, ne, sum, count } from "drizzle-orm";
+import { facebookAds } from "@/lib/db/schema";
+import { sql, gte, lte, and, eq, sum } from "drizzle-orm";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
+/**
+ * GET /api/reports/facebook-campaigns
+ *   ?from=&to=&campaignId=&groupBy=day   → daily time-series for a campaign
+ *   ?from=&to=&campaignId=               → aggregated totals for a campaign
+ */
 export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
@@ -11,224 +16,120 @@ export async function GET(request: Request) {
     const url = new URL(request.url);
     const from = url.searchParams.get("from");
     const to = url.searchParams.get("to");
+    const campaignId = url.searchParams.get("campaignId");
+    const utmCampaign = url.searchParams.get("utmCampaign");
+    const groupBy = url.searchParams.get("groupBy");
 
-    if (!from || !to) {
+    if (!from || !to || (!campaignId && !utmCampaign)) {
       return NextResponse.json(
-        { error: "from and to query params are required" },
+        { error: "from, to, and campaignId (or utmCampaign) are required" },
         { status: 400 }
       );
     }
 
-    const [campaignRows, fbRows, orderRows, allOrdersRow, sessionsRow, amazonRow] = await Promise.all([
-      db
-        .select({
-          utmCampaign: campaignsFcb.utmCampaign,
-          adGroup: campaignsFcb.adGroup,
-        })
-        .from(campaignsFcb)
-        .where(eq(campaignsFcb.orgId, orgId)),
+    const campaignFilter =
+      campaignId && campaignId !== ""
+        ? eq(facebookAds.campaignId, campaignId)
+        : eq(facebookAds.utmCampaign, utmCampaign!);
 
-      db
-        .select({
-          utmCampaign: facebookAds.utmCampaign,
-          adset: sql<string>`MIN(${facebookAds.adset})`.as("adset"),
-          campaignId: sql<string>`MIN(${facebookAds.campaignId})`.as("campaign_id"),
-          adSpend: sum(facebookAds.spend).as("ad_spend"),
-        })
-        .from(facebookAds)
-        .where(
-          and(
-            eq(facebookAds.orgId, orgId),
-            gte(facebookAds.date, from),
-            lte(facebookAds.date, to)
-          )
-        )
-        .groupBy(facebookAds.utmCampaign),
-
-      db
-        .select({
-          utmCampaign: orders.utmCampaign,
-          orderCount: count().as("order_count"),
-          revenue: sum(orders.total).as("revenue"),
-        })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.orgId, orgId),
-            eq(orders.utmSource, "facebook"),
-            gte(orders.createdAt, new Date(from)),
-            lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
-          )
-        )
-        .groupBy(orders.utmCampaign),
-
-      db
-        .select({
-          orderCount: count().as("order_count"),
-          revenue: sum(orders.total).as("revenue"),
-        })
-        .from(orders)
-        .where(
-          and(
-            eq(orders.orgId, orgId),
-            gte(orders.createdAt, new Date(from)),
-            lte(orders.createdAt, new Date(to + "T23:59:59.999Z"))
-          )
-        ),
-
-      db
-        .select({
-          sessions: sum(posthogAnalytics.totalSessions).as("sessions"),
-        })
-        .from(posthogAnalytics)
-        .where(
-          and(
-            eq(posthogAnalytics.orgId, orgId),
-            gte(posthogAnalytics.date, from),
-            lte(posthogAnalytics.date, to)
-          )
-        ),
-
-      db
-        .select({
-          revenue: sum(amazonSalesTraffic.orderedProductSales).as("revenue"),
-          orders: sum(amazonSalesTraffic.unitsOrdered).as("orders"),
-        })
-        .from(amazonSalesTraffic)
-        .where(
-          and(
-            eq(amazonSalesTraffic.orgId, orgId),
-            gte(amazonSalesTraffic.date, from),
-            lte(amazonSalesTraffic.date, to)
-          )
-        ),
-    ]);
-
-    const campaignNameMap = new Map(
-      campaignRows.map((r) => [r.utmCampaign || "", r.adGroup || ""])
-    );
-    const orderMap = new Map(
-      orderRows.map((r) => [
-        r.utmCampaign || "",
-        { orders: Number(r.orderCount), revenue: Number(r.revenue) || 0 },
-      ])
-    );
-
-    const rows = [];
-
-    for (const fb of fbRows) {
-      const utm = fb.utmCampaign || "";
-      const o = orderMap.get(utm);
-      const adSpend = Number(fb.adSpend) || 0;
-      const orderCount = o?.orders ?? 0;
-      const revenue = o?.revenue ?? 0;
-
-      rows.push({
-        campaign: campaignNameMap.get(utm) || fb.adset || "",
-        utmCampaign: utm,
-        campaignId: fb.campaignId || "",
-        adSpend: Math.round(adSpend * 100) / 100,
-        orders: orderCount,
-        revenue: Math.round(revenue * 100) / 100,
-        roas: adSpend > 0 ? Math.round((revenue / adSpend) * 100) / 100 : 0,
-        costPerResult:
-          orderCount > 0 ? Math.round((adSpend / orderCount) * 100) / 100 : 0,
-      });
-
-      orderMap.delete(utm);
-    }
-
-    for (const [utm, o] of orderMap) {
-      rows.push({
-        campaign: campaignNameMap.get(utm) || "",
-        utmCampaign: utm,
-        campaignId: "",
-        adSpend: 0,
-        orders: o.orders,
-        revenue: Math.round(o.revenue * 100) / 100,
-        roas: 0,
-        costPerResult: 0,
-      });
-    }
-
-    rows.sort((a, b) => b.adSpend - a.adSpend);
-
-    const shopifyRevenue = Math.round((Number(allOrdersRow[0]?.revenue) || 0) * 100) / 100;
-    const shopifyOrders = Number(allOrdersRow[0]?.orderCount) || 0;
-    let amazonRevenue = Math.round((Number(amazonRow[0]?.revenue) || 0) * 100) / 100;
-    let amazonOrderCount = Number(amazonRow[0]?.orders) || 0;
-
-    // Supplement Amazon totals with orders data for dates not in sales-traffic
-    const salesTrafficDates = await db
-      .select({ date: amazonSalesTraffic.date })
-      .from(amazonSalesTraffic)
-      .where(
-        and(
-          eq(amazonSalesTraffic.orgId, orgId),
-          gte(amazonSalesTraffic.date, from),
-          lte(amazonSalesTraffic.date, to)
-        )
-      )
-      .groupBy(amazonSalesTraffic.date);
-
-    const coveredDates = new Set(salesTrafficDates.map((r) => r.date));
-
-    const orderConditions = [
-      eq(amazonOrders.orgId, orgId),
-      gte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${from}::date`),
-      lte(sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date`, sql`${to}::date`),
-      ne(amazonOrders.orderStatus, "Canceled"),
+    const baseConditions = [
+      eq(facebookAds.orgId, orgId),
+      campaignFilter,
+      gte(facebookAds.date, from),
+      lte(facebookAds.date, to),
     ];
 
-    if (coveredDates.size > 0) {
-      const datesArr = Array.from(coveredDates);
-      orderConditions.push(
-        sql`(${amazonOrders.purchaseDate} AT TIME ZONE 'Europe/London')::date NOT IN (${sql.join(datesArr.map((d) => sql`${d}::date`), sql`, `)})`
-      );
+    function mapRow(r: Record<string, unknown>) {
+      const spend = Number(r.spend) || 0;
+      const purchaseValue = Number(r.purchaseValue) || 0;
+      const purchases = Number(r.purchases) || 0;
+      const clicks = Number(r.clicks) || 0;
+      const impressions = Number(r.impressions) || 0;
+      const reach = Number(r.reach) || 0;
+      const landingPageViews = Number(r.landingPageViews) || 0;
+      const frequency =
+        impressions > 0 ? Number(r.frequencyNum) / impressions : 0;
+      return {
+        ...(r.date !== undefined ? { date: r.date as string } : {}),
+        spend: Math.round(spend * 100) / 100,
+        impressions,
+        reach,
+        frequency: Math.round(frequency * 100) / 100,
+        clicks,
+        linkClicks: Number(r.linkClicks) || 0,
+        shopClicks: Number(r.shopClicks) || 0,
+        landingPageViews,
+        purchases,
+        purchaseValue: Math.round(purchaseValue * 100) / 100,
+        ctr:
+          impressions > 0
+            ? Math.round((clicks / impressions) * 10000) / 100
+            : 0,
+        cpc: clicks > 0 ? Math.round((spend / clicks) * 100) / 100 : 0,
+        cpm:
+          impressions > 0
+            ? Math.round((spend / impressions) * 1000 * 100) / 100
+            : 0,
+        costPerResult:
+          purchases > 0 ? Math.round((spend / purchases) * 100) / 100 : 0,
+        costPerLandingPageView:
+          landingPageViews > 0
+            ? Math.round((spend / landingPageViews) * 100) / 100
+            : 0,
+        roas: spend > 0 ? Math.round((purchaseValue / spend) * 100) / 100 : 0,
+      };
     }
 
-    const ordersSupplementRow = await db
-      .select({
-        revenue: sql<string>`SUM(COALESCE(NULLIF(${amazonOrders.itemPrice}, 0), ${products.amazonRrp}, 0) * ${amazonOrders.quantityOrdered})`.as("revenue"),
-        orderCount: count().as("order_count"),
-      })
-      .from(amazonOrders)
-      .leftJoin(
-        products,
-        and(
-          eq(products.orgId, amazonOrders.orgId),
-          eq(products.asin, amazonOrders.asin),
+    const selectFields = {
+      spend: sum(facebookAds.spend).as("spend"),
+      impressions: sum(facebookAds.impressions).as("impressions"),
+      reach: sum(facebookAds.reach).as("reach"),
+      clicks: sum(facebookAds.clicks).as("clicks"),
+      linkClicks: sum(facebookAds.linkClicks).as("link_clicks"),
+      shopClicks: sum(facebookAds.shopClicks).as("shop_clicks"),
+      landingPageViews: sum(facebookAds.landingPageViews).as("landing_page_views"),
+      purchases: sum(facebookAds.purchases).as("purchases"),
+      purchaseValue: sum(facebookAds.purchaseValue).as("purchase_value"),
+      frequencyNum:
+        sql<string>`SUM(${facebookAds.frequency} * ${facebookAds.impressions})`.as(
+          "frequency_num"
         ),
-      )
-      .where(and(...orderConditions));
+    };
 
-    const supplementRevenue = Math.round((Number(ordersSupplementRow[0]?.revenue) || 0) * 100) / 100;
-    const supplementOrders = Number(ordersSupplementRow[0]?.orderCount) || 0;
+    if (groupBy === "day") {
+      const rows = await db
+        .select({ date: facebookAds.date, ...selectFields })
+        .from(facebookAds)
+        .where(and(...baseConditions))
+        .groupBy(facebookAds.date)
+        .orderBy(facebookAds.date);
 
-    amazonRevenue += supplementRevenue;
-    amazonOrderCount += supplementOrders;
+      return NextResponse.json({
+        campaignId,
+        utmCampaign,
+        from,
+        to,
+        rows: rows.map((r) => mapRow(r as Record<string, unknown>)),
+      });
+    }
 
-    const totalSessions = Number(sessionsRow[0]?.sessions) || 0;
-    const totalAdSpend = rows.reduce((s, r) => s + r.adSpend, 0);
+    // Aggregated totals
+    const rows = await db
+      .select(selectFields)
+      .from(facebookAds)
+      .where(and(...baseConditions));
 
-    return NextResponse.json({
-      rows,
-      totals: {
-        shopifyRevenue,
-        shopifyOrders,
-        amazonRevenue,
-        amazonOrders: amazonOrderCount,
-        sessions: totalSessions,
-        adSpend: Math.round(totalAdSpend * 100) / 100,
-      },
-    });
+    const totals = rows[0]
+      ? mapRow(rows[0] as Record<string, unknown>)
+      : null;
+    return NextResponse.json({ campaignId, utmCampaign, from, to, totals });
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });
     }
-    console.error("Reports facebook-campaigns GET error:", error);
+    console.error("facebook-campaigns GET error:", error);
     return NextResponse.json(
-      { error: "Failed to fetch report data", details: error instanceof Error ? error.message : String(error) },
+      { error: "Failed to fetch campaign data" },
       { status: 500 }
     );
   }

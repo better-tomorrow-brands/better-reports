@@ -6,6 +6,16 @@ import { format, subDays, startOfDay, endOfYesterday } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import {
+  ResponsiveContainer,
+  ComposedChart,
+  CartesianGrid,
+  XAxis,
+  YAxis,
+  Tooltip,
+  Line,
+  Legend,
+} from "recharts";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -76,6 +86,166 @@ const METRIC_COLS: { key: keyof AdSetRow | keyof AdCreativeRow; label: string; f
   { key: "landingPageViews",       label: "LP Views",            fmt: (v) => v.toLocaleString() },
   { key: "costPerLandingPageView", label: "Cost/LP View",        fmt: (v) => `$${v.toFixed(2)}` },
 ];
+
+// ─── Chart series config ──────────────────────────────────────────────────────
+
+interface DayRow {
+  date: string;
+  spend: number;
+  impressions: number;
+  reach: number;
+  frequency: number;
+  clicks: number;
+  linkClicks: number;
+  purchases: number;
+  ctr: number;
+  cpc: number;
+  cpm: number;
+  costPerResult: number;
+  roas: number;
+}
+
+const CHART_SERIES = [
+  { key: "spend",         label: "Spend",          color: "#6366f1", fmt: (v: number) => `$${v.toFixed(2)}` },
+  { key: "impressions",   label: "Impressions",     color: "#4472c4", fmt: (v: number) => v.toLocaleString() },
+  { key: "reach",         label: "Reach",           color: "#8b5cf6", fmt: (v: number) => v.toLocaleString() },
+  { key: "cpc",           label: "CPC",             color: "#f59e0b", fmt: (v: number) => `$${v.toFixed(2)}` },
+  { key: "ctr",           label: "CTR (%)",         color: "#10b981", fmt: (v: number) => `${v.toFixed(2)}%` },
+  { key: "costPerResult", label: "Cost/Result",     color: "#ef4444", fmt: (v: number) => `$${v.toFixed(2)}` },
+  { key: "frequency",     label: "Frequency",       color: "#f97316", fmt: (v: number) => v.toFixed(2) },
+  { key: "purchases",     label: "Results",         color: "#c4d34f", fmt: (v: number) => v.toLocaleString() },
+  { key: "cpm",           label: "CPM",             color: "#2d2d2d", fmt: (v: number) => `$${v.toFixed(2)}` },
+] as const;
+
+type ChartSeriesKey = typeof CHART_SERIES[number]["key"];
+
+// Default visible series
+const DEFAULT_VISIBLE: ChartSeriesKey[] = ["spend", "impressions", "cpc", "ctr"];
+
+function MetricsChart({ rows, loading, storageKey }: {
+  rows: DayRow[];
+  loading: boolean;
+  storageKey: string;
+}) {
+  const [visible, setVisible] = useState<Set<ChartSeriesKey>>(() => {
+    if (typeof window === "undefined") return new Set(DEFAULT_VISIBLE);
+    try {
+      const stored = localStorage.getItem(storageKey);
+      if (stored) return new Set(JSON.parse(stored) as ChartSeriesKey[]);
+    } catch { /* ignore */ }
+    return new Set(DEFAULT_VISIBLE);
+  });
+
+  function toggleSeries(key: ChartSeriesKey) {
+    setVisible((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) { if (next.size > 1) next.delete(key); }
+      else next.add(key);
+      try { localStorage.setItem(storageKey, JSON.stringify([...next])); } catch { /* ignore */ }
+      return next;
+    });
+  }
+
+  const chartData = rows.map((r) => ({
+    ...r,
+    dateLabel: r.date ? format(new Date(r.date + "T00:00:00"), "MMM d") : r.date,
+  }));
+
+  const activeSeries = CHART_SERIES.filter((s) => visible.has(s.key));
+
+  // Normalise values so all visible series can share one Y axis
+  // We scale each series to 0-100 range internally and show raw values in tooltip
+  const maxima: Record<string, number> = {};
+  for (const s of activeSeries) {
+    maxima[s.key] = Math.max(...chartData.map((d) => (d as unknown as Record<string, number>)[s.key] ?? 0), 1);
+  }
+
+  const normalised = chartData.map((d) => {
+    const out: Record<string, unknown> = { dateLabel: d.dateLabel };
+    for (const s of activeSeries) {
+      const raw = (d as unknown as Record<string, number>)[s.key] ?? 0;
+      out[s.key] = maxima[s.key] > 0 ? (raw / maxima[s.key]) * 100 : 0;
+      out[`__raw_${s.key}`] = raw;
+    }
+    return out;
+  });
+
+  if (loading) {
+    return <div className="h-56 bg-zinc-100 dark:bg-zinc-800 rounded-lg animate-pulse" />;
+  }
+  if (rows.length === 0) {
+    return <div className="h-56 flex items-center justify-center text-zinc-400 text-sm">No data for this period.</div>;
+  }
+
+  return (
+    <div>
+      {/* Series toggles */}
+      <div className="flex flex-wrap gap-2 mb-3">
+        {CHART_SERIES.map((s) => (
+          <button
+            key={s.key}
+            onClick={() => toggleSeries(s.key)}
+            className={`flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-medium border transition-colors ${
+              visible.has(s.key)
+                ? "border-transparent text-white"
+                : "border-zinc-200 dark:border-zinc-700 text-zinc-400 dark:text-zinc-500 bg-transparent"
+            }`}
+            style={visible.has(s.key) ? { backgroundColor: s.color } : {}}
+          >
+            {s.label}
+          </button>
+        ))}
+      </div>
+
+      <ResponsiveContainer width="100%" height={220}>
+        <ComposedChart data={normalised} margin={{ top: 4, right: 8, left: -20, bottom: 0 }}>
+          <CartesianGrid strokeDasharray="3 3" stroke="var(--border-color)" />
+          <XAxis
+            dataKey="dateLabel"
+            tick={{ fontSize: 11, fill: "var(--color-zinc-500)" }}
+            tickLine={false}
+            axisLine={false}
+            interval="preserveStartEnd"
+          />
+          <YAxis hide domain={[0, 110]} />
+          <Tooltip
+            content={({ active, payload, label }) => {
+              if (!active || !payload?.length) return null;
+              return (
+                <div className="bg-white dark:bg-zinc-800 border border-zinc-200 dark:border-zinc-700 rounded-lg shadow-lg p-3 text-xs">
+                  <p className="font-medium mb-1.5 text-zinc-900 dark:text-zinc-100">{label}</p>
+                  {payload.map((entry) => {
+                    const series = CHART_SERIES.find((s) => s.key === entry.dataKey);
+                    if (!series) return null;
+                    const raw = (entry.payload as Record<string, number>)[`__raw_${series.key}`] ?? 0;
+                    return (
+                      <div key={series.key} className="flex items-center gap-2 py-0.5">
+                        <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: series.color }} />
+                        <span className="text-zinc-500 dark:text-zinc-400">{series.label}:</span>
+                        <span className="font-medium text-zinc-900 dark:text-zinc-100">{series.fmt(raw)}</span>
+                      </div>
+                    );
+                  })}
+                </div>
+              );
+            }}
+          />
+          {activeSeries.map((s) => (
+            <Line
+              key={s.key}
+              type="monotone"
+              dataKey={s.key}
+              stroke={s.color}
+              strokeWidth={2}
+              dot={false}
+              name={s.label}
+            />
+          ))}
+        </ComposedChart>
+      </ResponsiveContainer>
+    </div>
+  );
+}
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
@@ -204,6 +374,31 @@ function AdThumbnail({ adId }: { adId: string }) {
   );
 }
 
+// ─── Ad creative chart (lazy, rendered only when expanded) ────────────────────
+
+function AdCreativeChart({ adId, from, to }: { adId: string; from: string; to: string }) {
+  const { apiFetch } = useOrg();
+  const [rows, setRows] = useState<DayRow[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!adId || !from || !to) return;
+    setLoading(true);
+    const params = new URLSearchParams({ adId, from, to, groupBy: "day" });
+    apiFetch(`/api/reports/facebook-ad-creatives?${params.toString()}`)
+      .then((r) => r.json())
+      .then((d) => setRows(d.rows ?? []))
+      .catch(() => setRows([]))
+      .finally(() => setLoading(false));
+  }, [adId, from, to, apiFetch]);
+
+  return (
+    <div className="px-4 py-4 bg-zinc-50 dark:bg-zinc-900/70">
+      <MetricsChart rows={rows} loading={loading} storageKey={`ad-chart-series-${adId}`} />
+    </div>
+  );
+}
+
 // ─── Ad creatives sub-row ─────────────────────────────────────────────────────
 
 function AdCreativesRow({
@@ -225,6 +420,7 @@ function AdCreativesRow({
 }) {
   const [rows, setRows] = useState<AdCreativeRow[] | null>(null);
   const [loading, setLoading] = useState(true);
+  const [expandedAd, setExpandedAd] = useState<string | null>(null);
 
   useEffect(() => {
     setLoading(true);
@@ -243,7 +439,7 @@ function AdCreativesRow({
   if (loading) {
     return (
       <tr>
-        <td colSpan={METRIC_COLS.length + 1} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3">
+        <td colSpan={METRIC_COLS.length + 2} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3">
           <div className="h-4 w-32 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
         </td>
       </tr>
@@ -253,7 +449,7 @@ function AdCreativesRow({
   if (!rows || rows.length === 0) {
     return (
       <tr>
-        <td colSpan={METRIC_COLS.length + 1} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <td colSpan={METRIC_COLS.length + 2} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
           No ads found for this ad set.
         </td>
       </tr>
@@ -263,20 +459,42 @@ function AdCreativesRow({
   return (
     <>
       {rows.map((ad) => (
-        <tr key={ad.adId} className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
-          {/* Ad name + thumbnail */}
-          <td className="pl-10 pr-4 py-3 text-xs">
-            <div className="flex items-start gap-3">
-              <AdThumbnail adId={ad.adId} />
-              <span className="text-zinc-600 dark:text-zinc-300 leading-snug pt-1 max-w-[200px]">{ad.ad || "—"}</span>
-            </div>
-          </td>
-          {METRIC_COLS.map((col) => (
-            <td key={col.key} className="px-4 py-3 text-xs text-right text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-              {col.fmt((ad as unknown as Record<string, number>)[col.key] ?? 0)}
+        <>
+          <tr
+            key={`ad-${ad.adId}`}
+            className="bg-zinc-50 dark:bg-zinc-900/50 border-b border-zinc-100 dark:border-zinc-800 cursor-pointer hover:bg-zinc-100 dark:hover:bg-zinc-800/60 transition-colors"
+            onClick={() => setExpandedAd(expandedAd === ad.adId ? null : ad.adId)}
+          >
+            {/* Ad name + thumbnail */}
+            <td className="pl-10 pr-2 py-3 text-xs">
+              <div className="flex items-start gap-3">
+                <svg
+                  className={`w-3 h-3 mt-1 shrink-0 text-zinc-400 transition-transform ${expandedAd === ad.adId ? "rotate-90" : ""}`}
+                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                </svg>
+                <AdThumbnail adId={ad.adId} />
+                <span className="text-zinc-600 dark:text-zinc-300 leading-snug pt-1 max-w-[180px] truncate">{ad.ad || "—"}</span>
+              </div>
             </td>
-          ))}
-        </tr>
+            {METRIC_COLS.map((col) => (
+              <td key={col.key} className="px-4 py-3 text-xs text-right text-zinc-500 dark:text-zinc-400 whitespace-nowrap tabular-nums">
+                {col.fmt((ad as unknown as Record<string, number>)[col.key] ?? 0)}
+              </td>
+            ))}
+            {/* placeholder for the → button column */}
+            <td className="px-2 py-3" />
+          </tr>
+          {/* Expanded chart row */}
+          {expandedAd === ad.adId && (
+            <tr key={`ad-chart-${ad.adId}`}>
+              <td colSpan={METRIC_COLS.length + 2} className="p-0 border-b border-zinc-100 dark:border-zinc-800">
+                <AdCreativeChart adId={ad.adId} from={from} to={to} />
+              </td>
+            </tr>
+          )}
+        </>
       ))}
     </>
   );
@@ -300,6 +518,10 @@ export default function CampaignDetailPage() {
   const [adsetsLoading, setAdsetsLoading] = useState(false);
   const [expandedAdset, setExpandedAdset] = useState<string | null>(null);
 
+  const [chartRows, setChartRows] = useState<DayRow[]>([]);
+  const [chartLoading, setChartLoading] = useState(false);
+  const [notebook, setNotebook] = useState("");
+
   // ── Load campaign record ────────────────────────────────────────────────────
   useEffect(() => {
     if (!currentOrg) return; // wait for org context to be ready before fetching
@@ -314,29 +536,34 @@ export default function CampaignDetailPage() {
       .finally(() => setCampaignLoading(false));
   }, [id, apiFetch, currentOrg]);
 
-  // ── Load ad sets ────────────────────────────────────────────────────────────
+  // ── Load ad sets + campaign chart ───────────────────────────────────────────
   const loadAdsets = useCallback(async () => {
     if (!campaign) return;
     const from = dateRange?.from ? format(dateRange.from, "yyyy-MM-dd") : "";
     const to = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
     if (!from || !to) return;
+    if (!campaign.metaCampaignId && !campaign.utmCampaign) return;
 
-    if (!campaign.metaCampaignId && !campaign.utmCampaign) return; // no filter available
-
-    setAdsetsLoading(true);
     const params = new URLSearchParams({ from, to });
     if (campaign.metaCampaignId) params.set("campaignId", campaign.metaCampaignId);
     else if (campaign.utmCampaign) params.set("utmCampaign", campaign.utmCampaign);
 
-    try {
-      const res = await apiFetch(`/api/reports/facebook-adsets?${params.toString()}`);
-      const data = await res.json();
-      setAdsets(data.rows ?? []);
-    } catch {
-      setAdsets([]);
-    } finally {
-      setAdsetsLoading(false);
-    }
+    setAdsetsLoading(true);
+    setChartLoading(true);
+
+    await Promise.all([
+      apiFetch(`/api/reports/facebook-adsets?${params.toString()}`)
+        .then((r) => r.json())
+        .then((d) => setAdsets(d.rows ?? []))
+        .catch(() => setAdsets([]))
+        .finally(() => setAdsetsLoading(false)),
+
+      apiFetch(`/api/reports/facebook-campaigns?${params.toString()}&groupBy=day`)
+        .then((r) => r.json())
+        .then((d) => setChartRows(d.rows ?? []))
+        .catch(() => setChartRows([]))
+        .finally(() => setChartLoading(false)),
+    ]);
   }, [campaign, dateRange, apiFetch]);
 
   useEffect(() => {
@@ -399,84 +626,116 @@ export default function CampaignDetailPage() {
         ) : !campaign && !campaignLoading ? (
           <div className="pt-8 text-center text-zinc-400">Campaign not found.</div>
         ) : !campaign ? null : (
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-                  <th className="pl-4 pr-4 py-3 text-left text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                    Ad Set
-                  </th>
-                  {METRIC_COLS.map((col) => (
-                    <th key={col.key} className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                      {col.label}
+          <div className="space-y-6">
+            {/* Campaign chart */}
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">Performance over time</h2>
+              <MetricsChart rows={chartRows} loading={chartLoading} storageKey={`campaign-chart-series-${id}`} />
+            </div>
+
+            {/* Ad sets table */}
+            <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+              <table className="min-w-full text-sm">
+                <thead>
+                  <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                    <th className="pl-4 pr-4 py-3 text-left text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                      Ad Set
                     </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {adsetsLoading ? (
-                  [...Array(4)].map((_, i) => (
-                    <tr key={i}>
-                      <td colSpan={METRIC_COLS.length + 1} className="px-4 py-3">
-                        <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+                    {METRIC_COLS.map((col) => (
+                      <th key={col.key} className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                        {col.label}
+                      </th>
+                    ))}
+                    <th className="px-2 py-3" />
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                  {adsetsLoading ? (
+                    [...Array(4)].map((_, i) => (
+                      <tr key={i}>
+                        <td colSpan={METRIC_COLS.length + 2} className="px-4 py-3">
+                          <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
+                        </td>
+                      </tr>
+                    ))
+                  ) : adsets.length === 0 ? (
+                    <tr>
+                      <td colSpan={METRIC_COLS.length + 2} className="px-4 py-8 text-center text-zinc-400 text-xs">
+                        No ad set data found for this date range.
                       </td>
                     </tr>
-                  ))
-                ) : adsets.length === 0 ? (
-                  <tr>
-                    <td colSpan={METRIC_COLS.length + 1} className="px-4 py-8 text-center text-zinc-400 text-xs">
-                      No ad set data found for this date range.
-                    </td>
-                  </tr>
-                ) : (
-                  adsets.map((row) => (
-                    <>
-                      {/* Ad set row */}
-                      <tr
-                        key={`adset-${row.adsetId}`}
-                        onClick={() => setExpandedAdset(expandedAdset === row.adsetId ? null : row.adsetId)}
-                        className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors"
-                      >
-                        <td className="pl-4 pr-4 py-3 whitespace-nowrap">
-                          <div className="flex items-center gap-2">
-                            <svg
-                              className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${expandedAdset === row.adsetId ? "rotate-90" : ""}`}
-                              fill="none"
-                              stroke="currentColor"
-                              viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                            <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 max-w-[220px] truncate">
-                              {row.adset || "—"}
-                            </span>
-                          </div>
-                        </td>
-                        {METRIC_COLS.map((col) => (
-                          <td key={col.key} className="px-4 py-3 text-right text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap tabular-nums">
-                            {col.fmt((row as unknown as Record<string, number>)[col.key] ?? 0)}
+                  ) : (
+                    adsets.map((row) => (
+                      <>
+                        {/* Ad set row */}
+                        <tr
+                          key={`adset-${row.adsetId}`}
+                          onClick={() => setExpandedAdset(expandedAdset === row.adsetId ? null : row.adsetId)}
+                          className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors"
+                        >
+                          <td className="pl-4 pr-4 py-3 whitespace-nowrap">
+                            <div className="flex items-center gap-2">
+                              <svg
+                                className={`w-3.5 h-3.5 text-zinc-400 transition-transform ${expandedAdset === row.adsetId ? "rotate-90" : ""}`}
+                                fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                              >
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                              </svg>
+                              <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 max-w-[220px] truncate">
+                                {row.adset || "—"}
+                              </span>
+                            </div>
                           </td>
-                        ))}
-                      </tr>
+                          {METRIC_COLS.map((col) => (
+                            <td key={col.key} className="px-4 py-3 text-right text-sm text-zinc-700 dark:text-zinc-300 whitespace-nowrap tabular-nums">
+                              {col.fmt((row as unknown as Record<string, number>)[col.key] ?? 0)}
+                            </td>
+                          ))}
+                          {/* Navigate to ad set detail page */}
+                          <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
+                            <button
+                              onClick={() => router.push(`/campaigns/${id}/adsets/${row.adsetId}`)}
+                              className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
+                              title="Open ad set detail"
+                            >
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                              </svg>
+                            </button>
+                          </td>
+                        </tr>
 
-                      {/* Expanded ads sub-rows */}
-                      {expandedAdset === row.adsetId && (
-                        <AdCreativesRow
-                          key={`creatives-${row.adsetId}`}
-                          campaignId={campaign.metaCampaignId ?? ""}
-                          utmCampaign={campaign.utmCampaign ?? ""}
-                          adsetId={row.adsetId}
-                          adset={row.adset}
-                          from={fromStr}
-                          to={toStr}
-                          apiFetch={apiFetch}
-                        />
-                      )}
-                    </>
-                  ))
-                )}
-              </tbody>
-            </table>
+                        {/* Expanded ads sub-rows */}
+                        {expandedAdset === row.adsetId && (
+                          <AdCreativesRow
+                            key={`creatives-${row.adsetId}`}
+                            campaignId={campaign.metaCampaignId ?? ""}
+                            utmCampaign={campaign.utmCampaign ?? ""}
+                            adsetId={row.adsetId}
+                            adset={row.adset}
+                            from={fromStr}
+                            to={toStr}
+                            apiFetch={apiFetch}
+                          />
+                        )}
+                      </>
+                    ))
+                  )}
+                </tbody>
+              </table>
+            </div>
+
+            {/* Notebook */}
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+              <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Notebook</h2>
+              <textarea
+                value={notebook}
+                onChange={(e) => setNotebook(e.target.value)}
+                placeholder="Notes, observations, and context for this campaign…"
+                className="w-full min-h-[120px] resize-y rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+              <p className="text-xs text-zinc-400 mt-1.5">AI features will use this as context. (Persistence coming soon.)</p>
+            </div>
           </div>
         )}
       </div>
