@@ -30,9 +30,9 @@ function applyThemeToDOM(t: Theme) {
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   // Read from localStorage synchronously so the correct theme is used on first render
   const [theme, setThemeState] = useState<Theme>(() => {
-    if (typeof window === "undefined") return "system";
+    if (typeof window === "undefined") return "light";
     const stored = localStorage.getItem("theme") as Theme | null;
-    return stored === "light" || stored === "dark" || stored === "system" ? stored : "system";
+    return stored === "light" || stored === "dark" || stored === "system" ? stored : "light";
   });
 
   // Apply .dark class whenever theme changes

@@ -1982,7 +1982,7 @@ export default function SettingsPage() {
               </div>
               <p className="text-xs text-zinc-400 mt-3">
                 {theme === "system"
-                  ? "Follows your operating system's light/dark setting."
+                  ? "Follows your operating system's light/dark setting. May not work in Brave (fingerprinting protection blocks this)."
                   : theme === "dark"
                     ? "Always use the dark theme."
                     : "Always use the light theme."}
