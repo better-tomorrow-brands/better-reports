@@ -1,6 +1,6 @@
 @import "tailwindcss";
 
-/* Class-based dark mode so users can override the system preference */
+/* Class-based dark mode — .dark class on <html> controls theme */
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* ============================================
