@@ -3,10 +3,26 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
 import { useOrg } from "@/contexts/OrgContext";
-import { subDays, startOfDay, endOfYesterday, format, differenceInDays, addDays } from "date-fns";
 import {
-  LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend,
-  ReferenceLine, ResponsiveContainer,
+  subDays,
+  startOfDay,
+  endOfYesterday,
+  format,
+  differenceInDays,
+  addDays,
+} from "date-fns";
+import {
+  LineChart,
+  Line,
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  Legend,
+  ReferenceLine,
+  ResponsiveContainer,
 } from "recharts";
 import { DateRangePicker, suggestGroupBy } from "@/components/DateRangePicker";
 import { usePersistedDateRange } from "@/hooks/usePersistedDateRange";
@@ -72,10 +88,10 @@ interface InventoryItem {
 // ── Tabs ───────────────────────────────────────────────────
 const tabs = [
   { key: "products", label: "Product Database" },
-  { key: "amazon", label: "Amazon" },
-  { key: "dtc", label: "DTC" },
-  { key: "inventory", label: "Inventory" },
-  { key: "forecast", label: "Forecast" },
+  { key: "amazon", label: "Amazon Financials" },
+  { key: "dtc", label: "DTC Financials" },
+  { key: "inventory", label: "Current Inventory" },
+  { key: "forecast", label: "Forecasted Inventory" },
   { key: "unit-sales", label: "Unit Sales" },
 ] as const;
 
@@ -100,7 +116,7 @@ const LINE_COLORS = [
 ];
 
 const UNIT_SALES_COLORS: Record<string, string> = {
-  "8 Rolls": "#e4edaa",  // shopify light
+  "8 Rolls": "#e4edaa", // shopify light
   "24 Rolls": "#c4d34f", // shopify
   "48 Rolls": "#9aab2f", // shopify dark
 };
@@ -130,7 +146,8 @@ function fmt(val: number | null | undefined): string {
 }
 
 function pct(val: number | null | undefined): string {
-  if (val === null || val === undefined || isNaN(val) || !isFinite(val)) return "-";
+  if (val === null || val === undefined || isNaN(val) || !isFinite(val))
+    return "-";
   return (val * 100).toFixed(1) + "%";
 }
 
@@ -194,8 +211,16 @@ const ALL_AMAZON_COLUMNS: ColDef[] = [
   { key: "referralPercent", label: "Referral %", defaultVisible: true },
   { key: "amazonReferralFee", label: "Referral Fee", defaultVisible: true },
   { key: "amazonTotalCoS", label: "Total CoS", defaultVisible: true },
-  { key: "amazonContribProfit", label: "Contribution Profit", defaultVisible: true },
-  { key: "amazonContribMargin", label: "Contribution Margin", defaultVisible: true },
+  {
+    key: "amazonContribProfit",
+    label: "Contribution Profit",
+    defaultVisible: true,
+  },
+  {
+    key: "amazonContribMargin",
+    label: "Contribution Margin",
+    defaultVisible: true,
+  },
 ];
 
 const ALL_DTC_COLUMNS: ColDef[] = [
@@ -207,12 +232,28 @@ const ALL_DTC_COLUMNS: ColDef[] = [
   { key: "dtcRrpExVatCalc", label: "RRP ex. VAT", defaultVisible: true },
   { key: "dtcFulfillmentFee", label: "Fulfillment Fee", defaultVisible: true },
   { key: "dtcCourier", label: "Courier", defaultVisible: true },
-  { key: "dtcCustomerShipping", label: "Customer Shipping", defaultVisible: true },
+  {
+    key: "dtcCustomerShipping",
+    label: "Customer Shipping",
+    defaultVisible: true,
+  },
   { key: "dtcShopifyFees", label: "Shopify Fees (2%)", defaultVisible: true },
   { key: "dtcTotalCoS", label: "Total CoS", defaultVisible: true },
-  { key: "dtcFullyLoadedCogs", label: "Fully Loaded COGS", defaultVisible: true },
-  { key: "dtcContribProfit", label: "Contribution Profit", defaultVisible: true },
-  { key: "dtcContribMargin", label: "Contribution Margin", defaultVisible: true },
+  {
+    key: "dtcFullyLoadedCogs",
+    label: "Fully Loaded COGS",
+    defaultVisible: true,
+  },
+  {
+    key: "dtcContribProfit",
+    label: "Contribution Profit",
+    defaultVisible: true,
+  },
+  {
+    key: "dtcContribMargin",
+    label: "Contribution Margin",
+    defaultVisible: true,
+  },
 ];
 
 const ALL_INVENTORY_COLUMNS: ColDef[] = [
@@ -238,7 +279,8 @@ const DTC_COLUMN_STORAGE_KEY = "inventory-dtc-columns";
 const INVENTORY_COLUMN_STORAGE_KEY = "inventory-overall-columns-v2";
 
 function loadVisibleCols(storageKey: string, allCols: ColDef[]): Set<string> {
-  if (typeof window === "undefined") return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
+  if (typeof window === "undefined")
+    return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
   try {
     const saved = localStorage.getItem(storageKey);
     if (saved) return new Set(JSON.parse(saved));
@@ -246,10 +288,20 @@ function loadVisibleCols(storageKey: string, allCols: ColDef[]): Set<string> {
   return new Set(allCols.filter((c) => c.defaultVisible).map((c) => c.key));
 }
 
-const defaultVisibleColumns = new Set(ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key));
+const defaultVisibleColumns = new Set(
+  ALL_COLUMNS.filter((c) => c.defaultVisible).map((c) => c.key),
+);
 
 // ── Sort / Filter config ───────────────────────────────────
-type SortField = "sku" | "productName" | "brand" | "asin" | "dtcRrp" | "active" | "contribProfit" | "contribMargin";
+type SortField =
+  | "sku"
+  | "productName"
+  | "brand"
+  | "asin"
+  | "dtcRrp"
+  | "active"
+  | "contribProfit"
+  | "contribMargin";
 type SortDirection = "asc" | "desc";
 
 const baseSortFields: { value: SortField; label: string }[] = [
@@ -269,7 +321,7 @@ const channelSortFields: { value: SortField; label: string }[] = [
 
 function computeAmazonContribProfit(p: Product): number {
   const exVat = n(p.amazonRrp) / 1.2;
-  const referralFee = n(p.amazonRrp) * n(p.referralPercent) / 100;
+  const referralFee = (n(p.amazonRrp) * n(p.referralPercent)) / 100;
   const totalCoS = n(p.landedCost) + n(p.fbaFee) + referralFee;
   return exVat - totalCoS;
 }
@@ -283,7 +335,11 @@ function computeAmazonContribMargin(p: Product): number {
 function computeDtcContribProfit(p: Product): number {
   const exVat = n(p.dtcRrp) / 1.2;
   const customerShipping = n(p.dtcRrp) >= 20 ? 0 : 1.99;
-  const totalCoS = n(p.dtcFulfillmentFee) + n(p.dtcCourier) + n(p.dtcRrp) * 0.02 - customerShipping;
+  const totalCoS =
+    n(p.dtcFulfillmentFee) +
+    n(p.dtcCourier) +
+    n(p.dtcRrp) * 0.02 -
+    customerShipping;
   const fullyLoaded = n(p.landedCost) + totalCoS;
   return exVat - fullyLoaded;
 }
@@ -337,8 +393,18 @@ function EditableText({
         }}
       >
         <span className="truncate">{value || "-"}</span>
-        <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        <svg
+          className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+          />
         </svg>
       </button>
     );
@@ -391,8 +457,18 @@ function EditableSelect({
         onClick={() => setEditing(true)}
       >
         <span className="truncate">{value || "-"}</span>
-        <svg className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+        <svg
+          className="w-3 h-3 shrink-0 opacity-0 group-hover:opacity-60"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+          />
         </svg>
       </button>
     );
@@ -411,7 +487,9 @@ function EditableSelect({
     >
       <option value="">-- clear --</option>
       {options.map((opt) => (
-        <option key={opt} value={opt}>{opt}</option>
+        <option key={opt} value={opt}>
+          {opt}
+        </option>
       ))}
     </select>
   );
@@ -419,17 +497,26 @@ function EditableSelect({
 
 // ── Channel table builders ─────────────────────────────────
 
-function buildAmazonColumns(saveField: (id: number, field: string, value: unknown) => void): Column<Product>[] {
+function buildAmazonColumns(
+  saveField: (id: number, field: string, value: unknown) => void,
+): Column<Product>[] {
   return [
     { key: "sku", label: "SKU", sticky: true, primary: true },
     { key: "productName", label: "Product", className: "min-w-[180px]" },
     { key: "brand", label: "Brand" },
-    { key: "landedCost", label: "Landed Cost", render: (v) => fmt(n(v as string)) },
+    {
+      key: "landedCost",
+      label: "Landed Cost",
+      render: (v) => fmt(n(v as string)),
+    },
     {
       key: "amazonRrp",
       label: "RRP",
       render: (_, row) => (
-        <EditableText value={row.amazonRrp} onSave={(v) => saveField(row.id, "amazonRrp", v)} />
+        <EditableText
+          value={row.amazonRrp}
+          onSave={(v) => saveField(row.id, "amazonRrp", v)}
+        />
       ),
     },
     {
@@ -463,26 +550,33 @@ function buildAmazonColumns(saveField: (id: number, field: string, value: unknow
       key: "fbaFee",
       label: "FBA Fee",
       render: (_, row) => (
-        <EditableText value={row.fbaFee} onSave={(v) => saveField(row.id, "fbaFee", v)} />
+        <EditableText
+          value={row.fbaFee}
+          onSave={(v) => saveField(row.id, "fbaFee", v)}
+        />
       ),
     },
     {
       key: "referralPercent",
       label: "Referral %",
       render: (_, row) => (
-        <EditableText value={row.referralPercent} onSave={(v) => saveField(row.id, "referralPercent", v)} />
+        <EditableText
+          value={row.referralPercent}
+          onSave={(v) => saveField(row.id, "referralPercent", v)}
+        />
       ),
     },
     {
       key: "amazonReferralFee" as keyof Product,
       label: "Referral Fee",
-      render: (_, row) => fmt(n(row.amazonRrp) * n(row.referralPercent) / 100),
+      render: (_, row) =>
+        fmt((n(row.amazonRrp) * n(row.referralPercent)) / 100),
     },
     {
       key: "amazonTotalCoS" as keyof Product,
       label: "Total CoS",
       render: (_, row) => {
-        const referralFee = n(row.amazonRrp) * n(row.referralPercent) / 100;
+        const referralFee = (n(row.amazonRrp) * n(row.referralPercent)) / 100;
         return fmt(n(row.landedCost) + n(row.fbaFee) + referralFee);
       },
     },
@@ -491,7 +585,7 @@ function buildAmazonColumns(saveField: (id: number, field: string, value: unknow
       label: "Contribution Profit",
       render: (_, row) => {
         const exVat = n(row.amazonRrp) / 1.2;
-        const referralFee = n(row.amazonRrp) * n(row.referralPercent) / 100;
+        const referralFee = (n(row.amazonRrp) * n(row.referralPercent)) / 100;
         const totalCoS = n(row.landedCost) + n(row.fbaFee) + referralFee;
         return fmt(exVat - totalCoS);
       },
@@ -501,7 +595,7 @@ function buildAmazonColumns(saveField: (id: number, field: string, value: unknow
       label: "Contribution Margin",
       render: (_, row) => {
         const exVat = n(row.amazonRrp) / 1.2;
-        const referralFee = n(row.amazonRrp) * n(row.referralPercent) / 100;
+        const referralFee = (n(row.amazonRrp) * n(row.referralPercent)) / 100;
         const totalCoS = n(row.landedCost) + n(row.fbaFee) + referralFee;
         const cp = exVat - totalCoS;
         return pct(exVat > 0 ? cp / exVat : 0);
@@ -510,17 +604,26 @@ function buildAmazonColumns(saveField: (id: number, field: string, value: unknow
   ];
 }
 
-function buildDtcColumns(saveField: (id: number, field: string, value: unknown) => void): Column<Product>[] {
+function buildDtcColumns(
+  saveField: (id: number, field: string, value: unknown) => void,
+): Column<Product>[] {
   return [
     { key: "sku", label: "SKU", sticky: true, primary: true },
     { key: "productName", label: "Product", className: "min-w-[180px]" },
     { key: "brand", label: "Brand" },
-    { key: "landedCost", label: "Landed Cost", render: (v) => fmt(n(v as string)) },
+    {
+      key: "landedCost",
+      label: "Landed Cost",
+      render: (v) => fmt(n(v as string)),
+    },
     {
       key: "dtcRrp",
       label: "RRP",
       render: (_, row) => (
-        <EditableText value={row.dtcRrp} onSave={(v) => saveField(row.id, "dtcRrp", v)} />
+        <EditableText
+          value={row.dtcRrp}
+          onSave={(v) => saveField(row.id, "dtcRrp", v)}
+        />
       ),
     },
     {
@@ -532,14 +635,20 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
       key: "dtcFulfillmentFee",
       label: "Fulfillment Fee",
       render: (_, row) => (
-        <EditableText value={row.dtcFulfillmentFee} onSave={(v) => saveField(row.id, "dtcFulfillmentFee", v)} />
+        <EditableText
+          value={row.dtcFulfillmentFee}
+          onSave={(v) => saveField(row.id, "dtcFulfillmentFee", v)}
+        />
       ),
     },
     {
       key: "dtcCourier",
       label: "Courier",
       render: (_, row) => (
-        <EditableText value={row.dtcCourier} onSave={(v) => saveField(row.id, "dtcCourier", v)} />
+        <EditableText
+          value={row.dtcCourier}
+          onSave={(v) => saveField(row.id, "dtcCourier", v)}
+        />
       ),
     },
     {
@@ -560,7 +669,12 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
       label: "Total CoS",
       render: (_, row) => {
         const customerShipping = n(row.dtcRrp) >= 20 ? 0 : 1.99;
-        return fmt(n(row.dtcFulfillmentFee) + n(row.dtcCourier) + n(row.dtcRrp) * 0.02 - customerShipping);
+        return fmt(
+          n(row.dtcFulfillmentFee) +
+            n(row.dtcCourier) +
+            n(row.dtcRrp) * 0.02 -
+            customerShipping,
+        );
       },
     },
     {
@@ -568,7 +682,11 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
       label: "Fully Loaded COGS",
       render: (_, row) => {
         const customerShipping = n(row.dtcRrp) >= 20 ? 0 : 1.99;
-        const totalCoS = n(row.dtcFulfillmentFee) + n(row.dtcCourier) + n(row.dtcRrp) * 0.02 - customerShipping;
+        const totalCoS =
+          n(row.dtcFulfillmentFee) +
+          n(row.dtcCourier) +
+          n(row.dtcRrp) * 0.02 -
+          customerShipping;
         return fmt(n(row.landedCost) + totalCoS);
       },
     },
@@ -578,7 +696,11 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
       render: (_, row) => {
         const exVat = n(row.dtcRrp) / 1.2;
         const customerShipping = n(row.dtcRrp) >= 20 ? 0 : 1.99;
-        const totalCoS = n(row.dtcFulfillmentFee) + n(row.dtcCourier) + n(row.dtcRrp) * 0.02 - customerShipping;
+        const totalCoS =
+          n(row.dtcFulfillmentFee) +
+          n(row.dtcCourier) +
+          n(row.dtcRrp) * 0.02 -
+          customerShipping;
         const fullyLoaded = n(row.landedCost) + totalCoS;
         return fmt(exVat - fullyLoaded);
       },
@@ -589,7 +711,11 @@ function buildDtcColumns(saveField: (id: number, field: string, value: unknown) 
       render: (_, row) => {
         const exVat = n(row.dtcRrp) / 1.2;
         const customerShipping = n(row.dtcRrp) >= 20 ? 0 : 1.99;
-        const totalCoS = n(row.dtcFulfillmentFee) + n(row.dtcCourier) + n(row.dtcRrp) * 0.02 - customerShipping;
+        const totalCoS =
+          n(row.dtcFulfillmentFee) +
+          n(row.dtcCourier) +
+          n(row.dtcRrp) * 0.02 -
+          customerShipping;
         const fullyLoaded = n(row.landedCost) + totalCoS;
         const cp = exVat - fullyLoaded;
         return pct(exVat > 0 ? cp / exVat : 0);
@@ -606,8 +732,14 @@ export default function InventoryPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [syncingProducts, setSyncingProducts] = useState(false);
-  const [syncResult, setSyncResult] = useState<{ synced: number; skipped: number; deactivated: number } | null>(null);
-  const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("active");
+  const [syncResult, setSyncResult] = useState<{
+    synced: number;
+    skipped: number;
+    deactivated: number;
+  } | null>(null);
+  const [statusFilter, setStatusFilter] = useState<
+    "all" | "active" | "inactive"
+  >("active");
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState("");
 
@@ -627,15 +759,25 @@ export default function InventoryPage() {
   const [filters, setFilters] = useState<ActiveFilter[]>([]);
   const [showFilterDropdown, setShowFilterDropdown] = useState(false);
   const filterDropdownRef = useRef<HTMLDivElement>(null);
-  const [editingFilter, setEditingFilter] = useState<keyof Product | null>(null);
+  const [editingFilter, setEditingFilter] = useState<keyof Product | null>(
+    null,
+  );
   const [filterSearch, setFilterSearch] = useState("");
   const filterModalRef = useRef<HTMLDivElement>(null);
 
   // Column visibility — per tab
-  const [visibleCols, setVisibleCols] = useState<Set<string>>(() => loadVisibleCols(COLUMN_STORAGE_KEY, ALL_COLUMNS));
-  const [visibleAmazonCols, setVisibleAmazonCols] = useState<Set<string>>(() => loadVisibleCols(AMAZON_COLUMN_STORAGE_KEY, ALL_AMAZON_COLUMNS));
-  const [visibleDtcCols, setVisibleDtcCols] = useState<Set<string>>(() => loadVisibleCols(DTC_COLUMN_STORAGE_KEY, ALL_DTC_COLUMNS));
-  const [visibleInventoryCols, setVisibleInventoryCols] = useState<Set<string>>(() => loadVisibleCols(INVENTORY_COLUMN_STORAGE_KEY, ALL_INVENTORY_COLUMNS));
+  const [visibleCols, setVisibleCols] = useState<Set<string>>(() =>
+    loadVisibleCols(COLUMN_STORAGE_KEY, ALL_COLUMNS),
+  );
+  const [visibleAmazonCols, setVisibleAmazonCols] = useState<Set<string>>(() =>
+    loadVisibleCols(AMAZON_COLUMN_STORAGE_KEY, ALL_AMAZON_COLUMNS),
+  );
+  const [visibleDtcCols, setVisibleDtcCols] = useState<Set<string>>(() =>
+    loadVisibleCols(DTC_COLUMN_STORAGE_KEY, ALL_DTC_COLUMNS),
+  );
+  const [visibleInventoryCols, setVisibleInventoryCols] = useState<Set<string>>(
+    () => loadVisibleCols(INVENTORY_COLUMN_STORAGE_KEY, ALL_INVENTORY_COLUMNS),
+  );
   const [showColPicker, setShowColPicker] = useState(false);
   const colPickerRef = useRef<HTMLDivElement>(null);
   const [showInventoryColPicker, setShowInventoryColPicker] = useState(false);
@@ -644,16 +786,28 @@ export default function InventoryPage() {
   // ── Click-outside handler ────────────────────────────────
   useEffect(() => {
     function handleClickOutside(event: MouseEvent) {
-      if (sortModalRef.current && !sortModalRef.current.contains(event.target as Node)) {
+      if (
+        sortModalRef.current &&
+        !sortModalRef.current.contains(event.target as Node)
+      ) {
         setShowSortModal(false);
       }
-      if (filterDropdownRef.current && !filterDropdownRef.current.contains(event.target as Node)) {
+      if (
+        filterDropdownRef.current &&
+        !filterDropdownRef.current.contains(event.target as Node)
+      ) {
         setShowFilterDropdown(false);
       }
-      if (colPickerRef.current && !colPickerRef.current.contains(event.target as Node)) {
+      if (
+        colPickerRef.current &&
+        !colPickerRef.current.contains(event.target as Node)
+      ) {
         setShowColPicker(false);
       }
-      if (inventoryColPickerRef.current && !inventoryColPickerRef.current.contains(event.target as Node)) {
+      if (
+        inventoryColPickerRef.current &&
+        !inventoryColPickerRef.current.contains(event.target as Node)
+      ) {
         setShowInventoryColPicker(false);
       }
     }
@@ -663,15 +817,33 @@ export default function InventoryPage() {
 
   // ── Persist column visibility (tab-aware) ────────────────
   function getActiveColState() {
-    if (activeTab === "amazon") return { cols: visibleAmazonCols, setCols: setVisibleAmazonCols, allCols: ALL_AMAZON_COLUMNS, storageKey: AMAZON_COLUMN_STORAGE_KEY };
-    if (activeTab === "dtc") return { cols: visibleDtcCols, setCols: setVisibleDtcCols, allCols: ALL_DTC_COLUMNS, storageKey: DTC_COLUMN_STORAGE_KEY };
-    return { cols: visibleCols, setCols: setVisibleCols, allCols: ALL_COLUMNS, storageKey: COLUMN_STORAGE_KEY };
+    if (activeTab === "amazon")
+      return {
+        cols: visibleAmazonCols,
+        setCols: setVisibleAmazonCols,
+        allCols: ALL_AMAZON_COLUMNS,
+        storageKey: AMAZON_COLUMN_STORAGE_KEY,
+      };
+    if (activeTab === "dtc")
+      return {
+        cols: visibleDtcCols,
+        setCols: setVisibleDtcCols,
+        allCols: ALL_DTC_COLUMNS,
+        storageKey: DTC_COLUMN_STORAGE_KEY,
+      };
+    return {
+      cols: visibleCols,
+      setCols: setVisibleCols,
+      allCols: ALL_COLUMNS,
+      storageKey: COLUMN_STORAGE_KEY,
+    };
   }
 
   function toggleCol(key: string) {
     const { cols, setCols, storageKey } = getActiveColState();
     const newSet = new Set(cols);
-    if (newSet.has(key)) newSet.delete(key); else newSet.add(key);
+    if (newSet.has(key)) newSet.delete(key);
+    else newSet.add(key);
     setCols(newSet);
     localStorage.setItem(storageKey, JSON.stringify([...newSet]));
   }
@@ -689,9 +861,13 @@ export default function InventoryPage() {
 
   function toggleInventoryCol(key: string) {
     const newSet = new Set(visibleInventoryCols);
-    if (newSet.has(key)) newSet.delete(key); else newSet.add(key);
+    if (newSet.has(key)) newSet.delete(key);
+    else newSet.add(key);
     setVisibleInventoryCols(newSet);
-    localStorage.setItem(INVENTORY_COLUMN_STORAGE_KEY, JSON.stringify([...newSet]));
+    localStorage.setItem(
+      INVENTORY_COLUMN_STORAGE_KEY,
+      JSON.stringify([...newSet]),
+    );
   }
 
   // ── Reset state when org changes ────────────────────────
@@ -739,23 +915,30 @@ export default function InventoryPage() {
   }, [apiFetch, currentOrg]);
 
   useEffect(() => {
-    if (activeTab === "inventory" || activeTab === "forecast" || activeTab === "unit-sales") {
+    if (
+      activeTab === "inventory" ||
+      activeTab === "forecast" ||
+      activeTab === "unit-sales"
+    ) {
       fetchInventoryData();
     }
   }, [activeTab, fetchInventoryData]);
 
   // ── CRUD helpers ─────────────────────────────────────────
-  const saveField = useCallback(async (id: number, field: string, value: unknown) => {
-    const res = await apiFetch("/api/products", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ id, [field]: value }),
-    });
-    if (res.ok) {
-      const updated = await res.json();
-      setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
-    }
-  }, [apiFetch]);
+  const saveField = useCallback(
+    async (id: number, field: string, value: unknown) => {
+      const res = await apiFetch("/api/products", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, [field]: value }),
+      });
+      if (res.ok) {
+        const updated = await res.json();
+        setProducts((prev) => prev.map((p) => (p.id === id ? updated : p)));
+      }
+    },
+    [apiFetch],
+  );
 
   const addProduct = useCallback(async () => {
     const sku = prompt("Enter SKU:");
@@ -771,13 +954,18 @@ export default function InventoryPage() {
     }
   }, [apiFetch]);
 
-  const deleteProduct = useCallback(async (id: number) => {
-    if (!confirm("Delete this product?")) return;
-    const res = await apiFetch(`/api/products?id=${id}`, { method: "DELETE" });
-    if (res.ok) {
-      setProducts((prev) => prev.filter((p) => p.id !== id));
-    }
-  }, [apiFetch]);
+  const deleteProduct = useCallback(
+    async (id: number) => {
+      if (!confirm("Delete this product?")) return;
+      const res = await apiFetch(`/api/products?id=${id}`, {
+        method: "DELETE",
+      });
+      if (res.ok) {
+        setProducts((prev) => prev.filter((p) => p.id !== id));
+      }
+    },
+    [apiFetch],
+  );
 
   const syncProductsFromShopify = useCallback(async () => {
     setSyncingProducts(true);
@@ -786,7 +974,11 @@ export default function InventoryPage() {
       const res = await apiFetch("/api/products/sync", { method: "POST" });
       const data = await res.json();
       if (res.ok) {
-        setSyncResult({ synced: data.synced, skipped: data.skipped, deactivated: data.deactivated ?? 0 });
+        setSyncResult({
+          synced: data.synced,
+          skipped: data.skipped,
+          deactivated: data.deactivated ?? 0,
+        });
         // Reload products after sync
         const reloaded = await apiFetch("/api/products");
         if (reloaded.ok) setProducts(await reloaded.json());
@@ -799,15 +991,21 @@ export default function InventoryPage() {
   // ── Shopify forecast period ────────────────────────────
   type ForecastPeriod = "7d" | "14d" | "30d";
   const [forecastPeriod, setForecastPeriod] = useState<ForecastPeriod>("30d");
-  const [forecastDateRange, setForecastDateRange] = useState<{ from: Date; to: Date } | undefined>(
-    () => ({ from: startOfDay(subDays(new Date(), 30)), to: endOfYesterday() })
-  );
+  const [forecastDateRange, setForecastDateRange] = useState<
+    { from: Date; to: Date } | undefined
+  >(() => ({
+    from: startOfDay(subDays(new Date(), 30)),
+    to: endOfYesterday(),
+  }));
 
   // Sync toggle with date picker
   const handleForecastPeriodChange = useCallback((period: ForecastPeriod) => {
     setForecastPeriod(period);
     const days = period === "7d" ? 7 : period === "14d" ? 14 : 30;
-    setForecastDateRange({ from: startOfDay(subDays(new Date(), days)), to: endOfYesterday() });
+    setForecastDateRange({
+      from: startOfDay(subDays(new Date(), days)),
+      to: endOfYesterday(),
+    });
   }, []);
 
   // ── Run rate data ──────────────────────────────────────
@@ -815,11 +1013,14 @@ export default function InventoryPage() {
   const [amazonUnits, setAmazonUnits] = useState<Record<string, number>>({});
 
   const fetchRunRate = useCallback(async () => {
-    if (!currentOrg || !forecastDateRange?.from || !forecastDateRange?.to) return;
+    if (!currentOrg || !forecastDateRange?.from || !forecastDateRange?.to)
+      return;
     try {
       const from = format(forecastDateRange.from, "yyyy-MM-dd");
       const to = format(forecastDateRange.to, "yyyy-MM-dd");
-      const res = await apiFetch(`/api/inventory/run-rate?from=${from}&to=${to}`);
+      const res = await apiFetch(
+        `/api/inventory/run-rate?from=${from}&to=${to}`,
+      );
       if (res.ok) {
         const data = await res.json();
         setShopifyUnits(data.shopifyUnits ?? {});
@@ -867,7 +1068,8 @@ export default function InventoryPage() {
   }, [apiFetch, currentOrg, fetchInventoryData]);
 
   // ── Inventory edit modal state ──────────────────────────
-  const [editingInventory, setEditingInventory] = useState<InventoryItem | null>(null);
+  const [editingInventory, setEditingInventory] =
+    useState<InventoryItem | null>(null);
   const [editAmazonQty, setEditAmazonQty] = useState("");
   const [editShopifyQty, setEditShopifyQty] = useState("");
   const [editWarehouseQty, setEditWarehouseQty] = useState("");
@@ -893,50 +1095,89 @@ export default function InventoryPage() {
       const res = await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: editingInventory.sku, amazonQty, shopifyQty, warehouseQty, shipbobQty }),
+        body: JSON.stringify({
+          sku: editingInventory.sku,
+          amazonQty,
+          shopifyQty,
+          warehouseQty,
+          shipbobQty,
+        }),
       });
       if (res.ok) {
         setInventoryItems((prev) =>
           prev.map((item) =>
             item.sku === editingInventory.sku
-              ? { ...item, amazonQty, shopifyQty, warehouseQty, shipbobQty, totalQty: amazonQty + shopifyQty + warehouseQty + shipbobQty }
-              : item
-          )
+              ? {
+                  ...item,
+                  amazonQty,
+                  shopifyQty,
+                  warehouseQty,
+                  shipbobQty,
+                  totalQty: amazonQty + shopifyQty + warehouseQty + shipbobQty,
+                }
+              : item,
+          ),
         );
         setEditingInventory(null);
       }
     } finally {
       setSavingInventory(false);
     }
-  }, [editingInventory, editAmazonQty, editShopifyQty, editWarehouseQty, editShipBobQty, apiFetch]);
+  }, [
+    editingInventory,
+    editAmazonQty,
+    editShopifyQty,
+    editWarehouseQty,
+    editShipBobQty,
+    apiFetch,
+  ]);
 
   // ── Forecast tab state ──────────────────────────────────
-  const [forecastSkuFilter, setForecastSkuFilter] = useState<ForecastSkuFilter>("all");
-  const [forecastChannelFilter, setForecastChannelFilter] = useState<ForecastChannelFilter>("all");
+  const [forecastSkuFilter, setForecastSkuFilter] =
+    useState<ForecastSkuFilter>("all");
+  const [forecastChannelFilter, setForecastChannelFilter] =
+    useState<ForecastChannelFilter>("all");
 
   // ── Unit Sales tab state ──────────────────────────────
   type UnitSalesChannel = "total" | "amazon" | "shopify";
   type UnitSalesGroupBy = "day" | "week" | "month";
-  const [unitSalesData, setUnitSalesData] = useState<{ data: Record<string, number | string>[]; skus: string[] }>({ data: [], skus: [] });
+  const [unitSalesData, setUnitSalesData] = useState<{
+    data: Record<string, number | string>[];
+    skus: string[];
+  }>({ data: [], skus: [] });
   const [unitSalesLoading, setUnitSalesLoading] = useState(false);
   const [unitSalesDateRange, setUnitSalesDateRange] = usePersistedDateRange(
     "dr-unit-sales",
-    () => ({ from: startOfDay(subDays(new Date(), 365)), to: endOfYesterday() })
+    () => ({
+      from: startOfDay(subDays(new Date(), 365)),
+      to: endOfYesterday(),
+    }),
   );
-  const [unitSalesGroupBy, setUnitSalesGroupBy] = useState<UnitSalesGroupBy>("month");
-  const [unitSalesChannel, setUnitSalesChannel] = useState<UnitSalesChannel>("total");
-  const [unitSalesSkuFilter, setUnitSalesSkuFilter] = useState<ForecastSkuFilter>("all");
+  const [unitSalesGroupBy, setUnitSalesGroupBy] =
+    useState<UnitSalesGroupBy>("month");
+  const [unitSalesChannel, setUnitSalesChannel] =
+    useState<UnitSalesChannel>("total");
+  const [unitSalesSkuFilter, setUnitSalesSkuFilter] =
+    useState<ForecastSkuFilter>("all");
 
   const initInventoryFromProducts = useCallback(async () => {
     // Create today's snapshot for every active product that doesn't already have one
     const existingSkus = new Set(inventoryItems.map((i) => i.sku));
-    const missing = products.filter((p) => p.active && !existingSkus.has(p.sku));
+    const missing = products.filter(
+      (p) => p.active && !existingSkus.has(p.sku),
+    );
     if (missing.length === 0) return;
     for (const p of missing) {
       await apiFetch("/api/inventory", {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ sku: p.sku, amazonQty: 0, shopifyQty: 0, warehouseQty: 0, shipbobQty: 0 }),
+        body: JSON.stringify({
+          sku: p.sku,
+          amazonQty: 0,
+          shopifyQty: 0,
+          warehouseQty: 0,
+          shipbobQty: 0,
+        }),
       });
     }
     fetchInventoryData();
@@ -966,7 +1207,8 @@ export default function InventoryPage() {
       const amazonRate = amazonSold > 0 ? amazonSold / forecastDays : null;
       const whQty = item.warehouseQty ?? 0;
       const sbQty = shipbobEnabled ? (item.shipbobQty ?? 0) : 0;
-      const totalQty = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty + sbQty;
+      const totalQty =
+        (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + whQty + sbQty;
       const totalSold = shopifySold + amazonSold;
       const totalRate = totalSold > 0 ? totalSold / forecastDays : null;
       const lc = item.landedCost ?? 0;
@@ -984,14 +1226,19 @@ export default function InventoryPage() {
         valueRrp: amazonValRrp + shopifyValRrp,
         runRate: totalRate,
         daysLeft: totalDaysLeft,
-        oosDate: totalDaysLeft !== null ? format(addDays(new Date(), totalDaysLeft), "dd MMM yyyy") : null,
+        oosDate:
+          totalDaysLeft !== null
+            ? format(addDays(new Date(), totalDaysLeft), "dd MMM yyyy")
+            : null,
         isFirstInGroup: true,
         sourceItem: item,
       });
 
       // Amazon row
       const amzQty = item.amazonQty ?? 0;
-      const amazonDaysLeft = amazonRate ? Math.floor(amzQty / amazonRate) : null;
+      const amazonDaysLeft = amazonRate
+        ? Math.floor(amzQty / amazonRate)
+        : null;
       rows.push({
         sku: item.sku,
         productName: item.productName,
@@ -1001,14 +1248,19 @@ export default function InventoryPage() {
         valueRrp: amzQty * (item.amazonRrp ?? 0),
         runRate: amazonRate,
         daysLeft: amazonDaysLeft,
-        oosDate: amazonDaysLeft !== null ? format(addDays(new Date(), amazonDaysLeft), "dd MMM yyyy") : null,
+        oosDate:
+          amazonDaysLeft !== null
+            ? format(addDays(new Date(), amazonDaysLeft), "dd MMM yyyy")
+            : null,
         isFirstInGroup: false,
         sourceItem: item,
       });
 
       // Shopify row
       const shpQty = item.shopifyQty ?? 0;
-      const shopifyDaysLeft = shopifyRate ? Math.floor(shpQty / shopifyRate) : null;
+      const shopifyDaysLeft = shopifyRate
+        ? Math.floor(shpQty / shopifyRate)
+        : null;
       rows.push({
         sku: item.sku,
         productName: item.productName,
@@ -1018,14 +1270,19 @@ export default function InventoryPage() {
         valueRrp: shpQty * (item.dtcRrp ?? 0),
         runRate: shopifyRate,
         daysLeft: shopifyDaysLeft,
-        oosDate: shopifyDaysLeft !== null ? format(addDays(new Date(), shopifyDaysLeft), "dd MMM yyyy") : null,
+        oosDate:
+          shopifyDaysLeft !== null
+            ? format(addDays(new Date(), shopifyDaysLeft), "dd MMM yyyy")
+            : null,
         isFirstInGroup: false,
         sourceItem: item,
       });
 
       // ShipBob row (DTC fulfillment — uses shopify run rate as proxy)
       if (shipbobEnabled) {
-        const shipbobDaysLeft = shopifyRate ? Math.floor(sbQty / shopifyRate) : null;
+        const shipbobDaysLeft = shopifyRate
+          ? Math.floor(sbQty / shopifyRate)
+          : null;
         rows.push({
           sku: item.sku,
           productName: item.productName,
@@ -1035,7 +1292,10 @@ export default function InventoryPage() {
           valueRrp: sbQty * (item.dtcRrp ?? 0),
           runRate: shopifyRate,
           daysLeft: shipbobDaysLeft,
-          oosDate: shipbobDaysLeft !== null ? format(addDays(new Date(), shipbobDaysLeft), "dd MMM yyyy") : null,
+          oosDate:
+            shipbobDaysLeft !== null
+              ? format(addDays(new Date(), shipbobDaysLeft), "dd MMM yyyy")
+              : null,
           isFirstInGroup: false,
           sourceItem: item,
         });
@@ -1062,11 +1322,22 @@ export default function InventoryPage() {
   // ── Filter grouped rows by column visibility ────────────
   const filteredGroupedRows = useMemo(() => {
     const filtered = groupedRows.filter((row) => {
-      if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty")) return false;
-      if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty")) return false;
-      if (row.channel === "Warehouse" && !visibleInventoryCols.has("warehouseQty")) return false;
-      if (row.channel === "ShipBob" && (!shipbobEnabled || !visibleInventoryCols.has("shipbobQty"))) return false;
-      if (row.channel === "Total" && !visibleInventoryCols.has("totalQty")) return false;
+      if (row.channel === "Amazon" && !visibleInventoryCols.has("amazonQty"))
+        return false;
+      if (row.channel === "Shopify" && !visibleInventoryCols.has("shopifyQty"))
+        return false;
+      if (
+        row.channel === "Warehouse" &&
+        !visibleInventoryCols.has("warehouseQty")
+      )
+        return false;
+      if (
+        row.channel === "ShipBob" &&
+        (!shipbobEnabled || !visibleInventoryCols.has("shipbobQty"))
+      )
+        return false;
+      if (row.channel === "Total" && !visibleInventoryCols.has("totalQty"))
+        return false;
       return true;
     });
     // Recalculate isFirstInGroup after filtering
@@ -1074,16 +1345,21 @@ export default function InventoryPage() {
     return filtered.map((row) => {
       const isFirst = !seenSkus.has(row.sku);
       seenSkus.add(row.sku);
-      return isFirst !== row.isFirstInGroup ? { ...row, isFirstInGroup: isFirst } : row;
+      return isFirst !== row.isFirstInGroup
+        ? { ...row, isFirstInGroup: isFirst }
+        : row;
     });
   }, [groupedRows, visibleInventoryCols, shipbobEnabled]);
 
   // ── Forecast burn-down chart data ──────────────────────
   const forecastChartData = useMemo(() => {
     // Filter items by SKU toggle
-    const items = forecastSkuFilter === "all"
-      ? inventoryItems
-      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === forecastSkuFilter);
+    const items =
+      forecastSkuFilter === "all"
+        ? inventoryItems
+        : inventoryItems.filter(
+            (item) => skuToFilterKey(item.sku) === forecastSkuFilter,
+          );
 
     if (items.length === 0) return { data: [], skus: [] };
 
@@ -1096,15 +1372,25 @@ export default function InventoryPage() {
         inventory = item.amazonQty ?? 0;
         sold = amazonUnits[item.sku] ?? 0;
       } else if (forecastChannelFilter === "shopify") {
-        inventory = (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
+        inventory =
+          (item.shopifyQty ?? 0) +
+          (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
         sold = shopifyUnits[item.sku] ?? 0;
       } else {
-        inventory = (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
+        inventory =
+          (item.amazonQty ?? 0) +
+          (item.shopifyQty ?? 0) +
+          (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
         sold = (amazonUnits[item.sku] ?? 0) + (shopifyUnits[item.sku] ?? 0);
       }
 
       const runRate = sold > 0 ? sold / forecastDays : 0;
-      return { sku: item.sku, name: item.productName || item.sku, inventory, runRate };
+      return {
+        sku: item.sku,
+        name: item.productName || item.sku,
+        inventory,
+        runRate,
+      };
     });
 
     // Generate data points for day 0 to FORECAST_HORIZON
@@ -1121,17 +1407,26 @@ export default function InventoryPage() {
       data,
       skus: skuInfo.map((s) => ({ sku: s.sku, name: s.name })),
     };
-  }, [inventoryItems, forecastSkuFilter, forecastChannelFilter, amazonUnits, shopifyUnits, forecastDays, shipbobEnabled]);
+  }, [
+    inventoryItems,
+    forecastSkuFilter,
+    forecastChannelFilter,
+    amazonUnits,
+    shopifyUnits,
+    forecastDays,
+    shipbobEnabled,
+  ]);
 
   // ── Unit Sales fetch ──────────────────────────────────
   const fetchUnitSales = useCallback(async () => {
-    if (!currentOrg || !unitSalesDateRange?.from || !unitSalesDateRange?.to) return;
+    if (!currentOrg || !unitSalesDateRange?.from || !unitSalesDateRange?.to)
+      return;
     setUnitSalesLoading(true);
     try {
       const from = format(unitSalesDateRange.from, "yyyy-MM-dd");
       const to = format(unitSalesDateRange.to, "yyyy-MM-dd");
       const res = await apiFetch(
-        `/api/inventory/unit-sales?from=${from}&to=${to}&groupBy=${unitSalesGroupBy}&channel=${unitSalesChannel}&skuFilter=${unitSalesSkuFilter}`
+        `/api/inventory/unit-sales?from=${from}&to=${to}&groupBy=${unitSalesGroupBy}&channel=${unitSalesChannel}&skuFilter=${unitSalesSkuFilter}`,
       );
       if (res.ok) {
         const json = await res.json();
@@ -1142,7 +1437,14 @@ export default function InventoryPage() {
     } finally {
       setUnitSalesLoading(false);
     }
-  }, [apiFetch, currentOrg, unitSalesDateRange, unitSalesGroupBy, unitSalesChannel, unitSalesSkuFilter]);
+  }, [
+    apiFetch,
+    currentOrg,
+    unitSalesDateRange,
+    unitSalesGroupBy,
+    unitSalesChannel,
+    unitSalesSkuFilter,
+  ]);
 
   useEffect(() => {
     if (activeTab === "unit-sales") {
@@ -1160,7 +1462,7 @@ export default function InventoryPage() {
     let total = 0;
     for (const row of unitSalesData.data) {
       for (const sku of unitSalesData.skus) {
-        total += (Number(row[sku]) || 0);
+        total += Number(row[sku]) || 0;
       }
     }
 
@@ -1170,7 +1472,7 @@ export default function InventoryPage() {
     for (const row of unitSalesData.data) {
       if (String(row.date) >= cutoff) {
         for (const sku of unitSalesData.skus) {
-          last30Units += (Number(row[sku]) || 0);
+          last30Units += Number(row[sku]) || 0;
         }
       }
     }
@@ -1178,23 +1480,38 @@ export default function InventoryPage() {
 
     // Inventory held — total across all channels, filtered by active SKU filter
     let inventoryHeld = 0;
-    const filteredItems = unitSalesSkuFilter === "all"
-      ? inventoryItems
-      : inventoryItems.filter((item) => skuToFilterKey(item.sku) === unitSalesSkuFilter);
+    const filteredItems =
+      unitSalesSkuFilter === "all"
+        ? inventoryItems
+        : inventoryItems.filter(
+            (item) => skuToFilterKey(item.sku) === unitSalesSkuFilter,
+          );
     for (const item of filteredItems) {
       if (unitSalesChannel === "amazon") {
         inventoryHeld += item.amazonQty ?? 0;
       } else if (unitSalesChannel === "shopify") {
-        inventoryHeld += (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
+        inventoryHeld +=
+          (item.shopifyQty ?? 0) +
+          (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
       } else {
-        inventoryHeld += (item.amazonQty ?? 0) + (item.shopifyQty ?? 0) + (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
+        inventoryHeld +=
+          (item.amazonQty ?? 0) +
+          (item.shopifyQty ?? 0) +
+          (shipbobEnabled ? (item.shipbobQty ?? 0) : 0);
       }
     }
 
-    const daysRemaining = dailyRunRate > 0 ? Math.floor(inventoryHeld / dailyRunRate) : null;
+    const daysRemaining =
+      dailyRunRate > 0 ? Math.floor(inventoryHeld / dailyRunRate) : null;
 
     return { total, dailyRunRate, inventoryHeld, daysRemaining };
-  }, [unitSalesData, inventoryItems, unitSalesSkuFilter, unitSalesChannel, shipbobEnabled]);
+  }, [
+    unitSalesData,
+    inventoryItems,
+    unitSalesSkuFilter,
+    unitSalesChannel,
+    shipbobEnabled,
+  ]);
 
   // ── Filter helpers ───────────────────────────────────────
   function getDisplayValue(val: unknown): string {
@@ -1222,10 +1539,15 @@ export default function InventoryPage() {
         if (newValues.has(value)) newValues.delete(value);
         else newValues.add(value);
         if (newValues.size === 0) return prev.filter((f) => f.key !== key);
-        return prev.map((f) => (f.key === key ? { ...f, values: newValues } : f));
+        return prev.map((f) =>
+          f.key === key ? { ...f, values: newValues } : f,
+        );
       }
       const field = filterableFields.find((f) => f.key === key);
-      return [...prev, { key, label: field?.label || String(key), values: new Set([value]) }];
+      return [
+        ...prev,
+        { key, label: field?.label || String(key), values: new Set([value]) },
+      ];
     });
   }
 
@@ -1237,8 +1559,10 @@ export default function InventoryPage() {
     if (!editingFilter) return [];
     const values = getUniqueValues(editingFilter);
     if (!filterSearch) return values;
-    return values.filter((v) => v.toLowerCase().includes(filterSearch.toLowerCase()));
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    return values.filter((v) =>
+      v.toLowerCase().includes(filterSearch.toLowerCase()),
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [editingFilter, products, filterSearch]);
 
   // ── Filtered & sorted data ───────────────────────────────
@@ -1246,9 +1570,14 @@ export default function InventoryPage() {
     let result = [...products];
 
     // Status quick-filter (products tab only)
-    if (activeTab === "products" || activeTab === "amazon" || activeTab === "dtc") {
+    if (
+      activeTab === "products" ||
+      activeTab === "amazon" ||
+      activeTab === "dtc"
+    ) {
       if (statusFilter === "active") result = result.filter((p) => p.active);
-      else if (statusFilter === "inactive") result = result.filter((p) => !p.active);
+      else if (statusFilter === "inactive")
+        result = result.filter((p) => !p.active);
     }
 
     // Multi-field filters
@@ -1257,7 +1586,7 @@ export default function InventoryPage() {
         filters.every((filter) => {
           const value = getDisplayValue(p[filter.key]);
           return filter.values.has(value);
-        })
+        }),
       );
     }
 
@@ -1269,7 +1598,7 @@ export default function InventoryPage() {
           p.sku.toLowerCase().includes(q) ||
           (p.productName || "").toLowerCase().includes(q) ||
           (p.brand || "").toLowerCase().includes(q) ||
-          (p.asin || "").toLowerCase().includes(q)
+          (p.asin || "").toLowerCase().includes(q),
       );
     }
 
@@ -1279,11 +1608,23 @@ export default function InventoryPage() {
       let bVal: number | string;
 
       if (sortField === "contribProfit") {
-        aVal = activeTab === "dtc" ? computeDtcContribProfit(a) : computeAmazonContribProfit(a);
-        bVal = activeTab === "dtc" ? computeDtcContribProfit(b) : computeAmazonContribProfit(b);
+        aVal =
+          activeTab === "dtc"
+            ? computeDtcContribProfit(a)
+            : computeAmazonContribProfit(a);
+        bVal =
+          activeTab === "dtc"
+            ? computeDtcContribProfit(b)
+            : computeAmazonContribProfit(b);
       } else if (sortField === "contribMargin") {
-        aVal = activeTab === "dtc" ? computeDtcContribMargin(a) : computeAmazonContribMargin(a);
-        bVal = activeTab === "dtc" ? computeDtcContribMargin(b) : computeAmazonContribMargin(b);
+        aVal =
+          activeTab === "dtc"
+            ? computeDtcContribMargin(a)
+            : computeAmazonContribMargin(a);
+        bVal =
+          activeTab === "dtc"
+            ? computeDtcContribMargin(b)
+            : computeAmazonContribMargin(b);
       } else {
         aVal = getDisplayValue(a[sortField]).toLowerCase();
         bVal = getDisplayValue(b[sortField]).toLowerCase();
@@ -1295,15 +1636,25 @@ export default function InventoryPage() {
     });
 
     return result;
-  }, [products, filters, search, sortField, sortDirection, activeTab, statusFilter]);
+  }, [
+    products,
+    filters,
+    search,
+    sortField,
+    sortDirection,
+    activeTab,
+    statusFilter,
+  ]);
 
   // Reset page when filters / search / tab / status change
-  useEffect(() => { setPage(1); }, [search, filters, statusFilter, activeTab]);
+  useEffect(() => {
+    setPage(1);
+  }, [search, filters, statusFilter, activeTab]);
 
   // Paginated slice
   const pagedProducts = useMemo(
     () => filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE),
-    [filtered, page]
+    [filtered, page],
   );
 
   // ── Build Product Database columns ───────────────────────
@@ -1317,7 +1668,10 @@ export default function InventoryPage() {
         sticky: true,
         primary: true,
         render: (_, row) => (
-          <EditableText value={row.sku} onSave={(v) => v && saveField(row.id, "sku", v)} />
+          <EditableText
+            value={row.sku}
+            onSave={(v) => v && saveField(row.id, "sku", v)}
+          />
         ),
       });
     }
@@ -1328,7 +1682,10 @@ export default function InventoryPage() {
         label: "Product",
         className: "min-w-[200px]",
         render: (_, row) => (
-          <EditableText value={row.productName} onSave={(v) => saveField(row.id, "productName", v)} />
+          <EditableText
+            value={row.productName}
+            onSave={(v) => saveField(row.id, "productName", v)}
+          />
         ),
       });
     }
@@ -1338,12 +1695,21 @@ export default function InventoryPage() {
         key: "brand",
         label: "Brand",
         render: (_, row) => (
-          <EditableSelect value={row.brand} options={BRAND_OPTIONS} onSave={(v) => saveField(row.id, "brand", v)} />
+          <EditableSelect
+            value={row.brand}
+            options={BRAND_OPTIONS}
+            onSave={(v) => saveField(row.id, "brand", v)}
+          />
         ),
       });
     }
 
-    const simpleColumns: { key: keyof Product; label: string; editable?: boolean; price?: boolean }[] = [
+    const simpleColumns: {
+      key: keyof Product;
+      label: string;
+      editable?: boolean;
+      price?: boolean;
+    }[] = [
       { key: "unitBarcode", label: "Unit Barcode", editable: true },
       { key: "asin", label: "ASIN", editable: true },
       { key: "parentAsin", label: "Parent ASIN", editable: true },
@@ -1428,8 +1794,18 @@ export default function InventoryPage() {
           className="text-zinc-400 hover:text-red-500 dark:hover:text-red-400 cursor-pointer"
           title="Delete product"
         >
-          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+          <svg
+            className="w-4 h-4"
+            fill="none"
+            stroke="currentColor"
+            viewBox="0 0 24 24"
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              strokeWidth={2}
+              d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"
+            />
           </svg>
         </button>
       ),
@@ -1452,18 +1828,24 @@ export default function InventoryPage() {
   // ── Toolbar (shared across Product Database / Amazon / DTC) ──
   const renderToolbar = () => {
     const { cols, allCols } = getActiveColState();
-    const sortFields = activeTab === "amazon" || activeTab === "dtc" ? channelSortFields : baseSortFields;
+    const sortFields =
+      activeTab === "amazon" || activeTab === "dtc"
+        ? channelSortFields
+        : baseSortFields;
 
     return (
       <div className="flex items-center gap-3 mb-3 flex-wrap">
         <span className="text-sm text-muted">
           {filtered.length === products.length
             ? products.length
-            : `${filtered.length} of ${products.length}`} products
+            : `${filtered.length} of ${products.length}`}{" "}
+          products
         </span>
 
         {/* Status filter — products/amazon/dtc tabs */}
-        {(activeTab === "products" || activeTab === "amazon" || activeTab === "dtc") && (
+        {(activeTab === "products" ||
+          activeTab === "amazon" ||
+          activeTab === "dtc") && (
           <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
             {(["all", "active", "inactive"] as const).map((s) => (
               <button
@@ -1489,13 +1871,38 @@ export default function InventoryPage() {
             className="btn btn-secondary btn-sm"
           >
             {syncingProducts ? (
-              <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+              <svg
+                className="w-4 h-4 animate-spin"
+                fill="none"
+                viewBox="0 0 24 24"
+              >
+                <circle
+                  className="opacity-25"
+                  cx="12"
+                  cy="12"
+                  r="10"
+                  stroke="currentColor"
+                  strokeWidth="4"
+                />
+                <path
+                  className="opacity-75"
+                  fill="currentColor"
+                  d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                />
               </svg>
             ) : (
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                />
               </svg>
             )}
             {syncingProducts ? "Syncing..." : "Sync"}
@@ -1503,7 +1910,10 @@ export default function InventoryPage() {
         )}
         {activeTab === "products" && syncResult && (
           <span className="text-xs text-zinc-500">
-            {syncResult.synced} synced{syncResult.deactivated > 0 ? `, ${syncResult.deactivated} deactivated` : ""}
+            {syncResult.synced} synced
+            {syncResult.deactivated > 0
+              ? `, ${syncResult.deactivated} deactivated`
+              : ""}
           </span>
         )}
 
@@ -1522,18 +1932,34 @@ export default function InventoryPage() {
             onClick={() => setShowSortModal(!showSortModal)}
             className="btn btn-secondary btn-sm"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12"
+              />
             </svg>
             Sort
           </button>
           {showSortModal && (
-            <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+            <div
+              className="dropdown right-0 mt-2 w-56"
+              onClick={(e) => e.stopPropagation()}
+            >
               <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
                 <div className="text-sm font-medium mb-2">Sort by</div>
                 <div className="flex flex-col gap-1">
                   {sortFields.map((opt) => (
-                    <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                    <label
+                      key={opt.value}
+                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
+                    >
                       <input
                         type="radio"
                         name="sortField"
@@ -1546,18 +1972,54 @@ export default function InventoryPage() {
                 </div>
               </div>
               <div className="p-2">
-                <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                <label
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M5 15l7-7 7 7"
+                    />
                   </svg>
-                  <input type="radio" name="sortDir" checked={sortDirection === "asc"} onChange={() => setSortDirection("asc")} className="sr-only" />
+                  <input
+                    type="radio"
+                    name="sortDir"
+                    checked={sortDirection === "asc"}
+                    onChange={() => setSortDirection("asc")}
+                    className="sr-only"
+                  />
                   <span className="text-sm">Ascending</span>
                 </label>
-                <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
-                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                <label
+                  className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}
+                >
+                  <svg
+                    className="w-4 h-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth={2}
+                      d="M19 9l-7 7-7-7"
+                    />
                   </svg>
-                  <input type="radio" name="sortDir" checked={sortDirection === "desc"} onChange={() => setSortDirection("desc")} className="sr-only" />
+                  <input
+                    type="radio"
+                    name="sortDir"
+                    checked={sortDirection === "desc"}
+                    onChange={() => setSortDirection("desc")}
+                    className="sr-only"
+                  />
                   <span className="text-sm">Descending</span>
                 </label>
               </div>
@@ -1571,8 +2033,18 @@ export default function InventoryPage() {
             onClick={() => setShowFilterDropdown(!showFilterDropdown)}
             className="btn btn-secondary btn-sm"
           >
-            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+            <svg
+              className="w-4 h-4"
+              fill="none"
+              stroke="currentColor"
+              viewBox="0 0 24 24"
+            >
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth={2}
+                d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z"
+              />
             </svg>
             Add filter
           </button>
@@ -1602,18 +2074,34 @@ export default function InventoryPage() {
               onClick={() => setShowColPicker(!showColPicker)}
               className="btn btn-secondary btn-sm"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+              <svg
+                className="w-4 h-4"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                />
               </svg>
               Columns ({cols.size})
             </button>
             {showColPicker && (
               <div className="dropdown right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto">
                 <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
-                  <button onClick={showAllCols} className="btn btn-secondary btn-sm flex-1">
+                  <button
+                    onClick={showAllCols}
+                    className="btn btn-secondary btn-sm flex-1"
+                  >
                     Show All
                   </button>
-                  <button onClick={clearCols} className="btn btn-secondary btn-sm flex-1">
+                  <button
+                    onClick={clearCols}
+                    className="btn btn-secondary btn-sm flex-1"
+                  >
                     Clear
                   </button>
                 </div>
@@ -1650,7 +2138,10 @@ export default function InventoryPage() {
             <div key={String(filter.key)} className="filter-pill">
               <button
                 className="filter-pill-label"
-                onClick={() => { setEditingFilter(filter.key); setFilterSearch(""); }}
+                onClick={() => {
+                  setEditingFilter(filter.key);
+                  setFilterSearch("");
+                }}
               >
                 <span className="filter-pill-key">{filter.label}:</span>
                 <span className="filter-pill-values">
@@ -1659,21 +2150,47 @@ export default function InventoryPage() {
                     : `${filter.values.size} selected`}
                 </span>
               </button>
-              <button className="filter-pill-remove" onClick={() => removeFilter(filter.key)}>×</button>
+              <button
+                className="filter-pill-remove"
+                onClick={() => removeFilter(filter.key)}
+              >
+                ×
+              </button>
             </div>
           ))}
-          <button className="filter-clear-all" onClick={() => setFilters([])}>Clear all</button>
+          <button className="filter-clear-all" onClick={() => setFilters([])}>
+            Clear all
+          </button>
         </div>
       )}
 
       {editingFilter && (
-        <div className="modal-overlay" onClick={() => { setEditingFilter(null); setFilterSearch(""); }}>
-          <div className="filter-modal" ref={filterModalRef} onClick={(e) => e.stopPropagation()}>
+        <div
+          className="modal-overlay"
+          onClick={() => {
+            setEditingFilter(null);
+            setFilterSearch("");
+          }}
+        >
+          <div
+            className="filter-modal"
+            ref={filterModalRef}
+            onClick={(e) => e.stopPropagation()}
+          >
             <div className="filter-modal-header">
               <h3 className="filter-modal-title">
-                Filter by {filterableFields.find((f) => f.key === editingFilter)?.label}
+                Filter by{" "}
+                {filterableFields.find((f) => f.key === editingFilter)?.label}
               </h3>
-              <button className="modal-close" onClick={() => { setEditingFilter(null); setFilterSearch(""); }}>×</button>
+              <button
+                className="modal-close"
+                onClick={() => {
+                  setEditingFilter(null);
+                  setFilterSearch("");
+                }}
+              >
+                ×
+              </button>
             </div>
             <div className="filter-modal-search">
               <input
@@ -1702,7 +2219,15 @@ export default function InventoryPage() {
               )}
             </div>
             <div className="filter-modal-footer">
-              <button className="btn btn-secondary" onClick={() => { setEditingFilter(null); setFilterSearch(""); }}>Done</button>
+              <button
+                className="btn btn-secondary"
+                onClick={() => {
+                  setEditingFilter(null);
+                  setFilterSearch("");
+                }}
+              >
+                Done
+              </button>
             </div>
           </div>
         </div>
@@ -1752,13 +2277,24 @@ export default function InventoryPage() {
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                   {[48, 160, 64, 80, 72, 80, 80, 24].map((w, i) => (
-                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    <div
+                      key={i}
+                      className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0"
+                      style={{ width: w }}
+                    />
                   ))}
                 </div>
                 {[...Array(8)].map((_, row) => (
-                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                  <div
+                    key={row}
+                    className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50"
+                  >
                     {[48, 160, 64, 80, 72, 80, 80, 24].map((w, col) => (
-                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                      <div
+                        key={col}
+                        className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0"
+                        style={{ width: w }}
+                      />
                     ))}
                   </div>
                 ))}
@@ -1768,25 +2304,45 @@ export default function InventoryPage() {
                 columns={columns}
                 data={pagedProducts}
                 rowKey="id"
-                emptyMessage={search || filters.length > 0 ? "No products match your search." : "No products yet. Click \"Sync from Shopify\" to import."}
+                emptyMessage={
+                  search || filters.length > 0
+                    ? "No products match your search."
+                    : 'No products yet. Click "Sync from Shopify" to import.'
+                }
               />
             )}
             {filtered.length > PAGE_SIZE && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
                 <span>
-                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–
+                  {Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()}{" "}
+                  of {filtered.length.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.max(1, p - 1));
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page === 1}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
-                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <span>
+                    {page} / {Math.ceil(filtered.length / PAGE_SIZE)}
+                  </span>
                   <button
-                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) =>
+                        Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1),
+                      );
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -1803,14 +2359,30 @@ export default function InventoryPage() {
             {loading ? (
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  {[48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96, 96].map((w, i) => (
-                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  {[
+                    48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96, 96,
+                  ].map((w, i) => (
+                    <div
+                      key={i}
+                      className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0"
+                      style={{ width: w }}
+                    />
                   ))}
                 </div>
                 {[...Array(8)].map((_, row) => (
-                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
-                    {[48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96, 96].map((w, col) => (
-                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  <div
+                    key={row}
+                    className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50"
+                  >
+                    {[
+                      48, 160, 64, 56, 56, 64, 56, 72, 72, 48, 56, 64, 56, 96,
+                      96,
+                    ].map((w, col) => (
+                      <div
+                        key={col}
+                        className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0"
+                        style={{ width: w }}
+                      />
                     ))}
                   </div>
                 ))}
@@ -1826,19 +2398,35 @@ export default function InventoryPage() {
             {filtered.length > PAGE_SIZE && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
                 <span>
-                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–
+                  {Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()}{" "}
+                  of {filtered.length.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.max(1, p - 1));
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page === 1}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
-                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <span>
+                    {page} / {Math.ceil(filtered.length / PAGE_SIZE)}
+                  </span>
                   <button
-                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) =>
+                        Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1),
+                      );
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -1855,14 +2443,29 @@ export default function InventoryPage() {
             {loading ? (
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-                  {[48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96].map((w, i) => (
-                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  {[
+                    48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96,
+                  ].map((w, i) => (
+                    <div
+                      key={i}
+                      className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0"
+                      style={{ width: w }}
+                    />
                   ))}
                 </div>
                 {[...Array(8)].map((_, row) => (
-                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
-                    {[48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96].map((w, col) => (
-                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  <div
+                    key={row}
+                    className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50"
+                  >
+                    {[
+                      48, 160, 64, 56, 56, 64, 72, 56, 80, 72, 56, 96, 80, 96,
+                    ].map((w, col) => (
+                      <div
+                        key={col}
+                        className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0"
+                        style={{ width: w }}
+                      />
                     ))}
                   </div>
                 ))}
@@ -1878,19 +2481,35 @@ export default function InventoryPage() {
             {filtered.length > PAGE_SIZE && (
               <div className="flex items-center justify-between px-4 py-3 border-t border-zinc-200 dark:border-zinc-800 text-sm text-zinc-500 shrink-0">
                 <span>
-                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–{Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()} of {filtered.length.toLocaleString()}
+                  {((page - 1) * PAGE_SIZE + 1).toLocaleString()}–
+                  {Math.min(page * PAGE_SIZE, filtered.length).toLocaleString()}{" "}
+                  of {filtered.length.toLocaleString()}
                 </span>
                 <div className="flex items-center gap-2">
                   <button
-                    onClick={() => { setPage((p) => Math.max(1, p - 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) => Math.max(1, p - 1));
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page === 1}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
                     Previous
                   </button>
-                  <span>{page} / {Math.ceil(filtered.length / PAGE_SIZE)}</span>
+                  <span>
+                    {page} / {Math.ceil(filtered.length / PAGE_SIZE)}
+                  </span>
                   <button
-                    onClick={() => { setPage((p) => Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1)); document.querySelector(".table-container")?.scrollTo({ top: 0, behavior: "smooth" }); }}
+                    onClick={() => {
+                      setPage((p) =>
+                        Math.min(Math.ceil(filtered.length / PAGE_SIZE), p + 1),
+                      );
+                      document
+                        .querySelector(".table-container")
+                        ?.scrollTo({ top: 0, behavior: "smooth" });
+                    }}
                     disabled={page >= Math.ceil(filtered.length / PAGE_SIZE)}
                     className="px-3 py-1.5 border border-zinc-300 dark:border-zinc-700 rounded-md hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-40 disabled:cursor-not-allowed"
                   >
@@ -1906,7 +2525,9 @@ export default function InventoryPage() {
               <span className="text-sm text-muted">
                 {inventoryItems.length} SKUs
                 {inventoryDate && (
-                  <span className="ml-2 text-zinc-400">as of {inventoryDate}</span>
+                  <span className="ml-2 text-zinc-400">
+                    as of {inventoryDate}
+                  </span>
                 )}
               </span>
               <div className="flex items-center gap-3 ml-auto">
@@ -1921,7 +2542,11 @@ export default function InventoryPage() {
                           : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
                       }`}
                     >
-                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                      {p === "7d"
+                        ? "7 Days"
+                        : p === "14d"
+                          ? "14 Days"
+                          : "30 Days"}
                     </button>
                   ))}
                 </div>
@@ -1931,13 +2556,38 @@ export default function InventoryPage() {
                   className="btn btn-secondary btn-sm"
                 >
                   {syncing ? (
-                    <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                    <svg
+                      className="w-4 h-4 animate-spin"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                    >
+                      <circle
+                        className="opacity-25"
+                        cx="12"
+                        cy="12"
+                        r="10"
+                        stroke="currentColor"
+                        strokeWidth="4"
+                      />
+                      <path
+                        className="opacity-75"
+                        fill="currentColor"
+                        d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                      />
                     </svg>
                   ) : (
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"
+                      />
                     </svg>
                   )}
                   {syncing ? "Syncing..." : "Sync"}
@@ -1952,18 +2602,32 @@ export default function InventoryPage() {
                 )}
                 <div className="relative" ref={inventoryColPickerRef}>
                   <button
-                    onClick={() => setShowInventoryColPicker(!showInventoryColPicker)}
+                    onClick={() =>
+                      setShowInventoryColPicker(!showInventoryColPicker)
+                    }
                     className="btn btn-secondary btn-sm"
                   >
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                    <svg
+                      className="w-4 h-4"
+                      fill="none"
+                      stroke="currentColor"
+                      viewBox="0 0 24 24"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth={2}
+                        d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"
+                      />
                     </svg>
                     Columns
                   </button>
                   {showInventoryColPicker && (
                     <div className="dropdown right-0 mt-2 w-56 max-h-[70vh] overflow-y-auto">
                       <div className="p-2">
-                        {ALL_INVENTORY_COLUMNS.filter((col) => col.key !== "shipbobQty" || shipbobEnabled).map((col) => (
+                        {ALL_INVENTORY_COLUMNS.filter(
+                          (col) => col.key !== "shipbobQty" || shipbobEnabled,
+                        ).map((col) => (
                           <label
                             key={col.key}
                             className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
@@ -1987,35 +2651,67 @@ export default function InventoryPage() {
               <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
                 <div className="flex gap-4 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
                   {[48, 160, 80, 64, 64, 64, 80, 24].map((w, i) => (
-                    <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+                    <div
+                      key={i}
+                      className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0"
+                      style={{ width: w }}
+                    />
                   ))}
                 </div>
                 {[...Array(9)].map((_, row) => (
-                  <div key={row} className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50">
+                  <div
+                    key={row}
+                    className="flex gap-4 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800/50"
+                  >
                     {[48, 160, 80, 64, 64, 64, 80, 24].map((w, col) => (
-                      <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                      <div
+                        key={col}
+                        className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0"
+                        style={{ width: w }}
+                      />
                     ))}
                   </div>
                 ))}
               </div>
             ) : groupedRows.length === 0 ? (
-              <div className="table-empty">No inventory data yet. Click &apos;Add All Products&apos; to start tracking.</div>
+              <div className="table-empty">
+                No inventory data yet. Click &apos;Add All Products&apos; to
+                start tracking.
+              </div>
             ) : (
               <div className="table-container">
                 <table className="table">
                   <thead>
                     <tr className="table-header-row">
-                      <th className="table-header-cell table-header-cell-sticky">SKU</th>
-                      <th className="table-header-cell min-w-[180px]">Product</th>
-                      {visibleInventoryCols.has("brand") && <th className="table-header-cell">Brand</th>}
-                      {visibleInventoryCols.has("asin") && <th className="table-header-cell">ASIN</th>}
+                      <th className="table-header-cell table-header-cell-sticky">
+                        SKU
+                      </th>
+                      <th className="table-header-cell min-w-[180px]">
+                        Product
+                      </th>
+                      {visibleInventoryCols.has("brand") && (
+                        <th className="table-header-cell">Brand</th>
+                      )}
+                      {visibleInventoryCols.has("asin") && (
+                        <th className="table-header-cell">ASIN</th>
+                      )}
                       <th className="table-header-cell">Channel</th>
                       <th className="table-header-cell">Inventory</th>
-                      {visibleInventoryCols.has("valueCost") && <th className="table-header-cell">Value (Cost)</th>}
-                      {visibleInventoryCols.has("valueRrp") && <th className="table-header-cell">Value (RRP)</th>}
-                      {visibleInventoryCols.has("runRate") && <th className="table-header-cell">Run Rate</th>}
-                      {visibleInventoryCols.has("daysLeft") && <th className="table-header-cell">Days Left</th>}
-                      {visibleInventoryCols.has("oosDate") && <th className="table-header-cell">OOS Forecast</th>}
+                      {visibleInventoryCols.has("valueCost") && (
+                        <th className="table-header-cell">Value (Cost)</th>
+                      )}
+                      {visibleInventoryCols.has("valueRrp") && (
+                        <th className="table-header-cell">Value (RRP)</th>
+                      )}
+                      {visibleInventoryCols.has("runRate") && (
+                        <th className="table-header-cell">Run Rate</th>
+                      )}
+                      {visibleInventoryCols.has("daysLeft") && (
+                        <th className="table-header-cell">Days Left</th>
+                      )}
+                      {visibleInventoryCols.has("oosDate") && (
+                        <th className="table-header-cell">OOS Forecast</th>
+                      )}
                       <th className="table-header-cell"></th>
                     </tr>
                   </thead>
@@ -2027,78 +2723,116 @@ export default function InventoryPage() {
                           key={`${row.sku}-${row.channel}`}
                           className={`table-body-row ${row.isFirstInGroup ? "border-t-2 border-zinc-300 dark:border-zinc-600" : ""}`}
                         >
-                          <td className={`table-cell table-cell-sticky table-cell-primary ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                          <td
+                            className={`table-cell table-cell-sticky table-cell-primary ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}
+                          >
                             {row.sku}
                           </td>
-                          <td className={`table-cell min-w-[180px] ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                          <td
+                            className={`table-cell min-w-[180px] ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}
+                          >
                             {row.productName ?? "-"}
                           </td>
                           {visibleInventoryCols.has("brand") && (
-                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            <td
+                              className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}
+                            >
                               {row.sourceItem.brand ?? "-"}
                             </td>
                           )}
                           {visibleInventoryCols.has("asin") && (
-                            <td className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}>
+                            <td
+                              className={`table-cell ${!row.isFirstInGroup ? "text-transparent select-none" : ""}`}
+                            >
                               {row.sourceItem.asin ?? "-"}
                             </td>
                           )}
-                          <td className={`table-cell ${isTotal ? "font-semibold" : "text-zinc-500 dark:text-zinc-400 pl-6"}`}>
+                          <td
+                            className={`table-cell ${isTotal ? "font-semibold" : "text-zinc-500 dark:text-zinc-400 pl-6"}`}
+                          >
                             {row.channel}
                           </td>
-                          <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>
+                          <td
+                            className={`table-cell ${isTotal ? "font-semibold" : ""}`}
+                          >
                             {row.inventory === 0 ? (
-                              <span className="text-red-500 font-medium">0</span>
+                              <span className="text-red-500 font-medium">
+                                0
+                              </span>
                             ) : (
                               row.inventory
                             )}
                           </td>
                           {visibleInventoryCols.has("valueCost") && (
-                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueCost, displayCurrency)}</td>
+                            <td
+                              className={`table-cell ${isTotal ? "font-semibold" : ""}`}
+                            >
+                              {formatCurrency(row.valueCost, displayCurrency)}
+                            </td>
                           )}
                           {visibleInventoryCols.has("valueRrp") && (
-                            <td className={`table-cell ${isTotal ? "font-semibold" : ""}`}>{formatCurrency(row.valueRrp, displayCurrency)}</td>
+                            <td
+                              className={`table-cell ${isTotal ? "font-semibold" : ""}`}
+                            >
+                              {formatCurrency(row.valueRrp, displayCurrency)}
+                            </td>
                           )}
                           {visibleInventoryCols.has("runRate") && (
                             <td className="table-cell">
-                              {row.runRate !== null ? row.runRate.toFixed(1) : "-"}
+                              {row.runRate !== null
+                                ? row.runRate.toFixed(1)
+                                : "-"}
                             </td>
                           )}
                           {visibleInventoryCols.has("daysLeft") && (
-                            <td className={`table-cell ${
-                              row.daysLeft !== null
-                                ? row.channel === "Amazon"
-                                  ? row.daysLeft < 7
-                                    ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
-                                    : row.daysLeft < 30
-                                      ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
-                                      : ""
-                                  : (row.channel === "Total" || row.channel === "Shopify" || row.channel === "ShipBob")
-                                    ? row.daysLeft < 90
+                            <td
+                              className={`table-cell ${
+                                row.daysLeft !== null
+                                  ? row.channel === "Amazon"
+                                    ? row.daysLeft < 7
                                       ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
-                                      : row.daysLeft <= 150
+                                      : row.daysLeft < 30
                                         ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
                                         : ""
-                                    : ""
-                                : ""
-                            }`}>
+                                    : row.channel === "Total" ||
+                                        row.channel === "Shopify" ||
+                                        row.channel === "ShipBob"
+                                      ? row.daysLeft < 90
+                                        ? "bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-400 font-medium"
+                                        : row.daysLeft <= 150
+                                          ? "bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400 font-medium"
+                                          : ""
+                                      : ""
+                                  : ""
+                              }`}
+                            >
                               {row.daysLeft !== null ? row.daysLeft : "-"}
                             </td>
                           )}
                           {visibleInventoryCols.has("oosDate") && (
-                            <td className="table-cell">
-                              {row.oosDate ?? "-"}
-                            </td>
+                            <td className="table-cell">{row.oosDate ?? "-"}</td>
                           )}
                           <td className="table-cell">
                             {row.isFirstInGroup && (
                               <button
-                                onClick={() => openInventoryModal(row.sourceItem)}
+                                onClick={() =>
+                                  openInventoryModal(row.sourceItem)
+                                }
                                 className="text-zinc-400 hover:text-blue-600 dark:hover:text-blue-400 cursor-pointer"
                                 title="Edit stock"
                               >
-                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                                <svg
+                                  className="w-4 h-4"
+                                  fill="none"
+                                  stroke="currentColor"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth={2}
+                                    d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"
+                                  />
                                 </svg>
                               </button>
                             )}
@@ -2107,24 +2841,52 @@ export default function InventoryPage() {
                       );
                     })}
                     {(() => {
-                      const totalRows = groupedRows.filter((r) => r.channel === "Total");
+                      const totalRows = groupedRows.filter(
+                        (r) => r.channel === "Total",
+                      );
                       return (
                         <tr className="table-body-row border-t-2 border-zinc-300 dark:border-zinc-600 font-semibold">
-                          <td className="table-cell table-cell-sticky table-cell-primary">Total</td>
+                          <td className="table-cell table-cell-sticky table-cell-primary">
+                            Total
+                          </td>
                           <td className="table-cell min-w-[180px]"></td>
-                          {visibleInventoryCols.has("brand") && <td className="table-cell"></td>}
-                          {visibleInventoryCols.has("asin") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("brand") && (
+                            <td className="table-cell"></td>
+                          )}
+                          {visibleInventoryCols.has("asin") && (
+                            <td className="table-cell"></td>
+                          )}
                           <td className="table-cell"></td>
-                          <td className="table-cell">{totalRows.reduce((s, r) => s + r.inventory, 0).toLocaleString()}</td>
+                          <td className="table-cell">
+                            {totalRows
+                              .reduce((s, r) => s + r.inventory, 0)
+                              .toLocaleString()}
+                          </td>
                           {visibleInventoryCols.has("valueCost") && (
-                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueCost, 0), displayCurrency)}</td>
+                            <td className="table-cell">
+                              {formatCurrency(
+                                totalRows.reduce((s, r) => s + r.valueCost, 0),
+                                displayCurrency,
+                              )}
+                            </td>
                           )}
                           {visibleInventoryCols.has("valueRrp") && (
-                            <td className="table-cell">{formatCurrency(totalRows.reduce((s, r) => s + r.valueRrp, 0), displayCurrency)}</td>
+                            <td className="table-cell">
+                              {formatCurrency(
+                                totalRows.reduce((s, r) => s + r.valueRrp, 0),
+                                displayCurrency,
+                              )}
+                            </td>
                           )}
-                          {visibleInventoryCols.has("runRate") && <td className="table-cell"></td>}
-                          {visibleInventoryCols.has("daysLeft") && <td className="table-cell"></td>}
-                          {visibleInventoryCols.has("oosDate") && <td className="table-cell"></td>}
+                          {visibleInventoryCols.has("runRate") && (
+                            <td className="table-cell"></td>
+                          )}
+                          {visibleInventoryCols.has("daysLeft") && (
+                            <td className="table-cell"></td>
+                          )}
+                          {visibleInventoryCols.has("oosDate") && (
+                            <td className="table-cell"></td>
+                          )}
                           <td className="table-cell"></td>
                         </tr>
                       );
@@ -2136,19 +2898,36 @@ export default function InventoryPage() {
 
             {/* Edit inventory modal */}
             {editingInventory && (
-              <div className="modal-overlay" onClick={() => setEditingInventory(null)}>
-                <div className="filter-modal" onClick={(e) => e.stopPropagation()}>
+              <div
+                className="modal-overlay"
+                onClick={() => setEditingInventory(null)}
+              >
+                <div
+                  className="filter-modal"
+                  onClick={(e) => e.stopPropagation()}
+                >
                   <div className="filter-modal-header">
                     <h3 className="filter-modal-title">Update Stock</h3>
-                    <button className="modal-close" onClick={() => setEditingInventory(null)}>×</button>
+                    <button
+                      className="modal-close"
+                      onClick={() => setEditingInventory(null)}
+                    >
+                      ×
+                    </button>
                   </div>
                   <div className="p-4 space-y-4">
                     <div>
-                      <div className="text-sm font-medium">{editingInventory.sku}</div>
-                      <div className="text-xs text-zinc-500">{editingInventory.productName || "Unnamed product"}</div>
+                      <div className="text-sm font-medium">
+                        {editingInventory.sku}
+                      </div>
+                      <div className="text-xs text-zinc-500">
+                        {editingInventory.productName || "Unnamed product"}
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Amazon FBA Qty</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Amazon FBA Qty
+                      </label>
                       <input
                         type="number"
                         value={editAmazonQty}
@@ -2159,7 +2938,9 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Shopify Qty</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Shopify Qty
+                      </label>
                       <input
                         type="number"
                         value={editShopifyQty}
@@ -2169,7 +2950,9 @@ export default function InventoryPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-sm font-medium mb-1">Warehouse Qty</label>
+                      <label className="block text-sm font-medium mb-1">
+                        Warehouse Qty
+                      </label>
                       <input
                         type="number"
                         value={editWarehouseQty}
@@ -2180,7 +2963,9 @@ export default function InventoryPage() {
                     </div>
                     {shipbobEnabled && (
                       <div>
-                        <label className="block text-sm font-medium mb-1">ShipBob Qty</label>
+                        <label className="block text-sm font-medium mb-1">
+                          ShipBob Qty
+                        </label>
                         <input
                           type="number"
                           value={editShipBobQty}
@@ -2191,11 +2976,22 @@ export default function InventoryPage() {
                       </div>
                     )}
                     <div className="text-sm text-zinc-500">
-                      Total: <span className="font-medium text-zinc-900 dark:text-white">{(Number(editAmazonQty) || 0) + (Number(editShopifyQty) || 0) + (Number(editWarehouseQty) || 0) + (shipbobEnabled ? (Number(editShipBobQty) || 0) : 0)}</span>
+                      Total:{" "}
+                      <span className="font-medium text-zinc-900 dark:text-white">
+                        {(Number(editAmazonQty) || 0) +
+                          (Number(editShopifyQty) || 0) +
+                          (Number(editWarehouseQty) || 0) +
+                          (shipbobEnabled ? Number(editShipBobQty) || 0 : 0)}
+                      </span>
                     </div>
                   </div>
                   <div className="filter-modal-footer">
-                    <button className="btn btn-secondary" onClick={() => setEditingInventory(null)}>Cancel</button>
+                    <button
+                      className="btn btn-secondary"
+                      onClick={() => setEditingInventory(null)}
+                    >
+                      Cancel
+                    </button>
                     <button
                       className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-sm"
                       onClick={saveInventory}
@@ -2214,9 +3010,18 @@ export default function InventoryPage() {
             <div className="flex items-center gap-4 flex-wrap">
               {/* SKU filter */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  SKU
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["all", "All"],
+                      ["8-rolls", "8 Rolls"],
+                      ["24-rolls", "24 Rolls"],
+                      ["48-rolls", "48 Rolls"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setForecastSkuFilter(val)}
@@ -2234,9 +3039,17 @@ export default function InventoryPage() {
 
               {/* Channel filter */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Channel
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {([["all", "All"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["all", "All"],
+                      ["amazon", "Amazon"],
+                      ["shopify", "Shopify"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setForecastChannelFilter(val)}
@@ -2254,7 +3067,9 @@ export default function InventoryPage() {
 
               {/* Run rate period */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Run Rate</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Run Rate
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
                   {(["7d", "14d", "30d"] as const).map((p) => (
                     <button
@@ -2266,7 +3081,11 @@ export default function InventoryPage() {
                           : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
                       }`}
                     >
-                      {p === "7d" ? "7 Days" : p === "14d" ? "14 Days" : "30 Days"}
+                      {p === "7d"
+                        ? "7 Days"
+                        : p === "14d"
+                          ? "14 Days"
+                          : "30 Days"}
                     </button>
                   ))}
                 </div>
@@ -2276,13 +3095,21 @@ export default function InventoryPage() {
             {/* Chart */}
             {forecastChartData.skus.length === 0 ? (
               <div className="flex items-center justify-center h-64 text-zinc-400 dark:text-zinc-500 text-sm">
-                No inventory data available. Switch to the Inventory tab to add stock levels.
+                No inventory data available. Switch to the Inventory tab to add
+                stock levels.
               </div>
             ) : (
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
                 <ResponsiveContainer width="100%" height={420}>
-                  <LineChart data={forecastChartData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                  <LineChart
+                    data={forecastChartData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="currentColor"
+                      opacity={0.1}
+                    />
                     <XAxis
                       dataKey="day"
                       type="number"
@@ -2295,8 +3122,13 @@ export default function InventoryPage() {
                     <Tooltip
                       labelFormatter={(d) => `Day ${d}`}
                       formatter={(value, name) => {
-                        const match = forecastChartData.skus.find((s) => s.sku === name);
-                        return [Number(value).toLocaleString() + " units", match?.name || String(name)];
+                        const match = forecastChartData.skus.find(
+                          (s) => s.sku === name,
+                        );
+                        return [
+                          Number(value).toLocaleString() + " units",
+                          match?.name || String(name),
+                        ];
                       }}
                       contentStyle={{
                         backgroundColor: "var(--color-zinc-50, #fafafa)",
@@ -2307,7 +3139,9 @@ export default function InventoryPage() {
                     />
                     <Legend
                       formatter={(value) => {
-                        const match = forecastChartData.skus.find((s) => s.sku === value);
+                        const match = forecastChartData.skus.find(
+                          (s) => s.sku === value,
+                        );
                         return match?.name || value;
                       }}
                     />
@@ -2315,7 +3149,12 @@ export default function InventoryPage() {
                       y={REORDER_THRESHOLD}
                       stroke="#ef4444"
                       strokeDasharray="8 4"
-                      label={{ value: "Reorder", position: "right", fill: "#ef4444", fontSize: 12 }}
+                      label={{
+                        value: "Reorder",
+                        position: "right",
+                        fill: "#ef4444",
+                        fontSize: 12,
+                      }}
                     />
                     {forecastChartData.skus.map((s, i) => (
                       <Line
@@ -2339,9 +3178,17 @@ export default function InventoryPage() {
             <div className="flex items-center gap-4 flex-wrap">
               {/* Channel toggle */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Channel</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Channel
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {([["total", "Total"], ["amazon", "Amazon"], ["shopify", "Shopify"]] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["total", "Total"],
+                      ["amazon", "Amazon"],
+                      ["shopify", "Shopify"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setUnitSalesChannel(val)}
@@ -2359,9 +3206,18 @@ export default function InventoryPage() {
 
               {/* SKU filter */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">SKU</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  SKU
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {([["all", "All"], ["8-rolls", "8 Rolls"], ["24-rolls", "24 Rolls"], ["48-rolls", "48 Rolls"]] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["all", "All"],
+                      ["8-rolls", "8 Rolls"],
+                      ["24-rolls", "24 Rolls"],
+                      ["48-rolls", "48 Rolls"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setUnitSalesSkuFilter(val)}
@@ -2379,9 +3235,17 @@ export default function InventoryPage() {
 
               {/* GroupBy toggle */}
               <div className="flex items-center gap-2">
-                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">Group</span>
+                <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400">
+                  Group
+                </span>
                 <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {([["day", "Day"], ["week", "Week"], ["month", "Month"]] as const).map(([val, label]) => (
+                  {(
+                    [
+                      ["day", "Day"],
+                      ["week", "Week"],
+                      ["month", "Month"],
+                    ] as const
+                  ).map(([val, label]) => (
                     <button
                       key={val}
                       onClick={() => setUnitSalesGroupBy(val)}
@@ -2409,33 +3273,82 @@ export default function InventoryPage() {
             {/* Scorecards */}
             <div className="grid grid-cols-1 sm:grid-cols-5 gap-4">
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Total Units Sold</div>
-                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.total.toLocaleString()}</div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Total Units Sold
+                </div>
+                <div className="text-2xl font-bold">
+                  {unitSalesLoading
+                    ? "..."
+                    : unitSalesStats.total.toLocaleString()}
+                </div>
               </div>
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Day (30d avg)</div>
-                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.dailyRunRate.toFixed(1)}</div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Units / Day (30d avg)
+                </div>
+                <div className="text-2xl font-bold">
+                  {unitSalesLoading
+                    ? "..."
+                    : unitSalesStats.dailyRunRate.toFixed(1)}
+                </div>
               </div>
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Units / Month (30d avg)</div>
-                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : Math.round(unitSalesStats.dailyRunRate * 30).toLocaleString()}</div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Units / Month (30d avg)
+                </div>
+                <div className="text-2xl font-bold">
+                  {unitSalesLoading
+                    ? "..."
+                    : Math.round(
+                        unitSalesStats.dailyRunRate * 30,
+                      ).toLocaleString()}
+                </div>
               </div>
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Inventory Held</div>
-                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.inventoryHeld.toLocaleString()}</div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Inventory Held
+                </div>
+                <div className="text-2xl font-bold">
+                  {unitSalesLoading
+                    ? "..."
+                    : unitSalesStats.inventoryHeld.toLocaleString()}
+                </div>
               </div>
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
-                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">Days Remaining</div>
-                <div className="text-2xl font-bold">{unitSalesLoading ? "..." : unitSalesStats.daysRemaining !== null ? unitSalesStats.daysRemaining.toLocaleString() : "-"}</div>
+                <div className="text-xs font-medium text-zinc-500 dark:text-zinc-400 mb-1">
+                  Days Remaining
+                </div>
+                <div className="text-2xl font-bold">
+                  {unitSalesLoading
+                    ? "..."
+                    : unitSalesStats.daysRemaining !== null
+                      ? unitSalesStats.daysRemaining.toLocaleString()
+                      : "-"}
+                </div>
               </div>
             </div>
 
             {/* Chart */}
             {unitSalesLoading ? (
               <div className="flex items-center justify-center h-[420px] text-zinc-400 dark:text-zinc-500 text-sm">
-                <svg className="w-5 h-5 animate-spin mr-2" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                <svg
+                  className="w-5 h-5 animate-spin mr-2"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                >
+                  <circle
+                    className="opacity-25"
+                    cx="12"
+                    cy="12"
+                    r="10"
+                    stroke="currentColor"
+                    strokeWidth="4"
+                  />
+                  <path
+                    className="opacity-75"
+                    fill="currentColor"
+                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"
+                  />
                 </svg>
                 Loading unit sales...
               </div>
@@ -2446,8 +3359,15 @@ export default function InventoryPage() {
             ) : (
               <div className="bg-white dark:bg-zinc-900 border border-zinc-200 dark:border-zinc-800 rounded-lg p-4">
                 <ResponsiveContainer width="100%" height={420}>
-                  <BarChart data={unitSalesData.data} margin={{ top: 5, right: 30, left: 20, bottom: 5 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="currentColor" opacity={0.1} />
+                  <BarChart
+                    data={unitSalesData.data}
+                    margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+                  >
+                    <CartesianGrid
+                      strokeDasharray="3 3"
+                      stroke="currentColor"
+                      opacity={0.1}
+                    />
                     <XAxis
                       dataKey="date"
                       fontSize={12}
@@ -2477,7 +3397,16 @@ export default function InventoryPage() {
                         fontSize: "12px",
                       }}
                     />
-                    <Legend verticalAlign="top" height={36} wrapperStyle={{ fontSize: 12 }} formatter={(value) => <span className="text-zinc-900 dark:text-zinc-100">{value}</span>} />
+                    <Legend
+                      verticalAlign="top"
+                      height={36}
+                      wrapperStyle={{ fontSize: 12 }}
+                      formatter={(value) => (
+                        <span className="text-zinc-900 dark:text-zinc-100">
+                          {value}
+                        </span>
+                      )}
+                    />
                     {unitSalesData.skus.map((group) => (
                       <Bar
                         key={group}
