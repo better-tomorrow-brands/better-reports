@@ -86,6 +86,7 @@ function Lightbox({ fullUrl, videoSourceUrl, onClose }: {
 }) {
   const { apiFetch } = useOrg();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
+  const [imgError, setImgError] = useState<string | null>(null);
 
   useEffect(() => {
     const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
@@ -97,13 +98,20 @@ function Lightbox({ fullUrl, videoSourceUrl, onClose }: {
   useEffect(() => {
     if (!fullUrl || videoSourceUrl) return;
     let objectUrl: string | null = null;
+    setImgError(null);
+    setBlobUrl(null);
     apiFetch(`/api/meta/image-proxy?url=${encodeURIComponent(fullUrl)}`)
-      .then((r) => r.blob())
-      .then((blob) => {
+      .then(async (r) => {
+        if (!r.ok) {
+          const text = await r.text();
+          setImgError(`Proxy ${r.status}: ${text}`);
+          return;
+        }
+        const blob = await r.blob();
         objectUrl = URL.createObjectURL(blob);
         setBlobUrl(objectUrl);
       })
-      .catch(() => setBlobUrl(null));
+      .catch((e) => setImgError(String(e)));
     return () => { if (objectUrl) URL.revokeObjectURL(objectUrl); };
   }, [fullUrl, videoSourceUrl, apiFetch]);
 
@@ -139,6 +147,8 @@ function Lightbox({ fullUrl, videoSourceUrl, onClose }: {
             className="rounded-lg"
             style={{ maxHeight: "90vh", maxWidth: "90vw" }}
           />
+        ) : imgError ? (
+          <div className="text-white/60 text-sm text-center max-w-sm">{imgError}</div>
         ) : (
           <div className="w-16 h-16 rounded bg-zinc-700 animate-pulse" />
         )}

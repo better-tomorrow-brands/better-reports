@@ -1886,7 +1886,7 @@ export default function SettingsPage() {
                 Used as the fallback symbol for orders with no currency
                 recorded. The currency symbol shown in reports and scorecards.
               </p>
-              <div className="flex flex-col gap-4">
+              <div className="flex items-center gap-3">
                 <select
                   value={displayCurrency}
                   onChange={(e) => setDisplayCurrency(e.target.value)}
@@ -1910,38 +1910,36 @@ export default function SettingsPage() {
                     </option>
                   ))}
                 </select>
-                <div>
-                  <button
-                    onClick={async () => {
-                      setSavingPreferences(true);
-                      try {
-                        const res = await apiFetch("/api/settings", {
-                          method: "POST",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({
-                            preferences: { displayCurrency },
-                          }),
+                <button
+                  onClick={async () => {
+                    setSavingPreferences(true);
+                    try {
+                      const res = await apiFetch("/api/settings", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({
+                          preferences: { displayCurrency },
+                        }),
+                      });
+                      if (res.ok)
+                        setMessage({
+                          type: "success",
+                          text: "Preferences saved.",
                         });
-                        if (res.ok)
-                          setMessage({
-                            type: "success",
-                            text: "Preferences saved.",
-                          });
-                        else
-                          setMessage({
-                            type: "error",
-                            text: "Failed to save preferences.",
-                          });
-                      } finally {
-                        setSavingPreferences(false);
-                      }
-                    }}
-                    disabled={savingPreferences}
-                    className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
-                  >
-                    {savingPreferences ? "Saving..." : "Save"}
-                  </button>
-                </div>
+                      else
+                        setMessage({
+                          type: "error",
+                          text: "Failed to save preferences.",
+                        });
+                    } finally {
+                      setSavingPreferences(false);
+                    }
+                  }}
+                  disabled={savingPreferences}
+                  className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                >
+                  {savingPreferences ? "Saving..." : "Save"}
+                </button>
               </div>
             </div>
 
