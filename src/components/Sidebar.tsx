@@ -11,7 +11,7 @@ const navLinks = [
   { href: "/reports", label: "Reports" },
   { href: "/orders", label: "Orders", adminOnly: true },
   { href: "/customers", label: "Customers", adminOnly: true },
-  { href: "/inventory", label: "Products", adminOnly: true },
+  { href: "/products", label: "Products", adminOnly: true },
   { href: "/campaigns", label: "Campaigns", adminOnly: true },
   { href: "/users", label: "Users", adminOnly: true },
   { href: "/organizations", label: "Organizations", superAdminOnly: true },
