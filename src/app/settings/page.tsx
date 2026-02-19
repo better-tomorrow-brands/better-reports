@@ -1886,59 +1886,63 @@ export default function SettingsPage() {
                 Used as the fallback symbol for orders with no currency
                 recorded. The currency symbol shown in reports and scorecards.
               </p>
-              <select
-                value={displayCurrency}
-                onChange={(e) => setDisplayCurrency(e.target.value)}
-                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm w-48"
-              >
-                {[
-                  ["GBP", "£ GBP"],
-                  ["USD", "$ USD"],
-                  ["EUR", "€ EUR"],
-                  ["CAD", "CA$ CAD"],
-                  ["AUD", "A$ AUD"],
-                  ["NZD", "NZ$ NZD"],
-                  ["CHF", "CHF"],
-                  ["JPY", "¥ JPY"],
-                  ["SEK", "kr SEK"],
-                  ["NOK", "kr NOK"],
-                  ["DKK", "kr DKK"],
-                ].map(([code, label]) => (
-                  <option key={code} value={code}>
-                    {label}
-                  </option>
-                ))}
-              </select>
-              <button
-                onClick={async () => {
-                  setSavingPreferences(true);
-                  try {
-                    const res = await apiFetch("/api/settings", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json" },
-                      body: JSON.stringify({
-                        preferences: { displayCurrency },
-                      }),
-                    });
-                    if (res.ok)
-                      setMessage({
-                        type: "success",
-                        text: "Preferences saved.",
-                      });
-                    else
-                      setMessage({
-                        type: "error",
-                        text: "Failed to save preferences.",
-                      });
-                  } finally {
-                    setSavingPreferences(false);
-                  }
-                }}
-                disabled={savingPreferences}
-                className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
-              >
-                {savingPreferences ? "Saving..." : "Save"}
-              </button>
+              <div className="flex flex-col gap-4">
+                <select
+                  value={displayCurrency}
+                  onChange={(e) => setDisplayCurrency(e.target.value)}
+                  className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm w-48"
+                >
+                  {[
+                    ["GBP", "£ GBP"],
+                    ["USD", "$ USD"],
+                    ["EUR", "€ EUR"],
+                    ["CAD", "CA$ CAD"],
+                    ["AUD", "A$ AUD"],
+                    ["NZD", "NZ$ NZD"],
+                    ["CHF", "CHF"],
+                    ["JPY", "¥ JPY"],
+                    ["SEK", "kr SEK"],
+                    ["NOK", "kr NOK"],
+                    ["DKK", "kr DKK"],
+                  ].map(([code, label]) => (
+                    <option key={code} value={code}>
+                      {label}
+                    </option>
+                  ))}
+                </select>
+                <div>
+                  <button
+                    onClick={async () => {
+                      setSavingPreferences(true);
+                      try {
+                        const res = await apiFetch("/api/settings", {
+                          method: "POST",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({
+                            preferences: { displayCurrency },
+                          }),
+                        });
+                        if (res.ok)
+                          setMessage({
+                            type: "success",
+                            text: "Preferences saved.",
+                          });
+                        else
+                          setMessage({
+                            type: "error",
+                            text: "Failed to save preferences.",
+                          });
+                      } finally {
+                        setSavingPreferences(false);
+                      }
+                    }}
+                    disabled={savingPreferences}
+                    className="px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                  >
+                    {savingPreferences ? "Saving..." : "Save"}
+                  </button>
+                </div>
+              </div>
             </div>
 
             <div>

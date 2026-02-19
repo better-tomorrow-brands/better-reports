@@ -79,12 +79,12 @@ const METRIC_COLS: { key: keyof AdSetRow | keyof AdCreativeRow; label: string; f
 
 // ─── Lightbox ─────────────────────────────────────────────────────────────────
 
-function Lightbox({ fullUrl, videoSourceUrl, apiFetch, onClose }: {
+function Lightbox({ fullUrl, videoSourceUrl, onClose }: {
   fullUrl: string | null;
   videoSourceUrl: string | null;
-  apiFetch: (url: string) => Promise<Response>;
   onClose: () => void;
 }) {
+  const { apiFetch } = useOrg();
   const [blobUrl, setBlobUrl] = useState<string | null>(null);
 
   useEffect(() => {
@@ -149,7 +149,8 @@ function Lightbox({ fullUrl, videoSourceUrl, apiFetch, onClose }: {
 
 // ─── Ad thumbnail component ───────────────────────────────────────────────────
 
-function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string) => Promise<Response> }) {
+function AdThumbnail({ adId }: { adId: string }) {
+  const { apiFetch } = useOrg();
   const [thumbnailUrl, setThumbnailUrl] = useState<string | null | "loading">("loading");
   const [fullUrl, setFullUrl] = useState<string | null>(null);
   const [videoSourceUrl, setVideoSourceUrl] = useState<string | null>(null);
@@ -187,7 +188,7 @@ function AdThumbnail({ adId, apiFetch }: { adId: string; apiFetch: (url: string)
         <img src={thumbnailUrl} alt="Ad thumbnail" className="w-16 h-16 object-cover" />
       </button>
       {lightboxOpen && (
-        <Lightbox fullUrl={fullUrl} videoSourceUrl={videoSourceUrl} apiFetch={apiFetch} onClose={() => setLightboxOpen(false)} />
+        <Lightbox fullUrl={fullUrl} videoSourceUrl={videoSourceUrl} onClose={() => setLightboxOpen(false)} />
       )}
     </>
   );
@@ -256,7 +257,7 @@ function AdCreativesRow({
           {/* Ad name + thumbnail */}
           <td className="pl-10 pr-4 py-3 text-xs">
             <div className="flex items-start gap-3">
-              <AdThumbnail adId={ad.adId} apiFetch={apiFetch} />
+              <AdThumbnail adId={ad.adId} />
               <span className="text-zinc-600 dark:text-zinc-300 leading-snug pt-1 max-w-[200px]">{ad.ad || "—"}</span>
             </div>
           </td>
