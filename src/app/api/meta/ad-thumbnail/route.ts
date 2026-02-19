@@ -25,7 +25,7 @@ export async function GET(request: Request) {
     }
 
     const graphUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${adId}`);
-    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id,object_story_spec}");
+    graphUrl.searchParams.set("fields", "creative{thumbnail_url,image_url,video_id,asset_feed_spec{images}}");
     graphUrl.searchParams.set("access_token", settings.access_token);
 
     const res = await fetch(graphUrl.toString());
@@ -39,17 +39,41 @@ export async function GET(request: Request) {
     const videoId = creative?.video_id || null;
     const creativeId = creative?.id || null;
 
-    let fullUrl: string | null = thumbnailUrl;
+    let fullUrl: string | null = null;
     let videoSourceUrl: string | null = null;
 
-    // Fetch a larger thumbnail by calling the creative directly with size params
-    if (creativeId) {
+    // Try asset_feed_spec images first — these are the raw uploaded variants
+    const feedImages: Array<{ hash: string }> = creative?.asset_feed_spec?.images ?? [];
+    if (feedImages.length > 0 && settings.ad_account_id) {
+      try {
+        const hashes = feedImages.map((i) => i.hash);
+        const imgUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${settings.ad_account_id}/adimages`);
+        imgUrl.searchParams.set("hashes", JSON.stringify(hashes));
+        imgUrl.searchParams.set("fields", "url,width,height,url_128");
+        imgUrl.searchParams.set("access_token", settings.access_token);
+        const iRes = await fetch(imgUrl.toString());
+        if (iRes.ok) {
+          const iData = await iRes.json();
+          const images: Array<{ url: string; width: number; height: number }> = Object.values(iData.data ?? iData ?? {});
+          if (images.length > 0) {
+            // Pick the image whose aspect ratio is closest to 1:1 (square)
+            const scored = images
+              .filter((img) => img.url && img.width && img.height)
+              .map((img) => ({ ...img, ratio: Math.min(img.width, img.height) / Math.max(img.width, img.height) }))
+              .sort((a, b) => b.ratio - a.ratio); // highest ratio = most square
+            if (scored.length > 0) fullUrl = scored[0].url;
+          }
+        }
+      } catch { /* fall through */ }
+    }
+
+    // Fall back to fetching a large thumbnail from the creative endpoint
+    if (!fullUrl && creativeId) {
       try {
         const fullThumbUrl = new URL(`https://graph.facebook.com/${API_VERSION}/${creativeId}`);
         fullThumbUrl.searchParams.set("fields", "thumbnail_url");
         fullThumbUrl.searchParams.set("thumbnail_width", "1080");
         fullThumbUrl.searchParams.set("thumbnail_height", "1080");
-        // Note: proxy strips the stp crop param to get full resolution
         fullThumbUrl.searchParams.set("access_token", settings.access_token);
         const tRes = await fetch(fullThumbUrl.toString());
         if (tRes.ok) {
@@ -58,6 +82,8 @@ export async function GET(request: Request) {
         }
       } catch { /* fall through */ }
     }
+
+    if (!fullUrl) fullUrl = thumbnailUrl;
 
     if (videoId) {
       // Video ad — fetch direct MP4 source
