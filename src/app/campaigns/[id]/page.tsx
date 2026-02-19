@@ -439,7 +439,7 @@ function AdCreativesRow({
   if (loading) {
     return (
       <tr>
-        <td colSpan={METRIC_COLS.length + 2} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3">
+        <td colSpan={METRIC_COLS.length + 1} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3">
           <div className="h-4 w-32 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
         </td>
       </tr>
@@ -449,7 +449,7 @@ function AdCreativesRow({
   if (!rows || rows.length === 0) {
     return (
       <tr>
-        <td colSpan={METRIC_COLS.length + 2} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
+        <td colSpan={METRIC_COLS.length + 1} className="bg-zinc-50 dark:bg-zinc-900 px-4 py-3 text-xs text-zinc-400">
           No ads found for this ad set.
         </td>
       </tr>
@@ -483,13 +483,11 @@ function AdCreativesRow({
                 {col.fmt((ad as unknown as Record<string, number>)[col.key] ?? 0)}
               </td>
             ))}
-            {/* placeholder for the → button column */}
-            <td className="px-2 py-3" />
           </tr>
           {/* Expanded chart row */}
           {expandedAd === ad.adId && (
             <tr key={`ad-chart-${ad.adId}`}>
-              <td colSpan={METRIC_COLS.length + 2} className="p-0 border-b border-zinc-100 dark:border-zinc-800">
+              <td colSpan={METRIC_COLS.length + 1} className="p-0 border-b border-zinc-100 dark:border-zinc-800">
                 <AdCreativeChart adId={ad.adId} from={from} to={to} />
               </td>
             </tr>
@@ -666,21 +664,20 @@ export default function CampaignDetailPage() {
                             {col.label}
                           </th>
                         ))}
-                        <th className="px-2 py-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
                       {adsetsLoading ? (
                         [...Array(4)].map((_, i) => (
                           <tr key={i}>
-                            <td colSpan={METRIC_COLS.length + 2} className="px-4 py-3">
+                            <td colSpan={METRIC_COLS.length + 1} className="px-4 py-3">
                               <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
                             </td>
                           </tr>
                         ))
                       ) : adsets.length === 0 ? (
                         <tr>
-                          <td colSpan={METRIC_COLS.length + 2} className="px-4 py-8 text-center text-zinc-400 text-xs">
+                          <td colSpan={METRIC_COLS.length + 1} className="px-4 py-8 text-center text-zinc-400 text-xs">
                             No ad set data found for this date range.
                           </td>
                         </tr>
@@ -704,6 +701,15 @@ export default function CampaignDetailPage() {
                                   <span className="text-sm font-medium text-zinc-800 dark:text-zinc-100 max-w-[220px] truncate">
                                     {row.adset || "—"}
                                   </span>
+                                  <button
+                                    onClick={(e) => { e.stopPropagation(); router.push(`/campaigns/${id}/adsets/${row.adsetId}`); }}
+                                    className="p-1 rounded text-zinc-300 hover:text-zinc-600 dark:text-zinc-600 dark:hover:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors shrink-0"
+                                    title="Open ad set detail"
+                                  >
+                                    <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
+                                    </svg>
+                                  </button>
                                 </div>
                               </td>
                               {METRIC_COLS.map((col) => (
@@ -711,18 +717,6 @@ export default function CampaignDetailPage() {
                                   {col.fmt((row as unknown as Record<string, number>)[col.key] ?? 0)}
                                 </td>
                               ))}
-                              {/* Navigate to ad set detail page */}
-                              <td className="px-2 py-3" onClick={(e) => e.stopPropagation()}>
-                                <button
-                                  onClick={() => router.push(`/campaigns/${id}/adsets/${row.adsetId}`)}
-                                  className="p-1 rounded text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-200 hover:bg-zinc-100 dark:hover:bg-zinc-700 transition-colors"
-                                  title="Open ad set detail"
-                                >
-                                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                                  </svg>
-                                </button>
-                              </td>
                             </tr>
 
                             {/* Expanded ads sub-rows */}
