@@ -386,6 +386,7 @@ export default function AdSetDetailPage() {
   const [expandedAd, setExpandedAd] = useState<string | null>(null);
 
   const [notebook, setNotebook] = useState("");
+  const [tab, setTab] = useState<"charts" | "notebook">("charts");
 
   // ── Load campaign + adset name ───────────────────────────────────────────────
   useEffect(() => {
@@ -512,98 +513,119 @@ export default function AdSetDetailPage() {
 
       {/* Content */}
       <div className="page-content">
-        <div className="space-y-6">
-          {/* Ad set performance chart */}
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">Performance over time</h2>
-            <MetricsChart rows={chartRows} loading={chartLoading} storageKey={`adset-chart-series-${adsetId}`} />
+        <div className="space-y-4">
+          {/* Tab bar */}
+          <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
+            {(["charts", "notebook"] as const).map((t) => (
+              <button
+                key={t}
+                onClick={() => setTab(t)}
+                className={`px-4 py-2 text-sm font-medium capitalize transition-colors border-b-2 -mb-px ${
+                  tab === t
+                    ? "border-zinc-900 dark:border-zinc-100 text-zinc-900 dark:text-zinc-100"
+                    : "border-transparent text-zinc-500 hover:text-zinc-800 dark:hover:text-zinc-200"
+                }`}
+              >
+                {t.charAt(0).toUpperCase() + t.slice(1)}
+              </button>
+            ))}
           </div>
 
-          {/* Ad creatives table */}
-          <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
-            <table className="min-w-full text-sm">
-              <thead>
-                <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
-                  <th className="pl-4 pr-4 py-3 text-left text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                    Ad Creative
-                  </th>
-                  {METRIC_COLS.map((col) => (
-                    <th key={col.key} className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
-                      {col.label}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
-                {creativesLoading ? (
-                  [...Array(3)].map((_, i) => (
-                    <tr key={i}>
-                      <td colSpan={METRIC_COLS.length + 1} className="px-4 py-3">
-                        <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
-                      </td>
+          {tab === "charts" && (
+            <div className="space-y-6">
+              {/* Ad set performance chart */}
+              <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+                <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-4">Performance over time</h2>
+                <MetricsChart rows={chartRows} loading={chartLoading} storageKey={`adset-chart-series-${adsetId}`} />
+              </div>
+
+              {/* Ad creatives table */}
+              <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
+                <table className="min-w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-zinc-200 dark:border-zinc-700 bg-zinc-50 dark:bg-zinc-800/50">
+                      <th className="pl-4 pr-4 py-3 text-left text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                        Ad Creative
+                      </th>
+                      {METRIC_COLS.map((col) => (
+                        <th key={col.key} className="px-4 py-3 text-right text-xs font-semibold text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+                          {col.label}
+                        </th>
+                      ))}
                     </tr>
-                  ))
-                ) : creatives.length === 0 ? (
-                  <tr>
-                    <td colSpan={METRIC_COLS.length + 1} className="px-4 py-8 text-center text-zinc-400 text-xs">
-                      No ad creative data found for this date range.
-                    </td>
-                  </tr>
-                ) : (
-                  creatives.map((ad) => (
-                    <>
-                      <tr
-                        key={`ad-${ad.adId}`}
-                        className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors"
-                        onClick={() => setExpandedAd(expandedAd === ad.adId ? null : ad.adId)}
-                      >
-                        {/* Ad name + thumbnail */}
-                        <td className="pl-4 pr-2 py-3 text-xs">
-                          <div className="flex items-start gap-3">
-                            <svg
-                              className={`w-3 h-3 mt-1 shrink-0 text-zinc-400 transition-transform ${expandedAd === ad.adId ? "rotate-90" : ""}`}
-                              fill="none" stroke="currentColor" viewBox="0 0 24 24"
-                            >
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
-                            </svg>
-                            <AdThumbnail adId={ad.adId} />
-                            <span className="text-zinc-600 dark:text-zinc-300 leading-snug pt-1 max-w-[200px] truncate">
-                              {ad.ad || "—"}
-                            </span>
-                          </div>
-                        </td>
-                        {METRIC_COLS.map((col) => (
-                          <td key={col.key} className="px-4 py-3 text-xs text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap tabular-nums">
-                            {col.fmt((ad as unknown as Record<string, number>)[col.key] ?? 0)}
-                          </td>
-                        ))}
-                      </tr>
-                      {/* Expanded chart row */}
-                      {expandedAd === ad.adId && (
-                        <tr key={`ad-chart-${ad.adId}`}>
-                          <td colSpan={METRIC_COLS.length + 1} className="p-0 border-b border-zinc-100 dark:border-zinc-800">
-                            <AdCreativeChart adId={ad.adId} from={fromStr} to={toStr} />
+                  </thead>
+                  <tbody className="divide-y divide-zinc-100 dark:divide-zinc-800">
+                    {creativesLoading ? (
+                      [...Array(3)].map((_, i) => (
+                        <tr key={i}>
+                          <td colSpan={METRIC_COLS.length + 1} className="px-4 py-3">
+                            <div className="h-4 w-full bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
                           </td>
                         </tr>
-                      )}
-                    </>
-                  ))
-                )}
-              </tbody>
-            </table>
-          </div>
+                      ))
+                    ) : creatives.length === 0 ? (
+                      <tr>
+                        <td colSpan={METRIC_COLS.length + 1} className="px-4 py-8 text-center text-zinc-400 text-xs">
+                          No ad creative data found for this date range.
+                        </td>
+                      </tr>
+                    ) : (
+                      creatives.map((ad) => (
+                        <>
+                          <tr
+                            key={`ad-${ad.adId}`}
+                            className="cursor-pointer hover:bg-zinc-50 dark:hover:bg-zinc-800/40 transition-colors"
+                            onClick={() => setExpandedAd(expandedAd === ad.adId ? null : ad.adId)}
+                          >
+                            {/* Ad name + thumbnail */}
+                            <td className="pl-4 pr-2 py-3 text-xs">
+                              <div className="flex items-start gap-3">
+                                <svg
+                                  className={`w-3 h-3 mt-1 shrink-0 text-zinc-400 transition-transform ${expandedAd === ad.adId ? "rotate-90" : ""}`}
+                                  fill="none" stroke="currentColor" viewBox="0 0 24 24"
+                                >
+                                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M9 5l7 7-7 7" />
+                                </svg>
+                                <AdThumbnail adId={ad.adId} />
+                                <span className="text-zinc-600 dark:text-zinc-300 leading-snug pt-1 max-w-[200px] truncate">
+                                  {ad.ad || "—"}
+                                </span>
+                              </div>
+                            </td>
+                            {METRIC_COLS.map((col) => (
+                              <td key={col.key} className="px-4 py-3 text-xs text-right text-zinc-700 dark:text-zinc-300 whitespace-nowrap tabular-nums">
+                                {col.fmt((ad as unknown as Record<string, number>)[col.key] ?? 0)}
+                              </td>
+                            ))}
+                          </tr>
+                          {/* Expanded chart row */}
+                          {expandedAd === ad.adId && (
+                            <tr key={`ad-chart-${ad.adId}`}>
+                              <td colSpan={METRIC_COLS.length + 1} className="p-0 border-b border-zinc-100 dark:border-zinc-800">
+                                <AdCreativeChart adId={ad.adId} from={fromStr} to={toStr} />
+                              </td>
+                            </tr>
+                          )}
+                        </>
+                      ))
+                    )}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
 
-          {/* Notebook */}
-          <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
-            <h2 className="text-sm font-semibold text-zinc-700 dark:text-zinc-300 mb-3">Notebook</h2>
-            <textarea
-              value={notebook}
-              onChange={(e) => setNotebook(e.target.value)}
-              placeholder="Notes, observations, and context for this ad set…"
-              className="w-full min-h-[120px] resize-y rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
-            />
-            <p className="text-xs text-zinc-400 mt-1.5">AI features will use this as context. (Persistence coming soon.)</p>
-          </div>
+          {tab === "notebook" && (
+            <div className="rounded-lg border border-zinc-200 dark:border-zinc-700 p-4">
+              <textarea
+                value={notebook}
+                onChange={(e) => setNotebook(e.target.value)}
+                placeholder="Notes, observations, and context for this ad set…"
+                className="w-full min-h-[240px] resize-y rounded-md border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 px-3 py-2 text-sm text-zinc-800 dark:text-zinc-200 placeholder-zinc-400 focus:outline-none focus:ring-2 focus:ring-zinc-400"
+              />
+              <p className="text-xs text-zinc-400 mt-1.5">AI features will use this as context. (Persistence coming soon.)</p>
+            </div>
+          )}
         </div>
       </div>
     </div>
