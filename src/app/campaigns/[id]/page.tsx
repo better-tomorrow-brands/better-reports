@@ -276,7 +276,7 @@ function AdCreativesRow({
 export default function CampaignDetailPage() {
   const { id } = useParams<{ id: string }>();
   const router = useRouter();
-  const { apiFetch } = useOrg();
+  const { apiFetch, currentOrg } = useOrg();
 
   const [campaign, setCampaign] = useState<Campaign | null>(null);
   const [campaignLoading, setCampaignLoading] = useState(true);
@@ -291,6 +291,7 @@ export default function CampaignDetailPage() {
 
   // ── Load campaign record ────────────────────────────────────────────────────
   useEffect(() => {
+    if (!currentOrg) return; // wait for org context to be ready before fetching
     setCampaignLoading(true);
     apiFetch("/api/campaigns")
       .then((r) => r.json())
@@ -300,7 +301,7 @@ export default function CampaignDetailPage() {
       })
       .catch(() => setCampaign(null))
       .finally(() => setCampaignLoading(false));
-  }, [id, apiFetch]);
+  }, [id, apiFetch, currentOrg]);
 
   // ── Load ad sets ────────────────────────────────────────────────────────────
   const loadAdsets = useCallback(async () => {
@@ -384,9 +385,9 @@ export default function CampaignDetailPage() {
               <div key={i} className="h-12 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" />
             ))}
           </div>
-        ) : !campaign ? (
+        ) : !campaign && !campaignLoading ? (
           <div className="pt-8 text-center text-zinc-400">Campaign not found.</div>
-        ) : (
+        ) : !campaign ? null : (
           <div className="overflow-x-auto rounded-lg border border-zinc-200 dark:border-zinc-700">
             <table className="min-w-full text-sm">
               <thead>

@@ -1935,7 +1935,7 @@ export default function SettingsPage() {
                   }
                 }}
                 disabled={savingPreferences}
-                className="mt-3 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
+                className="mt-5 px-4 py-2 bg-zinc-900 dark:bg-zinc-100 text-white dark:text-zinc-900 rounded-md text-sm font-medium hover:opacity-80 disabled:opacity-50"
               >
                 {savingPreferences ? "Saving..." : "Save"}
               </button>
