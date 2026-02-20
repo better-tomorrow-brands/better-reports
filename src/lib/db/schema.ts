@@ -551,3 +551,32 @@ export const campaignMessagesRelations = relations(campaignMessages, ({ one }) =
     references: [customers.id],
   }),
 }));
+
+// ── AI Creatives ───────────────────────────────────────
+export const creatives = pgTable("creatives", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
+  userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
+  prompt: text("prompt").notNull(),
+  imageUrl: text("image_url").notNull(),
+  campaignGoal: text("campaign_goal").notNull(),
+  adAngle: text("ad_angle"),
+  productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
+  brandGuidelines: text("brand_guidelines"), // Store brand guidelines directly instead of reference
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+});
+
+export const creativesRelations = relations(creatives, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [creatives.orgId],
+    references: [organizations.id],
+  }),
+  user: one(users, {
+    fields: [creatives.userId],
+    references: [users.id],
+  }),
+  product: one(products, {
+    fields: [creatives.productId],
+    references: [products.id],
+  }),
+}));
