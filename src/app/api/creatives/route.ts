@@ -30,6 +30,7 @@ export async function GET(request: Request) {
         customPrompt: row.customPrompt,
         brandGuidelines: row.brandGuidelines,
         productId: row.productId,
+        productImageUrls: row.productImageUrls,
         headline: row.headline,
         primaryText: row.primaryText,
         description: row.description,
