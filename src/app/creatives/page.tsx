@@ -4,10 +4,18 @@ import { useState, useEffect } from "react";
 import { useOrg } from "@/contexts/OrgContext";
 import { Loader2, Download, Sparkles, Trash2, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 
+interface ProductImage {
+  id: number;
+  imageUrl: string;
+  displayOrder: number | null;
+  isPrimary: boolean | null;
+}
+
 interface Product {
   id: number;
   productName: string | null;
   sku: string;
+  images: ProductImage[];
 }
 
 interface GeneratedCreative {
@@ -20,6 +28,7 @@ interface GeneratedCreative {
   customPrompt: string | null;
   brandGuidelines: string | null;
   productId: number | null;
+  productImageUrls: string | null;
   headline: string | null;
   primaryText: string | null;
   description: string | null;
@@ -38,6 +47,7 @@ export default function CreativesPage() {
 
   // Form state
   const [selectedProduct, setSelectedProduct] = useState<number | null>(null);
+  const [selectedProductImageIds, setSelectedProductImageIds] = useState<Set<number>>(new Set());
   const [brandGuidelines, setBrandGuidelines] = useState("");
   const [campaignGoal, setCampaignGoal] = useState("");
   const [targetCta, setTargetCta] = useState("");
@@ -96,6 +106,21 @@ export default function CreativesPage() {
     setExpandedCreatives(newExpanded);
   }
 
+  function toggleProductImage(imageId: number) {
+    const newSelected = new Set(selectedProductImageIds);
+    if (newSelected.has(imageId)) {
+      newSelected.delete(imageId);
+    } else {
+      newSelected.add(imageId);
+    }
+    setSelectedProductImageIds(newSelected);
+  }
+
+  function handleProductChange(productId: number | null) {
+    setSelectedProduct(productId);
+    setSelectedProductImageIds(new Set()); // Clear selected images when product changes
+  }
+
   function reusePrompt(creative: GeneratedCreative) {
     setCampaignGoal(creative.campaignGoal);
     setTargetCta(creative.targetCta || "");
@@ -132,11 +157,22 @@ export default function CreativesPage() {
       if (customPrompt) formData.append("customPrompt", customPrompt);
       formData.append("numVariations", numVariations.toString());
 
-      // Add context images
+      // Add context images (user uploads)
       contextImages.forEach((file, index) => {
         formData.append(`contextImage${index}`, file);
       });
       formData.append("numContextImages", contextImages.length.toString());
+
+      // Add selected product image URLs
+      if (selectedProduct && selectedProductImageIds.size > 0) {
+        const selectedProductData = products.find(p => p.id === selectedProduct);
+        if (selectedProductData) {
+          const selectedImageUrls = selectedProductData.images
+            .filter(img => selectedProductImageIds.has(img.id))
+            .map(img => img.imageUrl);
+          formData.append("productImageUrls", JSON.stringify(selectedImageUrls));
+        }
+      }
 
       const res = await apiFetch("/api/creatives/generate", {
         method: "POST",
@@ -241,7 +277,7 @@ export default function CreativesPage() {
               </label>
               <select
                 value={selectedProduct || ""}
-                onChange={(e) => setSelectedProduct(e.target.value ? Number(e.target.value) : null)}
+                onChange={(e) => handleProductChange(e.target.value ? Number(e.target.value) : null)}
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
               >
                 <option value="">No specific product</option>
@@ -251,6 +287,42 @@ export default function CreativesPage() {
                   </option>
                 ))}
               </select>
+
+              {/* Product Images Thumbnails */}
+              {selectedProduct && selectedProductData && selectedProductData.images.length > 0 && (
+                <div className="mt-3">
+                  <p className="text-xs text-zinc-500 mb-2">
+                    Select product images to include ({selectedProductImageIds.size} selected)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    {selectedProductData.images.map((image) => (
+                      <button
+                        key={image.id}
+                        type="button"
+                        onClick={() => toggleProductImage(image.id)}
+                        className={`relative w-20 h-20 rounded border-2 transition-all ${
+                          selectedProductImageIds.has(image.id)
+                            ? 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-900'
+                            : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
+                        }`}
+                      >
+                        <img
+                          src={image.imageUrl}
+                          alt={`Product image ${image.displayOrder}`}
+                          className="w-full h-full object-cover rounded"
+                        />
+                        {selectedProductImageIds.has(image.id) && (
+                          <div className="absolute inset-0 bg-purple-500/20 rounded flex items-center justify-center">
+                            <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Brand Guidelines */}
@@ -504,6 +576,28 @@ export default function CreativesPage() {
                               <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.customPrompt}</p>
                             </div>
                           )}
+                          {creative.productImageUrls && (() => {
+                            try {
+                              const imageUrls = JSON.parse(creative.productImageUrls);
+                              return imageUrls.length > 0 ? (
+                                <div>
+                                  <span className="font-semibold text-zinc-600 dark:text-zinc-400">Product Images Used:</span>
+                                  <div className="flex flex-wrap gap-2 mt-2">
+                                    {imageUrls.map((url: string, idx: number) => (
+                                      <img
+                                        key={idx}
+                                        src={url}
+                                        alt={`Product ${idx + 1}`}
+                                        className="w-20 h-20 object-cover rounded border border-zinc-300 dark:border-zinc-700"
+                                      />
+                                    ))}
+                                  </div>
+                                </div>
+                              ) : null;
+                            } catch {
+                              return null;
+                            }
+                          })()}
                           <div>
                             <span className="font-semibold text-zinc-600 dark:text-zinc-400">Final Prompt:</span>
                             <p className="text-zinc-800 dark:text-zinc-200 mt-1 font-mono text-[10px]">{creative.prompt}</p>

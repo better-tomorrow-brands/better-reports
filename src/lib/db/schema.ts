@@ -586,6 +586,8 @@ export const creatives = pgTable("creatives", {
   primaryText: text("primary_text"), // Main body copy (125 chars for Facebook, 280 for Twitter)
   description: text("description"), // Secondary description text
   callToAction: text("call_to_action"), // CTA text (e.g., "Shop Now", "Learn More")
+  // Product images used (JSON array of URLs)
+  productImageUrls: text("product_image_urls"), // JSON array of product image URLs used in generation
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

@@ -1,18 +1,40 @@
 import { NextResponse } from "next/server";
 import { eq, and } from "drizzle-orm";
 import { db } from "@/lib/db";
-import { products } from "@/lib/db/schema";
+import { products, productImages } from "@/lib/db/schema";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 
 export async function GET(request: Request) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
-    const rows = await db
+    const productsData = await db
       .select()
       .from(products)
       .where(eq(products.orgId, orgId))
       .orderBy(products.sku);
-    return NextResponse.json(rows);
+
+    // Fetch images for all products
+    const productsWithImages = await Promise.all(
+      productsData.map(async (product) => {
+        const images = await db
+          .select()
+          .from(productImages)
+          .where(eq(productImages.productId, product.id))
+          .orderBy(productImages.displayOrder);
+
+        return {
+          ...product,
+          images: images.map(img => ({
+            id: img.id,
+            imageUrl: img.imageUrl,
+            displayOrder: img.displayOrder,
+            isPrimary: img.isPrimary,
+          })),
+        };
+      })
+    );
+
+    return NextResponse.json(productsWithImages);
   } catch (error) {
     if (error instanceof OrgAuthError) {
       return NextResponse.json({ error: error.message }, { status: error.status });

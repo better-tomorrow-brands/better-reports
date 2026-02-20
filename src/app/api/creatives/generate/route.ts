@@ -48,6 +48,8 @@ export async function POST(request: Request) {
     const customPrompt = formData.get("customPrompt") as string | null;
     const numVariations = Number(formData.get("numVariations") || "1");
     const numContextImages = Number(formData.get("numContextImages") || "0");
+    const productImageUrlsJson = formData.get("productImageUrls") as string | null;
+    const productImageUrls: string[] = productImageUrlsJson ? JSON.parse(productImageUrlsJson) : [];
 
     // Process uploaded images - convert to base64 for Gemini
     const contextImageParts: any[] = [];
@@ -65,6 +67,26 @@ export async function POST(request: Request) {
             data: base64,
           },
         });
+      }
+    }
+
+    // Process selected product images from URLs
+    for (const imageUrl of productImageUrls) {
+      try {
+        const imageResponse = await fetch(imageUrl);
+        const imageBuffer = await imageResponse.arrayBuffer();
+        const base64Image = Buffer.from(imageBuffer).toString("base64");
+        const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
+
+        contextImageParts.push({
+          inlineData: {
+            mimeType,
+            data: base64Image,
+          },
+        });
+      } catch (fetchError) {
+        console.error(`Failed to fetch product image from ${imageUrl}:`, fetchError);
+        // Continue without this image
       }
     }
 
@@ -308,6 +330,7 @@ Return ONLY the JSON object, no other text.`;
             customPrompt: customPrompt || null,
             productId: productId || null,
             brandGuidelines: brandGuidelines || null,
+            productImageUrls: productImageUrls.length > 0 ? JSON.stringify(productImageUrls) : null,
             headline: adCopy.headline,
             primaryText: adCopy.primaryText,
             description: adCopy.description,
@@ -325,6 +348,7 @@ Return ONLY the JSON object, no other text.`;
           customPrompt: creative.customPrompt,
           brandGuidelines: creative.brandGuidelines,
           productId: creative.productId,
+          productImageUrls: creative.productImageUrls,
           headline: creative.headline,
           primaryText: creative.primaryText,
           description: creative.description,
