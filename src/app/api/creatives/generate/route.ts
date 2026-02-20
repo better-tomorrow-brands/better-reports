@@ -79,6 +79,7 @@ export async function POST(request: Request) {
     prompt += `Scene: ${campaignGoal}. `;
 
     // Add product context if selected
+    let brandName: string | null = null;
     if (productId) {
       const productRows = await db
         .select()
@@ -88,6 +89,7 @@ export async function POST(request: Request) {
 
       if (productRows.length) {
         const productName = productRows[0].productName || productRows[0].sku;
+        brandName = productRows[0].brand;
         prompt += `Feature the product "${productName}" prominently in the composition. `;
       }
     }
@@ -96,6 +98,13 @@ export async function POST(request: Request) {
     if (brandGuidelines?.trim()) {
       const visualKeywords = brandGuidelines.slice(0, 200);
       prompt += `Visual style and branding: ${visualKeywords}. `;
+    }
+
+    // Important: Control text/branding in the image
+    if (brandName) {
+      prompt += `IMPORTANT: If any text or brand name appears in the image, it must be "${brandName}" only. Do not create fictional brand names. `;
+    } else {
+      prompt += `IMPORTANT: Do not add any text, brand names, or fictional company names to the image. Keep it clean and text-free for text overlay. `;
     }
 
     // Add ad angle as creative direction
