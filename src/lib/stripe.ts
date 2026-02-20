@@ -10,17 +10,16 @@ export const stripe = new Stripe(process.env.STRIPE_SECRET_KEY, {
 });
 
 /**
- * Stripe Price ID → Plan Tier mapping
- * Configure these after creating products in Stripe Dashboard
+ * Stripe Product ID → Plan Tier mapping
+ * Monthly subscription products configured in Stripe Dashboard
+ * Annual products will be added later
  */
 export const STRIPE_PRICE_TO_TIER: Record<string, string> = {
-  // Example (replace with your actual Stripe price IDs):
-  // price_xxx_starter_monthly: "starter",
-  // price_xxx_starter_yearly: "starter",
-  // price_xxx_growth_monthly: "growth",
-  // price_xxx_growth_yearly: "growth",
-  // price_xxx_pro_monthly: "pro",
-  // price_xxx_pro_yearly: "pro",
+  // Monthly products
+  prod_U0tNRKhw623wDI: "starter",
+  prod_U0tOHqzzerOuIG: "growth",
+  prod_U0tQAE1pcCd9zU: "pro",
+  prod_U0tQfxh3gufOS6: "enterprise",
 };
 
 export function getTierFromPriceId(priceId: string): string {
