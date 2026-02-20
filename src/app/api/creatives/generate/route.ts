@@ -174,51 +174,59 @@ export async function POST(request: Request) {
           throw new Error("No image data in Gemini response");
         }
 
-        // Generate ad copy using Gemini text model
-        const textModel = genAI.getGenerativeModel({
-          model: "gemini-1.5-pro",
-          safetySettings: [
-            {
-              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
-              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-            {
-              category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
-              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-            {
-              category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
-              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
-            },
-            {
-              category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
-              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
-            },
-          ],
-        });
+        // Generate ad copy using Gemini text model (non-blocking - if it fails, continue with image only)
+        let adCopy = {
+          headline: null,
+          primaryText: null,
+          description: null,
+          callToAction: null,
+        };
 
-        // Build ad copy prompt
-        let adCopyPrompt = `You are an expert advertising copywriter. Generate compelling ad copy for a social media advertisement with the following details:
+        try {
+          const textModel = genAI.getGenerativeModel({
+            model: "gemini-1.5-pro",
+            safetySettings: [
+              {
+                category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+                threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+              },
+              {
+                category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+                threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+              },
+            ],
+          });
+
+          // Build ad copy prompt
+          let adCopyPrompt = `You are an expert advertising copywriter. Generate compelling ad copy for a social media advertisement with the following details:
 
 Campaign Goal: ${campaignGoal}`;
 
-        if (targetCta) {
-          adCopyPrompt += `\nTarget Action/CTA: ${targetCta}`;
-        }
+          if (targetCta) {
+            adCopyPrompt += `\nTarget Action/CTA: ${targetCta}`;
+          }
 
-        if (adAngle) {
-          adCopyPrompt += `\nAd Angle: ${adAngle}`;
-        }
+          if (adAngle) {
+            adCopyPrompt += `\nAd Angle: ${adAngle}`;
+          }
 
-        if (brandGuidelines) {
-          adCopyPrompt += `\nBrand Guidelines: ${brandGuidelines}`;
-        }
+          if (brandGuidelines) {
+            adCopyPrompt += `\nBrand Guidelines: ${brandGuidelines}`;
+          }
 
-        if (customPrompt) {
-          adCopyPrompt += `\nAdditional Context: ${customPrompt}`;
-        }
+          if (customPrompt) {
+            adCopyPrompt += `\nAdditional Context: ${customPrompt}`;
+          }
 
-        adCopyPrompt += `\n\nGenerate the following ad copy components in JSON format:
+          adCopyPrompt += `\n\nGenerate the following ad copy components in JSON format:
 {
   "headline": "A punchy, attention-grabbing headline (25-40 characters)",
   "primaryText": "The main ad copy that tells the story and creates desire (100-125 characters for optimal Facebook/Instagram performance)",
@@ -237,31 +245,28 @@ Guidelines:
 
 Return ONLY the JSON object, no other text.`;
 
-        const adCopyResult = await textModel.generateContent(adCopyPrompt);
-        const adCopyResponse = adCopyResult.response;
+          const adCopyResult = await textModel.generateContent(adCopyPrompt);
+          const adCopyResponse = adCopyResult.response;
 
-        // Parse the ad copy JSON response
-        let adCopy = {
-          headline: null,
-          primaryText: null,
-          description: null,
-          callToAction: null,
-        };
-
-        try {
-          const adCopyText = adCopyResponse.text();
-          // Remove markdown code blocks if present
-          const cleanedText = adCopyText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-          const parsed = JSON.parse(cleanedText);
-          adCopy = {
-            headline: parsed.headline || null,
-            primaryText: parsed.primaryText || null,
-            description: parsed.description || null,
-            callToAction: parsed.callToAction || null,
-          };
-        } catch (parseError) {
-          console.error("Failed to parse ad copy JSON:", parseError);
-          // Continue with null values rather than failing the entire generation
+          // Parse the ad copy JSON response
+          try {
+            const adCopyText = adCopyResponse.text();
+            // Remove markdown code blocks if present
+            const cleanedText = adCopyText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+            const parsed = JSON.parse(cleanedText);
+            adCopy = {
+              headline: parsed.headline || null,
+              primaryText: parsed.primaryText || null,
+              description: parsed.description || null,
+              callToAction: parsed.callToAction || null,
+            };
+          } catch (parseError) {
+            console.error("Failed to parse ad copy JSON:", parseError);
+            // Continue with null values rather than failing the entire generation
+          }
+        } catch (adCopyError: any) {
+          console.error("Failed to generate ad copy (continuing with image only):", adCopyError.message);
+          // Continue with null ad copy values - don't fail the entire generation
         }
 
         // Convert base64 to buffer
