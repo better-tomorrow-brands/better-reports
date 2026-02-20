@@ -3,7 +3,7 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { products, creatives } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { uploadToSpaces, generateImageKey } from "@/lib/storage";
+import { uploadToSpaces, generateImageKey, isSpacesConfigured } from "@/lib/storage";
 import { GoogleGenerativeAI, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 
 /**
@@ -290,18 +290,28 @@ Return ONLY the JSON object, no other text.`;
         // Convert base64 to buffer
         const imageBuffer = Buffer.from(imageData, "base64");
 
-        // TODO: Re-enable DO Spaces upload after fixing credentials
-        // For now, return the base64 data URL directly so we can see the generated image
-        const dataUrl = `data:image/png;base64,${imageData}`;
+        // Upload to DO Spaces if configured, otherwise use base64 data URL
+        let imageUrl: string;
+        if (isSpacesConfigured()) {
+          try {
+            const key = generateImageKey(orgId);
+            imageUrl = await uploadToSpaces(imageBuffer, key, "image/png");
+          } catch (uploadError) {
+            console.error("DO Spaces upload failed, falling back to base64:", uploadError);
+            imageUrl = `data:image/png;base64,${imageData}`;
+          }
+        } else {
+          imageUrl = `data:image/png;base64,${imageData}`;
+        }
 
-        // Save to database with data URL (temporary) and ad copy
+        // Save to database with uploaded URL (or base64 fallback) and ad copy
         const [creative] = await db
           .insert(creatives)
           .values({
             orgId,
             userId,
             prompt,
-            imageUrl: dataUrl, // Store base64 data URL temporarily
+            imageUrl, // DO Spaces URL or base64 fallback
             campaignGoal,
             targetCta: targetCta || null,
             adAngle: adAngle || null,
@@ -318,7 +328,7 @@ Return ONLY the JSON object, no other text.`;
 
         generatedCreatives.push({
           id: creative.id.toString(),
-          imageUrl: dataUrl, // Return data URL so image displays immediately
+          imageUrl: creative.imageUrl, // Return uploaded URL or base64 fallback
           prompt: creative.prompt,
           campaignGoal: creative.campaignGoal,
           targetCta: creative.targetCta,

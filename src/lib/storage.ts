@@ -123,3 +123,25 @@ export function generateImageKey(orgId: number, prefix: string = "creatives"): s
   const random = Math.random().toString(36).substring(7);
   return `${prefix}/${orgId}/${timestamp}-${random}.jpg`;
 }
+
+/**
+ * Generate a unique key for a video
+ */
+export function generateVideoKey(orgId: number, prefix: string = "videos"): string {
+  const timestamp = Date.now();
+  const random = Math.random().toString(36).substring(7);
+  return `${prefix}/${orgId}/${timestamp}-${random}.mp4`;
+}
+
+/**
+ * Check if DO Spaces is configured
+ */
+export function isSpacesConfigured(): boolean {
+  return !!(
+    process.env.DO_SPACES_REGION &&
+    process.env.DO_SPACES_ENDPOINT &&
+    process.env.DO_SPACES_KEY &&
+    process.env.DO_SPACES_SECRET &&
+    process.env.DO_SPACES_BUCKET
+  );
+}
