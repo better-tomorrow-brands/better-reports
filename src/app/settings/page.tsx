@@ -1034,7 +1034,7 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-2xl mx-auto p-6">
+      <div className="max-w-4xl mx-auto p-6">
         <div className="h-8 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
 
         {/* Tab bar skeleton */}
@@ -1086,7 +1086,7 @@ export default function SettingsPage() {
   const tabs = allTabs.filter((t) => !t.superAdminOnly || userRole === "super_admin");
 
   return (
-    <div className="max-w-2xl mx-auto p-6">
+    <div className="max-w-4xl mx-auto p-6">
       <h1 className="text-2xl font-bold mb-6">Settings</h1>
 
       {message && (
