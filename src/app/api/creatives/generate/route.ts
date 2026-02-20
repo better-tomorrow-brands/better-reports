@@ -3,8 +3,8 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { products, creatives } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadAndUploadImage, generateImageKey, uploadToSpaces } from "@/lib/storage";
-import { GoogleGenerativeAI } from "@google/generative-ai";
+import { uploadToSpaces, generateImageKey } from "@/lib/storage";
+import { GoogleGenAI } from "@google/genai";
 
 /**
  * POST /api/creatives/generate
@@ -60,8 +60,8 @@ export async function POST(request: Request) {
 
         contextImageParts.push({
           inlineData: {
-            data: base64,
             mimeType: mimeType,
+            data: base64,
           },
         });
       }
@@ -107,80 +107,73 @@ export async function POST(request: Request) {
     prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
 
     // Initialize Google Generative AI
-    const genAI = new GoogleGenerativeAI(apiKey);
+    const ai = new GoogleGenAI({});
 
-    // Use Gemini 2.0 Flash Image model (Nano Banana)
-    // Note: As of the docs, gemini-2.0-flash-exp supports imagen-3.0-generate-001
-    const model = genAI.getGenerativeModel({
-      model: "gemini-2.0-flash-exp",
-      safetySettings: [
-        {
-          category: "HARM_CATEGORY_HARASSMENT",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE",
-        },
-        {
-          category: "HARM_CATEGORY_HATE_SPEECH",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE",
-        },
-        {
-          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-          threshold: "BLOCK_LOW_AND_ABOVE", // Strictest for adult content
-        },
-        {
-          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-          threshold: "BLOCK_MEDIUM_AND_ABOVE",
-        },
-      ],
-    });
-
-    // Generate creatives using Google Gemini Image
+    // Generate creatives using Google Gemini Image (Nano Banana)
     const generatedCreatives = [];
 
     for (let i = 0; i < numVariations; i++) {
       try {
-        // Build request parts
-        const parts: any[] = [];
+        // Build contents array - images first, then text (following the docs pattern)
+        const contents: any[] = [];
 
         // If we have context images, add them first
         if (contextImageParts.length > 0) {
-          parts.push(...contextImageParts);
+          contents.push(...contextImageParts);
         }
 
         // Add the text prompt
-        parts.push({ text: prompt });
+        contents.push({ text: prompt });
 
-        // Generate image using Gemini
-        const result = await model.generateContent({
-          contents: [{ role: "user", parts }],
-          generationConfig: {
-            temperature: 1.0,
-            topP: 0.95,
-            topK: 40,
-            maxOutputTokens: 8192,
-            responseMimeType: "image/jpeg", // Request image output
+        // Generate image using Gemini 2.5 Flash Image (Nano Banana)
+        const response = await ai.models.generateContent({
+          model: "gemini-2.5-flash-image",
+          contents: contents,
+          config: {
+            responseModalities: ['TEXT', 'IMAGE'],
+            imageConfig: {
+              aspectRatio: "16:9", // Good for social media ads
+            },
+            safetySettings: [
+              {
+                category: "HARM_CATEGORY_HARASSMENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_HATE_SPEECH",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+              {
+                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+                threshold: "BLOCK_LOW_AND_ABOVE", // Strictest for adult content
+              },
+              {
+                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+                threshold: "BLOCK_MEDIUM_AND_ABOVE",
+              },
+            ],
           },
         });
 
-        const response = result.response;
-
-        // Extract image from response
-        // Gemini returns images as base64 in the response
-        const candidate = response.candidates?.[0];
-        if (!candidate?.content?.parts?.[0]) {
-          throw new Error("No image generated from Gemini");
+        // Extract image from response (following docs pattern)
+        let imageData: string | null = null;
+        for (const part of response.candidates[0].content.parts) {
+          if (part.inlineData) {
+            imageData = part.inlineData.data;
+            break;
+          }
         }
 
-        const imagePart = candidate.content.parts.find((part: any) => part.inlineData);
-        if (!imagePart?.inlineData?.data) {
+        if (!imageData) {
           throw new Error("No image data in Gemini response");
         }
 
-        const base64Image = imagePart.inlineData.data;
-        const imageBuffer = Buffer.from(base64Image, "base64");
+        // Convert base64 to buffer
+        const imageBuffer = Buffer.from(imageData, "base64");
 
         // Upload to DigitalOcean Spaces for permanent storage
         const imageKey = generateImageKey(orgId, "creatives");
-        const permanentImageUrl = await uploadToSpaces(imageBuffer, imageKey, "image/jpeg");
+        const permanentImageUrl = await uploadToSpaces(imageBuffer, imageKey, "image/png");
 
         // Save to database with permanent URL
         const [creative] = await db
