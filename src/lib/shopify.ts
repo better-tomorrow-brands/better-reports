@@ -210,6 +210,9 @@ export async function upsertShopifyInventory(
 interface ShopifyVariantNode {
   sku: string | null;
   barcode: string | null;
+  image: {
+    url: string;
+  } | null;
   product: {
     id: string;
     title: string;
@@ -257,6 +260,9 @@ export async function syncShopifyProducts(
           node {
             sku
             barcode
+            image {
+              url
+            }
             product {
               id
               title
@@ -312,14 +318,15 @@ export async function syncShopifyProducts(
     if (!variants) break;
 
     for (const edge of variants.edges) {
-      const { sku, barcode, product } = edge.node;
+      const { sku, barcode, image, product } = edge.node;
       if (!sku?.trim()) {
         skipped++;
         continue;
       }
 
       const trimmedSku = sku.trim();
-      const imageUrl = product.featuredImage?.url || null;
+      // Prefer variant-specific image, fall back to product featured image
+      const imageUrl = image?.url || product.featuredImage?.url || null;
       const brand = product.vendor || null;
 
       // Upsert product
