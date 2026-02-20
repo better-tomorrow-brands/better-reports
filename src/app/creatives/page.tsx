@@ -289,7 +289,7 @@ export default function CreativesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {/* Left: Generation Form */}
-        <section className="border border-zinc-200 dark:border-zinc-700 rounded p-4 bg-white dark:bg-zinc-900">
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded p-4 bg-white dark:bg-zinc-950">
           <h2 className="text-base font-semibold mb-3">Campaign Brief</h2>
 
           <div className="space-y-3">
@@ -303,7 +303,7 @@ export default function CreativesPage() {
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
                 placeholder="e.g., Drive sales, Lead generation, Brand awareness"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
               <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-1">
                 What's the primary objective?
@@ -320,7 +320,7 @@ export default function CreativesPage() {
                 value={targetCta}
                 onChange={(e) => setTargetCta(e.target.value)}
                 placeholder="e.g., Subscribe now, Shop 35% off, Try risk-free"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
               <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-1">
                 What action should people take?
@@ -336,7 +336,7 @@ export default function CreativesPage() {
                 value={selectedProduct || ""}
                 onChange={(e) => handleProductChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={loadingProducts}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               >
                 <option value="">
                   {loadingProducts ? "Loading products..." : "No specific product"}
@@ -364,7 +364,7 @@ export default function CreativesPage() {
                         className={`relative w-20 h-20 rounded border-2 transition-all ${
                           selectedProductImageIds.has(-1)
                             ? 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-900'
-                            : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
+                            : 'border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600'
                         }`}
                       >
                         <img
@@ -393,7 +393,7 @@ export default function CreativesPage() {
                         className={`relative w-20 h-20 rounded border-2 transition-all ${
                           selectedProductImageIds.has(image.id)
                             ? 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-900'
-                            : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
+                            : 'border-zinc-300 dark:border-zinc-800 hover:border-zinc-400 dark:hover:border-zinc-600'
                         }`}
                       >
                         <img
@@ -429,7 +429,7 @@ export default function CreativesPage() {
                 maxLength={300}
                 placeholder="Brand colors, tone of voice, key messaging..."
                 rows={3}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
               <p className="text-[11px] text-zinc-500 mt-1">
                 Visual style keywords (300 char max)
@@ -446,7 +446,7 @@ export default function CreativesPage() {
                 value={adAngle}
                 onChange={(e) => setAdAngle(e.target.value)}
                 placeholder="e.g., Benefit-focused, Emotion-driven"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
             </div>
 
@@ -464,7 +464,7 @@ export default function CreativesPage() {
                   const files = Array.from(e.target.files || []);
                   setContextImages(files);
                 }}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm file:mr-2 file:px-2 file:py-0.5 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-700 file:text-xs file:font-medium focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm file:mr-2 file:px-2 file:py-0.5 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-700 file:text-xs file:font-medium focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
               <p className="text-[11px] text-zinc-500 mt-1">
                 Upload inspiration images or style references
@@ -476,7 +476,7 @@ export default function CreativesPage() {
                       <img
                         src={URL.createObjectURL(file)}
                         alt={`Context ${index + 1}`}
-                        className="w-20 h-20 object-cover rounded border border-zinc-200 dark:border-zinc-700"
+                        className="w-20 h-20 object-cover rounded border border-zinc-200 dark:border-zinc-800"
                       />
                       <button
                         onClick={() => {
@@ -511,7 +511,7 @@ export default function CreativesPage() {
                 maxLength={500}
                 placeholder="Any specific requirements..."
                 rows={3}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="w-full border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
               />
               <p className="text-[11px] text-zinc-500 mt-1">
                 Specific visual requirements (500 char max)
@@ -541,7 +541,7 @@ export default function CreativesPage() {
                 value={numVariations}
                 onChange={(e) => setNumVariations(Number(e.target.value))}
                 disabled={generating}
-                className="border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+                className="border border-zinc-300 dark:border-zinc-800 rounded px-2.5 py-2 bg-white dark:bg-black text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
                 title="Number of variations"
               >
                 <option value={1}>1</option>
@@ -555,13 +555,13 @@ export default function CreativesPage() {
         </section>
 
         {/* Right: Generated Creatives Gallery */}
-        <section className="border border-zinc-200 dark:border-zinc-700 rounded p-4 bg-white dark:bg-zinc-900">
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded p-4 bg-white dark:bg-zinc-950">
           <h2 className="text-base font-semibold mb-3">Generated Creatives</h2>
 
           {loadingCreatives ? (
             <div className="space-y-4">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden animate-pulse">
+                <div key={i} className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden animate-pulse">
                   <div className="w-full h-64 bg-zinc-200 dark:bg-zinc-800" />
                   <div className="p-4 space-y-3 bg-zinc-50 dark:bg-zinc-900/50">
                     <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-3/4" />
@@ -582,7 +582,7 @@ export default function CreativesPage() {
               {generatedCreatives.map((creative) => (
                 <div
                   key={creative.id}
-                  className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden"
+                  className="border border-zinc-200 dark:border-zinc-800 rounded-lg overflow-hidden"
                 >
                   <img
                     src={creative.imageUrl}
@@ -592,7 +592,7 @@ export default function CreativesPage() {
                   <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
                     {/* Ad Copy Section */}
                     {(creative.headline || creative.primaryText || creative.description || creative.callToAction) && (
-                      <div className="space-y-2 pb-3 border-b border-zinc-200 dark:border-zinc-700">
+                      <div className="space-y-2 pb-3 border-b border-zinc-200 dark:border-zinc-800">
                         {creative.headline && (
                           <div>
                             <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
@@ -637,7 +637,7 @@ export default function CreativesPage() {
                     )}
 
                     {/* Prompt Details Accordion */}
-                    <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+                    <div className="border-t border-zinc-200 dark:border-zinc-800 pt-3">
                       <button
                         onClick={() => toggleCreativeExpanded(creative.id)}
                         className="w-full flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
@@ -692,7 +692,7 @@ export default function CreativesPage() {
                                         key={idx}
                                         src={url}
                                         alt={`Product ${idx + 1}`}
-                                        className="w-20 h-20 object-cover rounded border border-zinc-300 dark:border-zinc-700"
+                                        className="w-20 h-20 object-cover rounded border border-zinc-300 dark:border-zinc-800"
                                       />
                                     ))}
                                   </div>
@@ -718,7 +718,7 @@ export default function CreativesPage() {
                     </div>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-zinc-800">
                       <span className="text-xs text-zinc-500">
                         {new Date(creative.createdAt).toLocaleDateString()}
                       </span>

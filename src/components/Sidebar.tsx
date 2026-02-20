@@ -50,7 +50,7 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`flex flex-col shrink-0 border-r border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 transition-all duration-200 ${
+      className={`flex flex-col shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 transition-all duration-200 ${
         isOpen ? "w-56" : "w-14"
       }`}
     >

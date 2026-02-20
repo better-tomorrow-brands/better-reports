@@ -51,7 +51,7 @@ export default function TopBar() {
   }));
 
   return (
-    <header className="h-14 border-b border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 flex items-center px-4 gap-4">
+    <header className="h-14 border-b border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 flex items-center px-4 gap-4">
       {/* Left: Logo + Breadcrumbs */}
       <div className="flex items-center gap-3">
         <div className="font-semibold text-sm">Better Reports</div>
@@ -77,7 +77,7 @@ export default function TopBar() {
           <input
             type="text"
             placeholder="Search anything..."
-            className="w-64 pl-8 pr-3 py-1.5 text-xs border border-zinc-300 dark:border-zinc-700 rounded bg-white dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
+            className="w-64 pl-8 pr-3 py-1.5 text-xs border border-zinc-300 dark:border-zinc-800 rounded bg-white dark:bg-black text-zinc-900 dark:text-zinc-100 placeholder-zinc-400 focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-700"
           />
           <kbd className="absolute right-2.5 top-1/2 -translate-y-1/2 px-1.5 py-0.5 text-[10px] font-medium text-zinc-500 dark:text-zinc-400 bg-zinc-100 dark:bg-zinc-700 rounded border border-zinc-200 dark:border-zinc-600">
             ⌘K
@@ -89,7 +89,7 @@ export default function TopBar() {
           <div className="relative" ref={orgMenuRef}>
             <button
               onClick={() => setOrgMenuOpen(!orgMenuOpen)}
-              className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
+              className="flex items-center gap-2 px-2.5 py-1.5 text-xs font-medium rounded border border-zinc-300 dark:border-zinc-800 bg-white dark:bg-black text-zinc-700 dark:text-zinc-300 hover:bg-zinc-50 dark:hover:bg-zinc-900 transition-colors"
             >
               <span className="truncate max-w-32">{currentOrg?.name ?? "Select org"}</span>
               {subscription && (
@@ -110,7 +110,7 @@ export default function TopBar() {
             </button>
 
             {orgMenuOpen && (
-              <div className="absolute right-0 top-full mt-1 w-56 z-50 rounded border border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 shadow-lg py-1">
+              <div className="absolute right-0 top-full mt-1 w-56 z-50 rounded border border-zinc-200 dark:border-zinc-800 bg-white dark:bg-zinc-950 shadow-lg py-1">
                 {orgs.map((org) => (
                   <button
                     key={org.id}

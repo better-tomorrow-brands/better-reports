@@ -54,14 +54,14 @@ export default function RootLayout({
           <SignedIn>
             <ThemeProvider>
               <OrgProvider>
-                <div className="flex flex-col h-screen bg-zinc-50 dark:bg-zinc-950">
+                <div className="flex flex-col h-screen bg-white dark:bg-black">
                   {/* Top Bar */}
                   <TopBar />
 
                   {/* Sidebar + Content */}
                   <div className="flex flex-1 min-h-0">
                     <Sidebar />
-                    <main className="flex-1 min-w-0 overflow-auto bg-zinc-50 dark:bg-zinc-950">{children}</main>
+                    <main className="flex-1 min-w-0 overflow-auto bg-white dark:bg-black">{children}</main>
                   </div>
                 </div>
               </OrgProvider>
