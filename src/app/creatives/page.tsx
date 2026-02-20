@@ -137,6 +137,7 @@ export default function CreativesPage() {
       <div className="flex items-center gap-3 mb-6">
         <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
         <h1 className="text-2xl font-bold">AI Creative Generator</h1>
+        <span className="text-xs text-zinc-500 dark:text-zinc-400 ml-2">Powered by Google Gemini</span>
       </div>
 
       {message && (

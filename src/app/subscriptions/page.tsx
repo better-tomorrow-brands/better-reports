@@ -16,7 +16,7 @@ interface OrgSubscription {
 }
 
 export default function SubscriptionsPage() {
-  const { apiFetch } = useOrg();
+  const { apiFetch, currentOrg, isLoading: orgLoading } = useOrg();
   const [subscriptions, setSubscriptions] = useState<OrgSubscription[]>([]);
   const [loading, setLoading] = useState(true);
   const [message, setMessage] = useState<{ type: "success" | "error"; text: string } | null>(null);
@@ -24,8 +24,11 @@ export default function SubscriptionsPage() {
   const [selectedTier, setSelectedTier] = useState<PlanTier>("free");
 
   useEffect(() => {
-    loadSubscriptions();
-  }, []);
+    // Wait for org context to be ready before loading data
+    if (!orgLoading && currentOrg) {
+      loadSubscriptions();
+    }
+  }, [orgLoading, currentOrg]);
 
   async function loadSubscriptions() {
     try {
@@ -57,7 +60,7 @@ export default function SubscriptionsPage() {
     }
   }
 
-  if (loading) {
+  if (loading || orgLoading) {
     return (
       <div className="max-w-6xl mx-auto p-6">
         <div className="h-8 w-48 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />

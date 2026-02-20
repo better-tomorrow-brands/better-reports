@@ -3,18 +3,19 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { products, creatives } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
-import { downloadAndUploadImage, generateImageKey } from "@/lib/storage";
+import { downloadAndUploadImage, generateImageKey, uploadToSpaces } from "@/lib/storage";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
  * POST /api/creatives/generate
- * Generate AI creatives using Fal.ai Freepik FLUX (Nano Banana)
+ * Generate AI creatives using Google's Gemini Image (Nano Banana)
  * Images are permanently stored in DigitalOcean Spaces
  *
  * Setup:
- * 1. Fal.ai:
- *    - Sign up at https://fal.ai
- *    - Get API key from https://fal.ai/dashboard/keys
- *    - Add to .env.local: FAL_API_KEY=your-key-here
+ * 1. Google AI:
+ *    - Sign up at https://aistudio.google.com/
+ *    - Get API key from https://aistudio.google.com/apikey
+ *    - Add to .env.local: GOOGLE_AI_API_KEY=your-key-here
  *
  * 2. DigitalOcean Spaces:
  *    - Create Space at https://cloud.digitalocean.com/spaces
@@ -30,10 +31,10 @@ export async function POST(request: Request) {
   try {
     const { userId, orgId } = await requireOrgFromRequest(request);
 
-    const apiKey = process.env.FAL_API_KEY;
+    const apiKey = process.env.GOOGLE_AI_API_KEY;
     if (!apiKey) {
       return NextResponse.json(
-        { error: "FAL_API_KEY not configured. Please add it to your environment variables." },
+        { error: "GOOGLE_AI_API_KEY not configured. Please add it to your environment variables." },
         { status: 500 }
       );
     }
@@ -47,17 +48,22 @@ export async function POST(request: Request) {
     const numVariations = Number(formData.get("numVariations") || "1");
     const numContextImages = Number(formData.get("numContextImages") || "0");
 
-    // Process uploaded images
-    const contextImageUrls: string[] = [];
+    // Process uploaded images - convert to base64 for Gemini
+    const contextImageParts: any[] = [];
     for (let i = 0; i < numContextImages; i++) {
       const file = formData.get(`contextImage${i}`) as File | null;
       if (file) {
-        // Convert to base64 for Fal.ai
         const bytes = await file.arrayBuffer();
         const buffer = Buffer.from(bytes);
         const base64 = buffer.toString("base64");
         const mimeType = file.type || "image/jpeg";
-        contextImageUrls.push(`data:${mimeType};base64,${base64}`);
+
+        contextImageParts.push({
+          inlineData: {
+            data: base64,
+            mimeType: mimeType,
+          },
+        });
       }
     }
 
@@ -100,71 +106,108 @@ export async function POST(request: Request) {
     // Add quality modifiers
     prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
 
-    // Generate creatives using Fal.ai
+    // Initialize Google Generative AI
+    const genAI = new GoogleGenerativeAI(apiKey);
+
+    // Use Gemini 2.0 Flash Image model (Nano Banana)
+    // Note: As of the docs, gemini-2.0-flash-exp supports imagen-3.0-generate-001
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.0-flash-exp",
+      safetySettings: [
+        {
+          category: "HARM_CATEGORY_HARASSMENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE",
+        },
+        {
+          category: "HARM_CATEGORY_HATE_SPEECH",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE",
+        },
+        {
+          category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+          threshold: "BLOCK_LOW_AND_ABOVE", // Strictest for adult content
+        },
+        {
+          category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+          threshold: "BLOCK_MEDIUM_AND_ABOVE",
+        },
+      ],
+    });
+
+    // Generate creatives using Google Gemini Image
     const generatedCreatives = [];
 
     for (let i = 0; i < numVariations; i++) {
-      // Call Fal.ai Freepik FLUX API (Nano Banana)
-      const requestBody: any = {
-        prompt,
-        image_size: "landscape_16_9", // Good for ads
-        num_inference_steps: 4,
-        enable_safety_checker: true,
-      };
+      try {
+        // Build request parts
+        const parts: any[] = [];
 
-      // If we have context images, use img2img mode
-      if (contextImageUrls.length > 0) {
-        requestBody.image_url = contextImageUrls[0]; // Primary reference image
-        requestBody.strength = 0.75; // How much to transform (0-1, higher = more creative freedom)
+        // If we have context images, add them first
+        if (contextImageParts.length > 0) {
+          parts.push(...contextImageParts);
+        }
+
+        // Add the text prompt
+        parts.push({ text: prompt });
+
+        // Generate image using Gemini
+        const result = await model.generateContent({
+          contents: [{ role: "user", parts }],
+          generationConfig: {
+            temperature: 1.0,
+            topP: 0.95,
+            topK: 40,
+            maxOutputTokens: 8192,
+            responseMimeType: "image/jpeg", // Request image output
+          },
+        });
+
+        const response = result.response;
+
+        // Extract image from response
+        // Gemini returns images as base64 in the response
+        const candidate = response.candidates?.[0];
+        if (!candidate?.content?.parts?.[0]) {
+          throw new Error("No image generated from Gemini");
+        }
+
+        const imagePart = candidate.content.parts.find((part: any) => part.inlineData);
+        if (!imagePart?.inlineData?.data) {
+          throw new Error("No image data in Gemini response");
+        }
+
+        const base64Image = imagePart.inlineData.data;
+        const imageBuffer = Buffer.from(base64Image, "base64");
+
+        // Upload to DigitalOcean Spaces for permanent storage
+        const imageKey = generateImageKey(orgId, "creatives");
+        const permanentImageUrl = await uploadToSpaces(imageBuffer, imageKey, "image/jpeg");
+
+        // Save to database with permanent URL
+        const [creative] = await db
+          .insert(creatives)
+          .values({
+            orgId,
+            userId,
+            prompt,
+            imageUrl: permanentImageUrl, // Store permanent DO Spaces URL
+            campaignGoal,
+            adAngle: adAngle || null,
+            productId: productId || null,
+            brandGuidelines: brandGuidelines || null,
+          })
+          .returning();
+
+        generatedCreatives.push({
+          id: creative.id.toString(),
+          imageUrl: permanentImageUrl, // Return permanent URL
+          prompt: creative.prompt,
+          createdAt: creative.createdAt?.toISOString() || new Date().toISOString(),
+        });
+      } catch (varError: any) {
+        console.error(`Failed to generate variation ${i + 1}:`, varError);
+        // Continue with other variations even if one fails
+        throw new Error(`Variation ${i + 1} failed: ${varError.message}`);
       }
-
-      const falResponse = await fetch("https://fal.run/fal-ai/flux-realism", {
-        method: "POST",
-        headers: {
-          "Authorization": `Key ${apiKey}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify(requestBody),
-      });
-
-      if (!falResponse.ok) {
-        const errorText = await falResponse.text();
-        console.error("Fal.ai API error:", errorText);
-        throw new Error(`Fal.ai API failed: ${falResponse.status}`);
-      }
-
-      const falData = await falResponse.json();
-      const falImageUrl = falData.images?.[0]?.url;
-
-      if (!falImageUrl) {
-        throw new Error("No image URL returned from Fal.ai");
-      }
-
-      // Download from Fal.ai and upload to DigitalOcean Spaces for permanent storage
-      const imageKey = generateImageKey(orgId, "creatives");
-      const permanentImageUrl = await downloadAndUploadImage(falImageUrl, imageKey);
-
-      // Save to database with permanent URL
-      const [creative] = await db
-        .insert(creatives)
-        .values({
-          orgId,
-          userId,
-          prompt,
-          imageUrl: permanentImageUrl, // Store permanent DO Spaces URL
-          campaignGoal,
-          adAngle: adAngle || null,
-          productId: productId || null,
-          brandGuidelines: brandGuidelines || null,
-        })
-        .returning();
-
-      generatedCreatives.push({
-        id: creative.id.toString(),
-        imageUrl: permanentImageUrl, // Return permanent URL
-        prompt: creative.prompt,
-        createdAt: creative.createdAt?.toISOString() || new Date().toISOString(),
-      });
     }
 
     return NextResponse.json({ creatives: generatedCreatives });
