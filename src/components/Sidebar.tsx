@@ -3,7 +3,6 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { PanelLeftClose, PanelLeftOpen } from "lucide-react";
 import { useOrg } from "@/contexts/OrgContext";
 
 const navLinks = [
@@ -22,12 +21,6 @@ const navLinks = [
 const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
 export default function Sidebar() {
-  const [isOpen, setIsOpen] = useState(true);
-
-  // Collapse sidebar on narrow screens after hydration
-  useEffect(() => {
-    setIsOpen(window.innerWidth >= 768);
-  }, []);
   const [role, setRole] = useState<string | null>(null);
 
   const { currentOrg } = useOrg();
@@ -75,7 +68,7 @@ export default function Sidebar() {
       </nav>
 
       {/* Version */}
-      {isOpen && version && (
+      {version && (
         <div className="px-4 py-3 border-t border-zinc-200 dark:border-zinc-700">
           <p className="text-[11px] text-zinc-500 dark:text-zinc-500">
             Version {version.replace(/^v/, "")}
