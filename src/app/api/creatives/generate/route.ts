@@ -176,7 +176,7 @@ export async function POST(request: Request) {
 
         // Generate ad copy using Gemini text model
         const textModel = genAI.getGenerativeModel({
-          model: "gemini-1.5-flash",
+          model: "gemini-1.5-pro",
           safetySettings: [
             {
               category: HarmCategory.HARM_CATEGORY_HARASSMENT,
