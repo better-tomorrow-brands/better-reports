@@ -82,6 +82,7 @@ export async function getOrgSubscription(orgId: number): Promise<Subscription | 
       maxDataSources: subscriptions.maxDataSources,
       maxAccounts: subscriptions.maxAccounts,
       dataRefreshInterval: subscriptions.dataRefreshInterval,
+      stripeCustomerId: subscriptions.stripeCustomerId,
     })
     .from(subscriptions)
     .where(eq(subscriptions.orgId, orgId))
@@ -96,6 +97,7 @@ export async function getOrgSubscription(orgId: number): Promise<Subscription | 
     maxDataSources: rows[0].maxDataSources,
     maxAccounts: rows[0].maxAccounts,
     dataRefreshInterval: rows[0].dataRefreshInterval || "weekly",
+    stripeCustomerId: rows[0].stripeCustomerId,
   };
 }
 

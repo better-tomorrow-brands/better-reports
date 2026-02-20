@@ -128,6 +128,7 @@ export interface Subscription {
   maxDataSources: number | null;
   maxAccounts: number | null;
   dataRefreshInterval: string;
+  stripeCustomerId?: string | null;
 }
 
 /**
