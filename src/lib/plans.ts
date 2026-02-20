@@ -2,7 +2,7 @@
  * Plan definitions and feature gates
  */
 
-export type PlanTier = "free" | "starter" | "growth" | "pro" | "enterprise";
+export type PlanTier = "free" | "free_trial" | "starter" | "growth" | "pro" | "enterprise";
 
 export interface PlanLimits {
   maxUsers: number | null; // null = unlimited
@@ -36,6 +36,23 @@ export const PLANS: Record<PlanTier, PlanLimits> = {
       dataWarehousing: false,
       multipleTeams: false,
       premiumSupport: false,
+    },
+  },
+  free_trial: {
+    // Early adopters: full Pro-level features for feedback period
+    maxUsers: 5,
+    maxDataSources: 10,
+    maxAccounts: 10,
+    dataRefreshInterval: "hourly",
+    features: {
+      sso: true,
+      dataTransformations: true,
+      customDataImport: true,
+      apiAccess: true,
+      supermetricsStorage: true,
+      dataWarehousing: false,
+      multipleTeams: false,
+      premiumSupport: true,
     },
   },
   starter: {
@@ -156,4 +173,19 @@ export function getLimitDisplay(
   }
   const val = subscription[limitKey];
   return val === null ? "Unlimited" : String(val);
+}
+
+/**
+ * Get human-readable tier name
+ */
+export function getTierDisplayName(tier: PlanTier): string {
+  const map: Record<PlanTier, string> = {
+    free: "Free",
+    free_trial: "Free Trial",
+    starter: "Starter",
+    growth: "Growth",
+    pro: "Pro",
+    enterprise: "Enterprise",
+  };
+  return map[tier] || tier;
 }

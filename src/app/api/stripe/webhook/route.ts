@@ -3,28 +3,23 @@ import { headers } from "next/headers";
 import { db } from "@/lib/db";
 import { subscriptions } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { stripe, getTierFromPriceId } from "@/lib/stripe";
+import type Stripe from "stripe";
 
 /**
  * Stripe webhook handler
  *
  * Setup:
- * 1. Install stripe: npm install stripe
- * 2. Add to .env.local:
+ * 1. Add to .env.local:
  *    STRIPE_SECRET_KEY=sk_...
  *    STRIPE_WEBHOOK_SECRET=whsec_...
- * 3. Configure webhook in Stripe dashboard:
+ * 2. Configure webhook in Stripe dashboard:
  *    URL: https://your-domain.com/api/stripe/webhook
  *    Events: customer.subscription.created, customer.subscription.updated, customer.subscription.deleted
- *
- * TODO: Uncomment when Stripe is installed and configured
+ * 3. Update STRIPE_PRICE_TO_TIER mapping in src/lib/stripe.ts
  */
 
 export async function POST(request: Request) {
-  return NextResponse.json({ error: "Stripe integration not yet configured" }, { status: 501 });
-
-  /* Uncomment when ready:
-
-  const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
   const webhookSecret = process.env.STRIPE_WEBHOOK_SECRET;
 
   if (!webhookSecret) {
@@ -39,7 +34,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Missing signature" }, { status: 400 });
   }
 
-  let event;
+  let event: Stripe.Event;
   try {
     event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
   } catch (err) {
@@ -51,22 +46,18 @@ export async function POST(request: Request) {
     switch (event.type) {
       case "customer.subscription.created":
       case "customer.subscription.updated": {
-        const subscription = event.data.object;
-        const orgId = subscription.metadata.orgId;
+        const subscription = event.data.object as Stripe.Subscription & {
+          current_period_start: number;
+          current_period_end: number;
+        };
+        const orgId = subscription.metadata?.orgId;
 
         if (!orgId) {
           console.error("Missing orgId in subscription metadata");
           break;
         }
 
-        // Map Stripe price ID to tier (you'll need to configure these mappings)
-        const tierMap: Record<string, string> = {
-          // price_xxx: "starter",
-          // price_yyy: "growth",
-          // price_zzz: "pro",
-        };
-
-        const tier = tierMap[subscription.items.data[0]?.price.id] || "free";
+        const tier = getTierFromPriceId(subscription.items.data[0]?.price.id || "");
 
         await db
           .insert(subscriptions)
@@ -74,7 +65,7 @@ export async function POST(request: Request) {
             orgId: Number(orgId),
             tier,
             status: subscription.status === "active" ? "active" : subscription.status,
-            stripeCustomerId: subscription.customer,
+            stripeCustomerId: String(subscription.customer),
             stripeSubscriptionId: subscription.id,
             stripePriceId: subscription.items.data[0]?.price.id,
             currentPeriodStart: new Date(subscription.current_period_start * 1000),
@@ -99,7 +90,7 @@ export async function POST(request: Request) {
       }
 
       case "customer.subscription.deleted": {
-        const subscription = event.data.object;
+        const subscription = event.data.object as Stripe.Subscription;
         const orgId = subscription.metadata.orgId;
 
         if (!orgId) {
@@ -129,5 +120,4 @@ export async function POST(request: Request) {
     console.error("Webhook handler error:", error);
     return NextResponse.json({ error: "Webhook handler failed" }, { status: 500 });
   }
-  */
 }
