@@ -267,6 +267,7 @@ export default function CreativesPage() {
                   const files = Array.from(e.target.files || []);
                   setContextImages(files);
                 }}
+                value=""
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-800 file:text-sm file:font-medium"
               />
               <p className="text-xs text-zinc-500 mt-1">
@@ -275,7 +276,7 @@ export default function CreativesPage() {
               {contextImages.length > 0 && (
                 <div className="mt-2 flex flex-wrap gap-2">
                   {contextImages.map((file, index) => (
-                    <div key={index} className="relative">
+                    <div key={`${file.name}-${index}`} className="relative">
                       <img
                         src={URL.createObjectURL(file)}
                         alt={`Context ${index + 1}`}
@@ -283,7 +284,8 @@ export default function CreativesPage() {
                       />
                       <button
                         onClick={() => {
-                          setContextImages(contextImages.filter((_, i) => i !== index));
+                          const newImages = contextImages.filter((_, i) => i !== index);
+                          setContextImages(newImages);
                         }}
                         className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
                       >
