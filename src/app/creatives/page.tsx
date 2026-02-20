@@ -6,8 +6,9 @@ import { Loader2, Download, Sparkles } from "lucide-react";
 
 interface Product {
   id: number;
-  title: string;
-  image: string | null;
+  productName: string | null;
+  sku: string;
+  featuredImage: string | null;
 }
 
 interface GeneratedCreative {
@@ -169,14 +170,14 @@ export default function CreativesPage() {
                 <option value="">No specific product</option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>
-                    {product.title}
+                    {product.productName || product.sku}
                   </option>
                 ))}
               </select>
-              {selectedProductData?.image && (
+              {selectedProductData?.featuredImage && (
                 <img
-                  src={selectedProductData.image}
-                  alt={selectedProductData.title}
+                  src={selectedProductData.featuredImage}
+                  alt={selectedProductData.productName || selectedProductData.sku}
                   className="mt-2 w-32 h-32 object-cover rounded border border-zinc-200 dark:border-zinc-700"
                 />
               )}

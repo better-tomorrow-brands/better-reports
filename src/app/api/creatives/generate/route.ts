@@ -51,7 +51,7 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (productRows.length) {
-        prompt += ` Featuring product: ${productRows[0].title}.`;
+        prompt += ` Featuring product: ${productRows[0].productName || productRows[0].sku}.`;
       }
     }
 
