@@ -286,9 +286,9 @@ export default function CreativesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:h-[calc(100vh-12rem)]">
-        {/* Left: Generation Form - Fixed/Sticky */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:overflow-y-auto lg:max-h-full">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+        {/* Left: Generation Form - Sticky */}
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:sticky lg:top-6 lg:self-start">
           <h2 className="text-lg font-semibold mb-4">Campaign Brief</h2>
 
           <div className="space-y-5">
@@ -553,8 +553,8 @@ export default function CreativesPage() {
           </div>
         </section>
 
-        {/* Right: Generated Creatives Gallery - Scrollable */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:overflow-y-auto lg:max-h-full">
+        {/* Right: Generated Creatives Gallery */}
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Generated Creatives</h2>
 
           {loadingCreatives ? (
