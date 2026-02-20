@@ -97,8 +97,7 @@ export async function POST(request: Request) {
     // Build the AI prompt - keep it visual and concise for best results
     let prompt = `${campaignGoal}`;
 
-    // Fetch product image URL if product is selected
-    let productImageUrl: string | null = null;
+    // Fetch product name for prompt if product is selected
     if (productId) {
       const productRows = await db
         .select()
@@ -108,7 +107,6 @@ export async function POST(request: Request) {
 
       if (productRows.length) {
         prompt += ` featuring ${productRows[0].productName || productRows[0].sku}`;
-        productImageUrl = productRows[0].imageUrl;
       }
     }
 
@@ -142,27 +140,7 @@ export async function POST(request: Request) {
         // Build contents array - images first, then text (following the docs pattern)
         const contents: any[] = [];
 
-        // If we have a product image from Shopify, fetch and add it
-        if (productImageUrl) {
-          try {
-            const imageResponse = await fetch(productImageUrl);
-            const imageBuffer = await imageResponse.arrayBuffer();
-            const base64Image = Buffer.from(imageBuffer).toString("base64");
-            const mimeType = imageResponse.headers.get("content-type") || "image/jpeg";
-
-            contents.push({
-              inlineData: {
-                mimeType,
-                data: base64Image,
-              },
-            });
-          } catch (fetchError) {
-            console.error("Failed to fetch product image:", fetchError);
-            // Continue without product image
-          }
-        }
-
-        // If we have context images, add them
+        // Add context images (user uploads + selected product images)
         if (contextImageParts.length > 0) {
           contents.push(...contextImageParts);
         }

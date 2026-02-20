@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc } from "drizzle-orm";
 import { db } from "@/lib/db";
 import { products, productImages } from "@/lib/db/schema";
 import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
@@ -20,7 +20,7 @@ export async function GET(request: Request) {
           .select()
           .from(productImages)
           .where(eq(productImages.productId, product.id))
-          .orderBy(productImages.displayOrder);
+          .orderBy(asc(productImages.displayOrder));
 
         return {
           ...product,

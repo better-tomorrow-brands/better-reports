@@ -15,6 +15,7 @@ interface Product {
   id: number;
   productName: string | null;
   sku: string;
+  imageUrl: string | null;
   images: ProductImage[];
 }
 
@@ -118,7 +119,18 @@ export default function CreativesPage() {
 
   function handleProductChange(productId: number | null) {
     setSelectedProduct(productId);
-    setSelectedProductImageIds(new Set()); // Clear selected images when product changes
+
+    // Default to main image selected (ID -1) if product has an image
+    if (productId) {
+      const product = products.find(p => p.id === productId);
+      if (product?.imageUrl) {
+        setSelectedProductImageIds(new Set([-1]));
+      } else {
+        setSelectedProductImageIds(new Set());
+      }
+    } else {
+      setSelectedProductImageIds(new Set());
+    }
   }
 
   function reusePrompt(creative: GeneratedCreative) {
@@ -167,10 +179,21 @@ export default function CreativesPage() {
       if (selectedProduct && selectedProductImageIds.size > 0) {
         const selectedProductData = products.find(p => p.id === selectedProduct);
         if (selectedProductData) {
-          const selectedImageUrls = selectedProductData.images
+          const selectedImageUrls: string[] = [];
+
+          // Add main product image if selected (ID -1)
+          if (selectedProductImageIds.has(-1) && selectedProductData.imageUrl) {
+            selectedImageUrls.push(selectedProductData.imageUrl);
+          }
+
+          // Add gallery images
+          selectedProductData.images
             .filter(img => selectedProductImageIds.has(img.id))
-            .map(img => img.imageUrl);
-          formData.append("productImageUrls", JSON.stringify(selectedImageUrls));
+            .forEach(img => selectedImageUrls.push(img.imageUrl));
+
+          if (selectedImageUrls.length > 0) {
+            formData.append("productImageUrls", JSON.stringify(selectedImageUrls));
+          }
         }
       }
 
@@ -289,12 +312,42 @@ export default function CreativesPage() {
               </select>
 
               {/* Product Images Thumbnails */}
-              {selectedProduct && selectedProductData && selectedProductData.images.length > 0 && (
+              {selectedProduct && selectedProductData && (selectedProductData.imageUrl || selectedProductData.images.length > 0) && (
                 <div className="mt-3">
                   <p className="text-xs text-zinc-500 mb-2">
                     Select product images to include ({selectedProductImageIds.size} selected)
                   </p>
                   <div className="flex flex-wrap gap-2">
+                    {/* Main product image (if exists) */}
+                    {selectedProductData.imageUrl && (
+                      <button
+                        key="main"
+                        type="button"
+                        onClick={() => toggleProductImage(-1)} // Use -1 as ID for main image
+                        className={`relative w-20 h-20 rounded border-2 transition-all ${
+                          selectedProductImageIds.has(-1)
+                            ? 'border-purple-500 ring-2 ring-purple-200 dark:ring-purple-900'
+                            : 'border-zinc-300 dark:border-zinc-700 hover:border-zinc-400 dark:hover:border-zinc-600'
+                        }`}
+                      >
+                        <img
+                          src={selectedProductData.imageUrl}
+                          alt="Main product image"
+                          className="w-full h-full object-cover rounded"
+                        />
+                        <div className="absolute top-0 right-0 bg-blue-500 text-white text-[9px] px-1 rounded-bl">
+                          MAIN
+                        </div>
+                        {selectedProductImageIds.has(-1) && (
+                          <div className="absolute inset-0 bg-purple-500/20 rounded flex items-center justify-center">
+                            <svg className="w-6 h-6 text-purple-600 dark:text-purple-400" fill="currentColor" viewBox="0 0 20 20">
+                              <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                            </svg>
+                          </div>
+                        )}
+                      </button>
+                    )}
+                    {/* Gallery images */}
                     {selectedProductData.images.map((image) => (
                       <button
                         key={image.id}
