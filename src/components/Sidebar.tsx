@@ -16,6 +16,7 @@ const navLinks = [
   { href: "/campaigns", label: "Campaigns", adminOnly: true },
   { href: "/users", label: "Users", adminOnly: true },
   { href: "/organizations", label: "Organizations", superAdminOnly: true },
+  { href: "/subscriptions", label: "Subscriptions", superAdminOnly: true },
   { href: "/settings", label: "Settings", adminOnly: true },
 ];
 

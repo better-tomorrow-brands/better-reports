@@ -1884,67 +1884,9 @@ export default function SettingsPage() {
             Manage your subscription tier and billing settings.
           </p>
 
-          <div className="space-y-5">
-            {/* Super Admin Controls - Always show for super_admin */}
-            {userRole === "super_admin" && currentOrg && (
-                <div className="border border-amber-200 dark:border-amber-800 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/30">
-                  <h3 className="text-sm font-semibold mb-3 text-amber-900 dark:text-amber-200">Super Admin: Manage Tier</h3>
-                  <form
-                    onSubmit={async (e) => {
-                      e.preventDefault();
-                      setSavingSubscription(true);
-                      const formData = new FormData(e.currentTarget);
-                      const tier = formData.get("tier") as string;
-
-                      try {
-                        const res = await apiFetch("/api/subscription", {
-                          method: "PUT",
-                          headers: { "Content-Type": "application/json" },
-                          body: JSON.stringify({ orgId: currentOrg.id, tier }),
-                        });
-
-                        if (!res.ok) throw new Error("Failed to update tier");
-
-                        const data = await res.json();
-                        setSubscription(data.subscription);
-                        setMessage({ type: "success", text: "Tier updated successfully" });
-                      } catch (err) {
-                        setMessage({ type: "error", text: String(err) });
-                      } finally {
-                        setSavingSubscription(false);
-                      }
-                    }}
-                  >
-                    <div className="flex items-center gap-3">
-                      <select
-                        name="tier"
-                        defaultValue={subscription?.tier || "free"}
-                        className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm flex-1"
-                      >
-                        <option value="free">Free</option>
-                        <option value="free_trial">Free Trial (Early Adopters)</option>
-                        <option value="starter">Starter</option>
-                        <option value="growth">Growth</option>
-                        <option value="pro">Pro</option>
-                        <option value="enterprise">Enterprise</option>
-                      </select>
-                      <button
-                        type="submit"
-                        disabled={savingSubscription}
-                        className="px-4 py-2 bg-amber-600 dark:bg-amber-700 text-white text-sm font-medium rounded-md hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
-                      >
-                        {savingSubscription ? "Saving..." : "Update Tier"}
-                      </button>
-                    </div>
-                    <p className="text-xs text-zinc-500 mt-2">
-                      Manually assign a tier to this organization. Use "Free Trial" for early adopters.
-                    </p>
-                  </form>
-                </div>
-              )}
-
-            {/* Current Plan Card - Only show if subscription exists */}
-            {subscription && (
+          {/* Current Plan Card */}
+          {subscription ? (
+            <div className="space-y-5">
               <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 bg-zinc-50 dark:bg-zinc-900/50">
                 <div className="flex items-center justify-between mb-3">
                   <h3 className="text-sm font-semibold">Current Plan</h3>
@@ -1989,10 +1931,9 @@ export default function SettingsPage() {
                   </div>
                 )}
               </div>
-            )}
 
               {/* Stripe Billing Portal (for paid plans) */}
-              {subscription && subscription.tier !== "free" && subscription.tier !== "free_trial" && subscription.stripeCustomerId && (
+              {subscription.tier !== "free" && subscription.tier !== "free_trial" && subscription.stripeCustomerId && (
                 <div>
                   <button
                     onClick={async () => {
@@ -2013,17 +1954,17 @@ export default function SettingsPage() {
                   </p>
                 </div>
               )}
-
-            {/* Empty state message for non-super-admins */}
-            {!subscription && userRole !== "super_admin" && (
-              <div className="text-center py-8">
-                <p className="text-zinc-400 text-sm">No subscription found for this organization.</p>
-                <p className="text-xs text-zinc-500 mt-2">
-                  Contact your administrator to set up a subscription.
-                </p>
-              </div>
-            )}
-          </div>
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-zinc-400 text-sm">No subscription found for this organization.</p>
+              <p className="text-xs text-zinc-500 mt-2">
+                {userRole === "super_admin"
+                  ? "Go to the Subscriptions page to assign a plan to this organization."
+                  : "Contact your administrator to set up a subscription."}
+              </p>
+            </div>
+          )}
         </section>
       )}
 
