@@ -678,8 +678,20 @@ export default function CreativesPage() {
                       </span>
                       <div className="flex items-center gap-2">
                         <button
-                          onClick={() => {
-                            setGeneratedCreatives(generatedCreatives.filter((c) => c.id !== creative.id));
+                          onClick={async () => {
+                            try {
+                              const res = await apiFetch(`/api/creatives/${creative.id}`, {
+                                method: "DELETE",
+                              });
+                              if (res.ok) {
+                                setGeneratedCreatives(generatedCreatives.filter((c) => c.id !== creative.id));
+                              } else {
+                                const error = await res.json();
+                                setMessage({ type: "error", text: error.error || "Failed to delete creative" });
+                              }
+                            } catch (err) {
+                              setMessage({ type: "error", text: "Failed to delete creative" });
+                            }
                           }}
                           className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs font-medium"
                         >
