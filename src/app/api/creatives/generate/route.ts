@@ -172,18 +172,18 @@ export async function POST(request: Request) {
         // Convert base64 to buffer
         const imageBuffer = Buffer.from(imageData, "base64");
 
-        // Upload to DigitalOcean Spaces for permanent storage
-        const imageKey = generateImageKey(orgId, "creatives");
-        const permanentImageUrl = await uploadToSpaces(imageBuffer, imageKey, "image/png");
+        // TODO: Re-enable DO Spaces upload after fixing credentials
+        // For now, return the base64 data URL directly so we can see the generated image
+        const dataUrl = `data:image/png;base64,${imageData}`;
 
-        // Save to database with permanent URL
+        // Save to database with data URL (temporary)
         const [creative] = await db
           .insert(creatives)
           .values({
             orgId,
             userId,
             prompt,
-            imageUrl: permanentImageUrl, // Store permanent DO Spaces URL
+            imageUrl: dataUrl, // Store base64 data URL temporarily
             campaignGoal,
             adAngle: adAngle || null,
             productId: productId || null,
@@ -193,7 +193,7 @@ export async function POST(request: Request) {
 
         generatedCreatives.push({
           id: creative.id.toString(),
-          imageUrl: permanentImageUrl, // Return permanent URL
+          imageUrl: dataUrl, // Return data URL so image displays immediately
           prompt: creative.prompt,
           createdAt: creative.createdAt?.toISOString() || new Date().toISOString(),
         });
