@@ -22,9 +22,8 @@ const version = process.env.NEXT_PUBLIC_APP_VERSION;
 
 export default function Sidebar() {
   const [role, setRole] = useState<string | null>(null);
-
-  const { currentOrg } = useOrg();
   const pathname = usePathname();
+  const { currentOrg } = useOrg();
 
   useEffect(() => {
     fetch("/api/users/me")
@@ -48,9 +47,7 @@ export default function Sidebar() {
       {/* Navigation */}
       <nav className="flex flex-col gap-0.5 px-2 py-2 text-sm flex-1">
         {visibleLinks.map((link) => {
-          const isActive = link.href === "/"
-            ? pathname === "/"
-            : pathname === link.href || pathname.startsWith(link.href + "/");
+          const isActive = pathname === link.href || (link.href !== "/" && pathname?.startsWith(link.href + "/"));
           return (
             <Link
               key={link.href}
