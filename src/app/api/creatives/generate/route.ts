@@ -125,9 +125,9 @@ export async function POST(request: Request) {
         // Add the text prompt last
         contents.push({ text: prompt });
 
-        // Get the model
+        // Get the model (using Nano Banana Pro for higher quality and potentially better quota)
         const model = genAI.getGenerativeModel({
-          model: "gemini-2.5-flash-image",
+          model: "gemini-3-pro-image-preview",
           safetySettings: [
             {
               category: HarmCategory.HARM_CATEGORY_HARASSMENT,
