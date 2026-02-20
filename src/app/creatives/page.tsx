@@ -43,7 +43,8 @@ export default function CreativesPage() {
       const productsRes = await apiFetch("/api/products");
       if (productsRes.ok) {
         const data = await productsRes.json();
-        setProducts(data.products || []);
+        // Products API returns array directly, not { products: [...] }
+        setProducts(Array.isArray(data) ? data : []);
       }
 
       // Load creatives separately with error handling
