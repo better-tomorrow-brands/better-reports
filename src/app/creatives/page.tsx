@@ -268,29 +268,29 @@ export default function CreativesPage() {
 
   return (
     <div className="max-w-7xl mx-auto px-6 py-4">
-      <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 -mx-6 px-6 pb-3">
-        <div className="flex items-center gap-2.5 mb-3">
+      <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 -mx-6 px-6 pb-3 mb-4">
+        <div className="flex items-center gap-2.5">
           <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400" />
           <h1 className="text-xl font-semibold">AI Creative Generator</h1>
           <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Powered by Google Gemini</span>
         </div>
-
-        {message && (
-          <div
-            className={`mb-3 px-3 py-2 rounded text-xs ${
-              message.type === "success"
-                ? "bg-green-50 dark:bg-green-950/50 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800/50"
-                : "bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800/50"
-            }`}
-          >
-            {message.text}
-          </div>
-        )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-        {/* Left: Generation Form - Sticky */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 lg:sticky lg:top-[85px] lg:self-start bg-white dark:bg-zinc-950">
+      {message && (
+        <div
+          className={`mb-4 px-3 py-2 rounded text-xs ${
+            message.type === "success"
+              ? "bg-green-50 dark:bg-green-950/50 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800/50"
+              : "bg-red-50 dark:bg-red-950/50 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800/50"
+          }`}
+        >
+          {message.text}
+        </div>
+      )}
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+        {/* Left: Generation Form */}
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 bg-white dark:bg-zinc-950">
           <h2 className="text-base font-semibold mb-4">Campaign Brief</h2>
 
           <div className="space-y-4">
