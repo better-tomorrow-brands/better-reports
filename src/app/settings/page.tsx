@@ -5,6 +5,7 @@ import { useSearchParams } from "next/navigation";
 import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { Eye, EyeOff, Pencil, X } from "lucide-react";
+import { getTierDisplayName, type Subscription, type PlanTier } from "@/lib/plans";
 
 type SettingsTab =
   | "shopify"
@@ -13,6 +14,7 @@ type SettingsTab =
   | "amazon"
   | "logistics"
   | "expenses"
+  | "billing"
   | "preferences";
 
 interface MetaForm {
@@ -112,6 +114,8 @@ export default function SettingsPage() {
   const [displayCurrency, setDisplayCurrency] = useState("USD");
   const [savingPreferences, setSavingPreferences] = useState(false);
   const [userRole, setUserRole] = useState<string | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
+  const [savingSubscription, setSavingSubscription] = useState(false);
   const [loading, setLoading] = useState(true);
   const [savingMeta, setSavingMeta] = useState(false);
   const [savingFacebookAds, setSavingFacebookAds] = useState(false);
@@ -297,8 +301,9 @@ export default function SettingsPage() {
       fetch("/api/users/me")
         .then((res) => res.json())
         .catch(() => ({ role: null })),
+      apiFetch("/api/subscription").then((res) => res.json()).catch(() => ({ subscription: null })),
     ])
-      .then(([settingsData, lifecycleData, userData]) => {
+      .then(([settingsData, lifecycleData, userData, subscriptionData]) => {
         if (settingsData.meta) {
           setMeta(settingsData.meta);
           setSavedMeta(settingsData.meta);
@@ -352,6 +357,7 @@ export default function SettingsPage() {
         }
         if (lifecycleData && !lifecycleData.error) setLifecycle(lifecycleData);
         if (userData.role) setUserRole(userData.role);
+        if (subscriptionData.subscription) setSubscription(subscriptionData.subscription);
       })
       .catch(() =>
         setMessage({ type: "error", text: "Failed to load settings" }),
@@ -1074,6 +1080,7 @@ export default function SettingsPage() {
     { key: "amazon", label: "Amazon" },
     { key: "logistics", label: "Logistics", superAdminOnly: true },
     { key: "expenses", label: "Expenses" },
+    { key: "billing", label: "Billing & Plan" },
     { key: "preferences", label: "Preferences" },
   ];
   const tabs = allTabs.filter((t) => !t.superAdminOnly || userRole === "super_admin");
@@ -1866,6 +1873,156 @@ export default function SettingsPage() {
             Coming soon — expense categories and recurring costs will be
             configured here.
           </p>
+        </section>
+      )}
+
+      {/* ── Billing & Plan Tab ─────────────────────────── */}
+      {activeTab === "billing" && (
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+          <h2 className="text-lg font-semibold mb-1">Billing & Plan</h2>
+          <p className="text-sm text-zinc-500 mb-5">
+            Manage your subscription tier and billing settings.
+          </p>
+
+          {subscription ? (
+            <div className="space-y-5">
+              {/* Current Plan Card */}
+              <div className="border border-zinc-200 dark:border-zinc-700 rounded-lg p-4 bg-zinc-50 dark:bg-zinc-900/50">
+                <div className="flex items-center justify-between mb-3">
+                  <h3 className="text-sm font-semibold">Current Plan</h3>
+                  <span className={`px-2.5 py-1 rounded-full text-xs font-medium ${
+                    subscription.tier === "free" ? "bg-zinc-200 dark:bg-zinc-700 text-zinc-700 dark:text-zinc-300" :
+                    subscription.tier === "free_trial" ? "bg-blue-100 dark:bg-blue-950 text-blue-800 dark:text-blue-200" :
+                    subscription.tier === "enterprise" ? "bg-purple-100 dark:bg-purple-950 text-purple-800 dark:text-purple-200" :
+                    "bg-green-100 dark:bg-green-950 text-green-800 dark:text-green-200"
+                  }`}>
+                    {getTierDisplayName(subscription.tier as PlanTier)}
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3 text-sm">
+                  <div>
+                    <span className="text-zinc-500">Status:</span>
+                    <span className="ml-2 font-medium capitalize">{subscription.status}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500">Max Users:</span>
+                    <span className="ml-2 font-medium">{subscription.maxUsers ?? "Unlimited"}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500">Max Data Sources:</span>
+                    <span className="ml-2 font-medium">{subscription.maxDataSources ?? "Unlimited"}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500">Max Accounts:</span>
+                    <span className="ml-2 font-medium">{subscription.maxAccounts ?? "Unlimited"}</span>
+                  </div>
+                  <div>
+                    <span className="text-zinc-500">Refresh Interval:</span>
+                    <span className="ml-2 font-medium capitalize">{subscription.dataRefreshInterval}</span>
+                  </div>
+                </div>
+
+                {subscription.tier === "free_trial" && (
+                  <div className="mt-3 pt-3 border-t border-zinc-200 dark:border-zinc-700">
+                    <p className="text-xs text-blue-600 dark:text-blue-400">
+                      <strong>Early Adopter Access:</strong> You're on our free trial tier with Pro-level features. Thank you for helping us improve!
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              {/* Super Admin Controls */}
+              {userRole === "super_admin" && currentOrg && (
+                <div className="border border-amber-200 dark:border-amber-800 rounded-lg p-4 bg-amber-50 dark:bg-amber-950/30">
+                  <h3 className="text-sm font-semibold mb-3 text-amber-900 dark:text-amber-200">Super Admin: Manage Tier</h3>
+                  <form
+                    onSubmit={async (e) => {
+                      e.preventDefault();
+                      setSavingSubscription(true);
+                      const formData = new FormData(e.currentTarget);
+                      const tier = formData.get("tier") as string;
+
+                      try {
+                        const res = await apiFetch("/api/subscription", {
+                          method: "PUT",
+                          headers: { "Content-Type": "application/json" },
+                          body: JSON.stringify({ orgId: currentOrg.id, tier }),
+                        });
+
+                        if (!res.ok) throw new Error("Failed to update tier");
+
+                        const data = await res.json();
+                        setSubscription(data.subscription);
+                        setMessage({ type: "success", text: "Tier updated successfully" });
+                      } catch (err) {
+                        setMessage({ type: "error", text: String(err) });
+                      } finally {
+                        setSavingSubscription(false);
+                      }
+                    }}
+                  >
+                    <div className="flex items-center gap-3">
+                      <select
+                        name="tier"
+                        defaultValue={subscription.tier}
+                        className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm flex-1"
+                      >
+                        <option value="free">Free</option>
+                        <option value="free_trial">Free Trial (Early Adopters)</option>
+                        <option value="starter">Starter</option>
+                        <option value="growth">Growth</option>
+                        <option value="pro">Pro</option>
+                        <option value="enterprise">Enterprise</option>
+                      </select>
+                      <button
+                        type="submit"
+                        disabled={savingSubscription}
+                        className="px-4 py-2 bg-amber-600 dark:bg-amber-700 text-white text-sm font-medium rounded-md hover:bg-amber-700 dark:hover:bg-amber-600 disabled:opacity-50 disabled:cursor-not-allowed"
+                      >
+                        {savingSubscription ? "Saving..." : "Update Tier"}
+                      </button>
+                    </div>
+                    <p className="text-xs text-zinc-500 mt-2">
+                      Manually assign a tier to this organization. Use "Free Trial" for early adopters.
+                    </p>
+                  </form>
+                </div>
+              )}
+
+              {/* Stripe Billing Portal (for paid plans) */}
+              {subscription.tier !== "free" && subscription.tier !== "free_trial" && subscription.stripeCustomerId && (
+                <div>
+                  <button
+                    onClick={async () => {
+                      try {
+                        const res = await apiFetch("/api/stripe/create-portal-session", { method: "POST" });
+                        const data = await res.json();
+                        if (data.url) window.location.href = data.url;
+                      } catch (err) {
+                        setMessage({ type: "error", text: "Failed to open billing portal" });
+                      }
+                    }}
+                    className="w-full px-4 py-2 bg-zinc-900 dark:bg-white text-white dark:text-zinc-900 text-sm font-medium rounded-md hover:bg-zinc-700 dark:hover:bg-zinc-200"
+                  >
+                    Manage Billing & Payment Method
+                  </button>
+                  <p className="text-xs text-zinc-500 mt-2">
+                    Opens Stripe's secure billing portal to update payment methods, view invoices, and manage your subscription.
+                  </p>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-8">
+              <p className="text-zinc-400 text-sm">No subscription found for this organization.</p>
+              {userRole === "super_admin" && (
+                <p className="text-xs text-zinc-500 mt-2">
+                  Use the form above to assign a tier.
+                </p>
+              )}
+            </div>
+          )}
         </section>
       )}
 

@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 import { UserButton } from "@clerk/nextjs";
 import { PanelLeftClose, PanelLeftOpen, ChevronDown, Check, Building2 } from "lucide-react";
 import { useOrg, Org } from "@/contexts/OrgContext";
+import { getTierDisplayName, type Subscription } from "@/lib/plans";
 
 const navLinks = [
   { href: "/reports", label: "Reports" },
@@ -29,6 +30,7 @@ export default function Sidebar() {
   }, []);
   const [role, setRole] = useState<string | null>(null);
   const [orgMenuOpen, setOrgMenuOpen] = useState(false);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const orgMenuRef = useRef<HTMLDivElement>(null);
 
   const { orgs, currentOrg, setCurrentOrg } = useOrg();
@@ -40,6 +42,19 @@ export default function Sidebar() {
       .then((data) => setRole(data?.role ?? "user"))
       .catch(() => setRole("user"));
   }, []);
+
+  // Fetch subscription for current org
+  useEffect(() => {
+    if (!currentOrg?.id) {
+      setSubscription(null);
+      return;
+    }
+
+    fetch("/api/subscription")
+      .then((r) => r.ok ? r.json() : null)
+      .then((data) => setSubscription(data?.subscription ?? null))
+      .catch(() => setSubscription(null));
+  }, [currentOrg?.id]);
 
   // Close org dropdown when clicking outside
   useEffect(() => {
@@ -101,7 +116,24 @@ export default function Sidebar() {
                 onClick={() => setOrgMenuOpen(!orgMenuOpen)}
                 className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
               >
-                <span className="truncate">{currentOrg?.name ?? "Select org"}</span>
+                <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
+                  <span className="truncate">{currentOrg?.name ?? "Select org"}</span>
+                  {subscription && (
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded-sm font-medium ${
+                        subscription.tier === "free"
+                          ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-600 dark:text-zinc-400"
+                          : subscription.tier === "free_trial"
+                          ? "bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400"
+                          : subscription.tier === "enterprise"
+                          ? "bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400"
+                          : "bg-green-100 dark:bg-green-900/30 text-green-700 dark:text-green-400"
+                      }`}
+                    >
+                      {getTierDisplayName(subscription.tier)}
+                    </span>
+                  )}
+                </div>
                 <ChevronDown
                   size={14}
                   className={`shrink-0 transition-transform ${orgMenuOpen ? "rotate-180" : ""}`}
