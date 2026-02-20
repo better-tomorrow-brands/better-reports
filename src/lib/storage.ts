@@ -63,10 +63,22 @@ export async function uploadToSpaces(
     Key: key,
     Body: buffer,
     ContentType: contentType,
-    ACL: "public-read", // Make images publicly accessible
+    // Note: ACL removed - set your Space's Files Listing to "Public" in DO dashboard instead
   });
 
-  await client.send(command);
+  try {
+    await client.send(command);
+  } catch (error: any) {
+    console.error("DO Spaces upload error:", {
+      message: error.message,
+      code: error.Code,
+      bucket,
+      key,
+      region: process.env.DO_SPACES_REGION,
+      endpoint: process.env.DO_SPACES_ENDPOINT,
+    });
+    throw new Error(`Failed to upload to DO Spaces: ${error.message}`);
+  }
 
   // Return the public URL
   const endpoint = process.env.DO_SPACES_ENDPOINT!;
