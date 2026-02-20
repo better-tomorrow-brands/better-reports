@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useOrg } from "@/contexts/OrgContext";
 import { Loader2, Download, Sparkles, Trash2, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
+import PageLayout from "@/components/PageLayout";
 
 interface ProductImage {
   id: number;
@@ -267,13 +268,13 @@ export default function CreativesPage() {
   const selectedProductData = products.find((p) => p.id === selectedProduct);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-6">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-1">AI Creative Generator</h1>
-        <p className="text-sm text-zinc-500 dark:text-zinc-400">
-          Generate professional ad creatives with AI. Powered by Google Gemini.
-        </p>
-      </div>
+    <PageLayout title="AI Creative Generator" subtitle="Generate professional ad creatives with AI" actions={<></>}>
+      <div className="max-w-7xl mx-auto px-6 py-6">
+        <div className="mb-6">
+          <p className="text-sm text-zinc-500 dark:text-zinc-400">
+            Generate professional ad creatives with AI. Powered by Google Gemini.
+          </p>
+        </div>
 
       {message && (
         <div
@@ -761,6 +762,7 @@ export default function CreativesPage() {
           )}
         </section>
       </div>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

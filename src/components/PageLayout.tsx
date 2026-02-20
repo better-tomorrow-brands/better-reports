@@ -5,15 +5,16 @@ import PageTitle from "@/components/PageTitle";
 
 interface PageLayoutProps {
   title: string;
+  subtitle?: string;
   actions?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export default function PageLayout({ title, actions, children }: PageLayoutProps) {
+export default function PageLayout({ title, subtitle, actions, children }: PageLayoutProps) {
   return (
     <>
       {/* Full-width PageTitle */}
-      <PageTitle title={title} actions={actions} />
+      <PageTitle title={title} subtitle={subtitle} actions={actions} />
 
       {/* Sidebar + Content Area */}
       <div className="flex flex-1 min-h-0">

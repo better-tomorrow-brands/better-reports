@@ -2,7 +2,6 @@
 
 import { useState, useEffect } from "react";
 import { useOrg } from "@/contexts/OrgContext";
-import PageLayout from "@/components/PageLayout";
 import { getTierDisplayName, type PlanTier } from "@/lib/plans";
 
 interface OrgSubscription {
@@ -75,8 +74,8 @@ export default function SubscriptionsPage() {
   }
 
   return (
-    <PageLayout title="Subscriptions Management" subtitle="View and manage subscription plans" actions={<></>}>
-      <div className="max-w-6xl mx-auto p-6">
+    <div className="max-w-6xl mx-auto p-6">
+      <h1 className="text-2xl font-bold mb-6">Subscriptions Management</h1>
 
       {message && (
         <div
@@ -186,7 +185,6 @@ export default function SubscriptionsPage() {
           </div>
         )}
       </section>
-      </div>
-    </PageLayout>
+    </div>
   );
 }

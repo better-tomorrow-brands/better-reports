@@ -21,6 +21,7 @@ import { OverallChart } from "@/components/reports/OverallChart";
 import { SessionsChart } from "@/components/reports/SessionsChart";
 import { TrafficChart } from "@/components/reports/TrafficChart";
 import { EcommerceChart } from "@/components/reports/EcommerceChart";
+import PageLayout from "@/components/PageLayout";
 
 const tabs = [
   { key: "campaigns", label: "Dashboard" },
@@ -91,66 +92,68 @@ export default function ReportsPage() {
   }, [apiFetch]);
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Reports</h1>
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <button
-                onClick={handleSync}
-                disabled={syncing}
-                className="flex items-center gap-1.5 px-2.5 py-1 border border-zinc-300 dark:border-zinc-600 rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
-              >
-                {syncing ? (
-                  <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                ) : (
-                  <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                  </svg>
-                )}
-                {syncing ? "Syncing..." : "Sync All"}
-              </button>
-              {syncMessage && (
-                <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
-                  {syncMessage}
-                </div>
+    <PageLayout
+      title="Reports"
+      subtitle="View analytics and performance metrics across all channels"
+      actions={
+        <>
+          <div className="relative">
+            <button
+              onClick={handleSync}
+              disabled={syncing}
+              className="flex items-center gap-1.5 px-2.5 py-1 border border-zinc-300 dark:border-zinc-600 rounded-md text-xs font-medium hover:bg-zinc-50 dark:hover:bg-zinc-800 disabled:opacity-50"
+            >
+              {syncing ? (
+                <svg className="w-3.5 h-3.5 animate-spin" fill="none" viewBox="0 0 24 24">
+                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                </svg>
+              ) : (
+                <svg className="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                </svg>
               )}
-            </div>
-            {activeTab === "amazon" && (
-              <>
-                <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
-                  {groupByOrder.map((g) => (
-                    <button
-                      key={g}
-                      onClick={() => {
-                        setGroupBy(g);
-                        userSetGroupByRef.current = true;
-                        localStorage.setItem("chart-amazon-groupby", g);
-                      }}
-                      className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
-                        groupBy === g
-                          ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
-                          : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
-                      }`}
-                    >
-                      {groupByLabels[g]}
-                    </button>
-                  ))}
-                </div>
-                <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-                <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
-              </>
+              {syncing ? "Syncing..." : "Sync All"}
+            </button>
+            {syncMessage && (
+              <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
+                {syncMessage}
+              </div>
             )}
-            <div ref={setControlsEl} className="contents" />
           </div>
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
+          {activeTab === "amazon" && (
+            <>
+              <div className="flex items-center bg-zinc-100 dark:bg-zinc-800 rounded-lg p-0.5">
+                {groupByOrder.map((g) => (
+                  <button
+                    key={g}
+                    onClick={() => {
+                      setGroupBy(g);
+                      userSetGroupByRef.current = true;
+                      localStorage.setItem("chart-amazon-groupby", g);
+                    }}
+                    className={`text-xs font-medium px-2.5 py-1 rounded-md transition-colors ${
+                      groupBy === g
+                        ? "bg-white dark:bg-zinc-700 text-zinc-900 dark:text-zinc-100 shadow-sm"
+                        : "text-zinc-500 dark:text-zinc-400 hover:text-zinc-700 dark:hover:text-zinc-300"
+                    }`}
+                  >
+                    {groupByLabels[g]}
+                  </button>
+                ))}
+              </div>
+              <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
+              <ChartSettingsPopover series={seriesConfig} onChange={handleSeriesChange} />
+            </>
+          )}
+          <div ref={setControlsEl} className="contents" />
+        </>
+      }
+    >
+      <div className="page-container">
+        <div className="page-header">
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 overflow-x-auto">
           {tabs.map((tab) => (
             <button
               key={tab.key}
@@ -194,7 +197,8 @@ export default function ReportsPage() {
               </div>
             ))
         )}
+        </div>
       </div>
-    </div>
+    </PageLayout>
   );
 }

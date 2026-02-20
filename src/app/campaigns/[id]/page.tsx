@@ -6,6 +6,7 @@ import { format, subDays, startOfDay, endOfYesterday } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import PageLayout from "@/components/PageLayout";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -575,34 +576,25 @@ export default function CampaignDetailPage() {
   const toStr = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
 
   return (
-    <div className="page-container">
-      {/* Header */}
-      <div className="page-header">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3">
-            <button
-              onClick={() => router.push("/campaigns")}
-              className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
-              Campaigns
-            </button>
-            <span className="text-zinc-300 dark:text-zinc-600">/</span>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100">
-              {campaignLoading ? (
-                <span className="inline-block h-5 w-48 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
-              ) : (
-                campaign?.campaign || campaign?.utmCampaign || `Campaign #${id}`
-              )}
-            </h1>
-          </div>
+    <PageLayout
+      title={campaignLoading ? "Loading..." : (campaign?.campaign || campaign?.utmCampaign || `Campaign #${id}`)}
+      subtitle="View ad sets, creatives, and performance metrics"
+      actions={
+        <>
+          <button
+            onClick={() => router.push("/campaigns")}
+            className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
+          >
+            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
+            </svg>
+            Back to Campaigns
+          </button>
           <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-        </div>
-      </div>
-
-      {/* Content */}
+        </>
+      }
+    >
+      <div className="page-container">
       <div className="page-content">
         {/* Missing Meta Campaign ID warning */}
         {!campaignLoading && campaign && !campaign.metaCampaignId && (
@@ -755,6 +747,7 @@ export default function CampaignDetailPage() {
           </div>
         )}
       </div>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

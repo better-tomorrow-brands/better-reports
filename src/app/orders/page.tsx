@@ -740,6 +740,7 @@ export default function OrdersPage() {
   return (
     <PageLayout
       title="Orders"
+      subtitle="Track and manage customer orders"
       actions={
           <>
             <span className="text-sm text-muted">

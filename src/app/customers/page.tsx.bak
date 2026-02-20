@@ -6,7 +6,6 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
-import PageLayout from "@/components/PageLayout";
 
 interface Customer {
   id: number;
@@ -562,11 +561,11 @@ export default function CustomersPage() {
   }
 
   return (
-    <PageLayout
-      title="Customers"
-      subtitle="View and segment your customer base"
-      actions={
-        <>
+    <div className="page-container">
+      <div className="page-header">
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-2xl font-bold">Customers</h1>
+        <div className="flex items-center gap-3">
           <span className="text-sm text-muted">
             {filteredCustomers.length === total ? total : `${filteredCustomers.length} of ${total}`} customers
           </span>
@@ -788,11 +787,8 @@ export default function CustomersPage() {
             onDateRangeChange={setDateRange}
             placeholder="Select dates"
           />
-        </>
-      }
-    >
-      <div className="page-container">
-        <div className="page-header">
+        </div>
+      </div>
 
       {/* Scorecards — powered by DB aggregates, load independently */}
       <ScorecardGrid scrollable>
@@ -1116,7 +1112,6 @@ export default function CustomersPage() {
           </div>
         )}
       </div>
-      </div>
-    </PageLayout>
+    </div>
   );
 }

@@ -1680,6 +1680,7 @@ export default function CampaignsPage() {
   return (
     <PageLayout
       title="Campaigns"
+      subtitle="Manage Facebook and WhatsApp marketing campaigns"
       actions={
         <>
           {activeTab === "facebook" && (

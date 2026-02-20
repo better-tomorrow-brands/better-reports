@@ -2,7 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react";
 import { useOrg } from "@/contexts/OrgContext";
-import PageLayout from "@/components/PageLayout";
 
 interface Member {
   userId: string;
@@ -103,13 +102,13 @@ export default function UsersPage() {
   };
 
   return (
-    <PageLayout title="Users" subtitle="Manage team members and permissions" actions={<></>}>
-      <div className="p-6 max-w-4xl">
-        <div className="mb-6">
-          {currentOrg && (
-            <p className="text-sm text-zinc-500 mt-1">{currentOrg.name}</p>
-          )}
-        </div>
+    <div className="p-6 max-w-4xl">
+      <div className="mb-6">
+        <h1 className="text-2xl font-semibold text-zinc-900 dark:text-zinc-100">Users</h1>
+        {currentOrg && (
+          <p className="text-sm text-zinc-500 mt-1">{currentOrg.name}</p>
+        )}
+      </div>
 
       {message && (
         <div
@@ -207,7 +206,6 @@ export default function UsersPage() {
           </table>
         )}
       </div>
-      </div>
-    </PageLayout>
+    </div>
   );
 }

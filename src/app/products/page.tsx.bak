@@ -3,7 +3,6 @@
 import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import { Table, Column } from "@/components/Table";
 import { useOrg } from "@/contexts/OrgContext";
-import PageLayout from "@/components/PageLayout";
 import {
   subDays,
   startOfDay,
@@ -2237,11 +2236,10 @@ export default function InventoryPage() {
   );
 
   return (
-    <PageLayout
-      title="Products"
-      subtitle="Manage product catalog and inventory"
-      actions={
-        <>
+    <div className="page-container">
+      <div className="page-header">
+        <div className="flex items-center justify-between mb-6">
+          <h1 className="text-2xl font-bold">Products</h1>
           {activeTab === "products" && (
             <button
               onClick={addProduct}
@@ -2250,28 +2248,25 @@ export default function InventoryPage() {
               Add Product
             </button>
           )}
-        </>
-      }
-    >
-      <div className="page-container">
-        <div className="page-header">
-          {/* Tabs */}
-          <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
-            {tabs.map((tab) => (
-              <button
-                key={tab.key}
-                onClick={() => setActiveTab(tab.key)}
-                className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
-                  activeTab === tab.key
-                    ? "border-zinc-900 dark:border-white text-zinc-900 dark:text-white"
-                    : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
-                }`}
-              >
-                {tab.label}
-              </button>
-            ))}
-          </div>
         </div>
+
+        {/* Tabs */}
+        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
+          {tabs.map((tab) => (
+            <button
+              key={tab.key}
+              onClick={() => setActiveTab(tab.key)}
+              className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
+                activeTab === tab.key
+                  ? "border-zinc-900 dark:border-white text-zinc-900 dark:text-white"
+                  : "border-transparent text-zinc-500 hover:text-zinc-700 dark:hover:text-zinc-300"
+              }`}
+            >
+              {tab.label}
+            </button>
+          ))}
+        </div>
+      </div>
 
       <div className="page-content">
         {activeTab === "products" ? (
@@ -3428,7 +3423,6 @@ export default function InventoryPage() {
           </div>
         ) : null}
       </div>
-      </div>
-    </PageLayout>
+    </div>
   );
 }

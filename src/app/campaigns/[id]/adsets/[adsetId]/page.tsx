@@ -6,6 +6,7 @@ import { format } from "date-fns";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import { DateRangePicker, presets } from "@/components/DateRangePicker";
+import PageLayout from "@/components/PageLayout";
 import {
   ResponsiveContainer,
   ComposedChart,
@@ -471,47 +472,31 @@ export default function AdSetDetailPage() {
   const toStr = dateRange?.to ? format(dateRange.to, "yyyy-MM-dd") : "";
 
   return (
-    <div className="page-container">
-      {/* Header */}
-      <div className="page-header">
-        <div className="flex items-center justify-between mb-6">
-          <div className="flex items-center gap-3 min-w-0">
-            {/* Campaigns → Campaign → Ad Set breadcrumb */}
+    <PageLayout
+      title={headerLoading || !adsetName ? "Loading..." : adsetName}
+      subtitle="View ad creatives and performance metrics"
+      actions={
+        <>
+          <div className="flex items-center gap-2 text-sm text-zinc-500">
             <button
               onClick={() => router.push("/campaigns")}
-              className="flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors shrink-0"
+              className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
             >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M15 19l-7-7 7-7" />
-              </svg>
               Campaigns
             </button>
-            <span className="text-zinc-300 dark:text-zinc-600 shrink-0">/</span>
+            <span>/</span>
             <button
               onClick={() => router.push(`/campaigns/${id}`)}
-              className="text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors truncate max-w-[160px]"
-              title={campaignName ?? `Campaign #${id}`}
+              className="hover:text-zinc-900 dark:hover:text-zinc-100 transition-colors"
             >
-              {headerLoading ? (
-                <span className="inline-block h-4 w-28 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
-              ) : (
-                campaignName || `Campaign #${id}`
-              )}
+              {headerLoading ? "..." : campaignName || `Campaign #${id}`}
             </button>
-            <span className="text-zinc-300 dark:text-zinc-600 shrink-0">/</span>
-            <h1 className="text-lg font-semibold text-zinc-900 dark:text-zinc-100 truncate">
-              {headerLoading || !adsetName ? (
-                <span className="inline-block h-5 w-48 bg-zinc-200 dark:bg-zinc-700 rounded animate-pulse" />
-              ) : (
-                adsetName
-              )}
-            </h1>
           </div>
           <DateRangePicker dateRange={dateRange} onDateRangeChange={setDateRange} />
-        </div>
-      </div>
-
-      {/* Content */}
+        </>
+      }
+    >
+      <div className="page-container">
       <div className="page-content">
         <div className="space-y-4">
           {/* Tab bar */}
@@ -628,6 +613,7 @@ export default function AdSetDetailPage() {
           )}
         </div>
       </div>
-    </div>
+      </div>
+    </PageLayout>
   );
 }

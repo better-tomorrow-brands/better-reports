@@ -6,6 +6,7 @@ import { useOrg } from "@/contexts/OrgContext";
 import { useTheme, type Theme } from "@/contexts/ThemeContext";
 import { Eye, EyeOff, Pencil, X } from "lucide-react";
 import { getTierDisplayName, type Subscription, type PlanTier } from "@/lib/plans";
+import PageLayout from "@/components/PageLayout";
 
 type SettingsTab =
   | "shopify"
@@ -1086,8 +1087,8 @@ export default function SettingsPage() {
   const tabs = allTabs.filter((t) => !t.superAdminOnly || userRole === "super_admin");
 
   return (
-    <div className="max-w-4xl mx-auto p-6">
-      <h1 className="text-2xl font-bold mb-6">Settings</h1>
+    <PageLayout title="Settings" subtitle="Configure integrations and preferences" actions={<></>}>
+      <div className="max-w-4xl mx-auto p-6">
 
       {message && (
         <div
@@ -2090,6 +2091,7 @@ export default function SettingsPage() {
           </div>
         </section>
       )}
-    </div>
+      </div>
+    </PageLayout>
   );
 }
