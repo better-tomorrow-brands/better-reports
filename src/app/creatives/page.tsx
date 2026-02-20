@@ -29,7 +29,8 @@ interface GeneratedCreative {
 
 export default function CreativesPage() {
   const { apiFetch, currentOrg, isLoading: orgLoading } = useOrg();
-  const [loading, setLoading] = useState(true);
+  const [loadingProducts, setLoadingProducts] = useState(true);
+  const [loadingCreatives, setLoadingCreatives] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
   const [generatedCreatives, setGeneratedCreatives] = useState<GeneratedCreative[]>([]);
@@ -54,30 +55,35 @@ export default function CreativesPage() {
   }, [orgLoading, currentOrg]);
 
   async function loadData() {
-    try {
-      const productsRes = await apiFetch("/api/products");
-      if (productsRes.ok) {
-        const data = await productsRes.json();
-        // Products API returns array directly, not { products: [...] }
-        setProducts(Array.isArray(data) ? data : []);
-      }
+    // Load products
+    apiFetch("/api/products")
+      .then(async (productsRes) => {
+        if (productsRes.ok) {
+          const data = await productsRes.json();
+          setProducts(Array.isArray(data) ? data : []);
+        }
+      })
+      .catch((err) => {
+        console.error("Failed to load products:", err);
+      })
+      .finally(() => {
+        setLoadingProducts(false);
+      });
 
-      // Load creatives separately with error handling
-      try {
-        const creativesRes = await apiFetch("/api/creatives");
+    // Load creatives (independently, don't block on products)
+    apiFetch("/api/creatives")
+      .then(async (creativesRes) => {
         if (creativesRes.ok) {
           const data = await creativesRes.json();
           setGeneratedCreatives(data.creatives || []);
         }
-      } catch (err) {
-        // Creatives endpoint might not exist yet or fail - that's ok
+      })
+      .catch((err) => {
         console.log("Could not load creatives:", err);
-      }
-    } catch (err) {
-      setMessage({ type: "error", text: "Failed to load data" });
-    } finally {
-      setLoading(false);
-    }
+      })
+      .finally(() => {
+        setLoadingCreatives(false);
+      });
   }
 
   function toggleCreativeExpanded(id: string) {
