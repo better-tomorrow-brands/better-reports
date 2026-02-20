@@ -85,38 +85,38 @@ export default function Sidebar() {
 
   return (
     <aside
-      className={`flex flex-col shrink-0 border-r border-zinc-200 dark:border-zinc-800 bg-zinc-50 dark:bg-zinc-950 transition-all duration-200 ${
+      className={`flex flex-col shrink-0 border-r border-zinc-200 dark:border-zinc-700 bg-white dark:bg-zinc-900 transition-all duration-200 ${
         isOpen ? "w-56" : "w-14"
       }`}
     >
       {/* Header */}
-      <div className="flex items-center justify-between px-3 py-4">
+      <div className="flex items-center justify-between px-3 py-3 border-b border-zinc-200 dark:border-zinc-700">
         {isOpen && (
-          <Link href="/" className="font-semibold text-lg px-2">
+          <Link href="/" className="font-semibold text-base px-2">
             Better Reports
           </Link>
         )}
         <button
           onClick={() => setIsOpen(!isOpen)}
-          className="p-1.5 rounded-md text-zinc-500 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
+          className="p-1 rounded text-zinc-500 dark:text-zinc-400 hover:text-zinc-900 hover:bg-zinc-100 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
           aria-label={isOpen ? "Collapse sidebar" : "Expand sidebar"}
         >
           {isOpen ? (
-            <PanelLeftClose size={18} />
+            <PanelLeftClose size={16} />
           ) : (
-            <PanelLeftOpen size={18} />
+            <PanelLeftOpen size={16} />
           )}
         </button>
       </div>
 
       {/* Org Switcher */}
       {showOrgSwitcher && (
-        <div className="px-3 pb-2" ref={orgMenuRef}>
+        <div className="px-2 py-2 border-b border-zinc-200 dark:border-zinc-700" ref={orgMenuRef}>
           {isOpen ? (
             <div className="relative">
               <button
                 onClick={() => setOrgMenuOpen(!orgMenuOpen)}
-                className="w-full flex items-center justify-between gap-2 px-3 py-2 rounded-md text-sm font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 text-zinc-700 dark:text-zinc-300 transition-colors"
+                className="w-full flex items-center justify-between gap-2 px-2.5 py-1.5 rounded text-xs font-medium bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 text-zinc-700 dark:text-zinc-300 transition-colors"
               >
                 <div className="flex flex-col items-start gap-0.5 min-w-0 flex-1">
                   <span className="truncate">{currentOrg?.name ?? "Select org"}</span>
@@ -173,7 +173,7 @@ export default function Sidebar() {
       )}
 
       {/* Navigation */}
-      <nav className="flex flex-col gap-1 px-3 text-sm flex-1">
+      <nav className="flex flex-col gap-0.5 px-2 py-2 text-sm flex-1">
         {visibleLinks.map((link) => {
           const isActive = link.href === "/"
             ? pathname === "/"
@@ -182,12 +182,12 @@ export default function Sidebar() {
             <Link
               key={link.href}
               href={link.href}
-              className={`px-3 py-2 rounded-md whitespace-nowrap overflow-hidden transition-colors ${
+              className={`px-2.5 py-1.5 rounded text-xs whitespace-nowrap overflow-hidden transition-colors ${
                 !isOpen ? "text-center" : ""
               } ${
                 isActive
-                  ? "bg-zinc-200 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
-                  : "text-zinc-600 hover:text-zinc-900 hover:bg-zinc-100 dark:text-zinc-400 dark:hover:text-zinc-100 dark:hover:bg-zinc-800"
+                  ? "bg-zinc-100 dark:bg-zinc-800 text-zinc-900 dark:text-zinc-100 font-medium"
+                  : "text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100 hover:bg-zinc-50 dark:hover:bg-zinc-800/50"
               }`}
               title={!isOpen ? link.label : undefined}
             >
@@ -199,13 +199,13 @@ export default function Sidebar() {
 
       {/* Version */}
       {isOpen && version && (
-        <p className="text-xs text-zinc-400 px-5 pb-2">
+        <p className="text-[11px] text-zinc-500 dark:text-zinc-500 px-4 pb-2">
           Version {version.replace(/^v/, "")}
         </p>
       )}
 
       {/* Footer */}
-      <div className="px-3 py-4 border-t border-zinc-200 dark:border-zinc-800">
+      <div className="px-3 py-3 border-t border-zinc-200 dark:border-zinc-700">
         <div className={isOpen ? "px-2" : "flex justify-center"}>
           <UserButton
             showName={isOpen}

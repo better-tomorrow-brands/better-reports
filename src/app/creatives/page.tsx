@@ -267,13 +267,12 @@ export default function CreativesPage() {
   const selectedProductData = products.find((p) => p.id === selectedProduct);
 
   return (
-    <div className="max-w-7xl mx-auto px-6 py-4">
-      <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 -mx-6 px-6 pb-3 mb-4">
-        <div className="flex items-center gap-2.5">
-          <Sparkles className="w-6 h-6 text-purple-600 dark:text-purple-400" />
-          <h1 className="text-xl font-semibold">AI Creative Generator</h1>
-          <span className="text-[11px] text-zinc-500 dark:text-zinc-400">Powered by Google Gemini</span>
-        </div>
+    <div className="max-w-7xl mx-auto px-6 py-6">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-1">AI Creative Generator</h1>
+        <p className="text-sm text-zinc-500 dark:text-zinc-400">
+          Generate professional ad creatives with AI. Powered by Google Gemini.
+        </p>
       </div>
 
       {message && (
@@ -290,13 +289,13 @@ export default function CreativesPage() {
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
         {/* Left: Generation Form */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 bg-white dark:bg-zinc-950">
-          <h2 className="text-base font-semibold mb-4">Campaign Brief</h2>
+        <section className="border border-zinc-200 dark:border-zinc-700 rounded p-4 bg-white dark:bg-zinc-900">
+          <h2 className="text-base font-semibold mb-3">Campaign Brief</h2>
 
-          <div className="space-y-4">
+          <div className="space-y-3">
             {/* Campaign Goal */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400">
                 Campaign Goal <span className="text-red-500">*</span>
               </label>
               <input
@@ -304,16 +303,16 @@ export default function CreativesPage() {
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
                 placeholder="e.g., Drive sales, Lead generation, Brand awareness"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-1">
                 What's the primary objective?
               </p>
             </div>
 
             {/* Target CTA */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400">
                 Target Action <span className="text-red-500">*</span>
               </label>
               <input
@@ -321,23 +320,23 @@ export default function CreativesPage() {
                 value={targetCta}
                 onChange={(e) => setTargetCta(e.target.value)}
                 placeholder="e.g., Subscribe now, Shop 35% off, Try risk-free"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-[11px] text-zinc-500 dark:text-zinc-500 mt-1">
                 What action should people take?
               </p>
             </div>
 
             {/* Product Selection */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400">
                 Product (Optional)
               </label>
               <select
                 value={selectedProduct || ""}
                 onChange={(e) => handleProductChange(e.target.value ? Number(e.target.value) : null)}
                 disabled={loadingProducts}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               >
                 <option value="">
                   {loadingProducts ? "Loading products..." : "No specific product"}
@@ -418,9 +417,9 @@ export default function CreativesPage() {
 
             {/* Brand Guidelines */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
                 <span>Brand Guidelines (Optional)</span>
-                <span className={`text-[11px] ${brandGuidelines.length > 300 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                <span className={`text-[11px] ${brandGuidelines.length > 300 ? 'text-red-500' : 'text-zinc-500'}`}>
                   {brandGuidelines.length}/300
                 </span>
               </label>
@@ -430,16 +429,16 @@ export default function CreativesPage() {
                 maxLength={300}
                 placeholder="Brand colors, tone of voice, key messaging..."
                 rows={3}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-[11px] text-zinc-500 mt-1">
                 Visual style keywords (300 char max)
               </p>
             </div>
 
             {/* Ad Angle */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400">
                 Ad Angle (Optional)
               </label>
               <input
@@ -447,13 +446,13 @@ export default function CreativesPage() {
                 value={adAngle}
                 onChange={(e) => setAdAngle(e.target.value)}
                 placeholder="e.g., Benefit-focused, Emotion-driven"
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
             </div>
 
             {/* Context Images */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400">
                 Reference Images (Optional)
               </label>
               <input
@@ -465,9 +464,9 @@ export default function CreativesPage() {
                   const files = Array.from(e.target.files || []);
                   setContextImages(files);
                 }}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm file:mr-2 file:px-2 file:py-0.5 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-800 file:text-xs file:font-medium focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm file:mr-2 file:px-2 file:py-0.5 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-700 file:text-xs file:font-medium focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-[11px] text-zinc-500 mt-1">
                 Upload inspiration images or style references
               </p>
               {contextImages.length > 0 && (
@@ -500,9 +499,9 @@ export default function CreativesPage() {
 
             {/* Custom Prompt */}
             <div>
-              <label className="block text-xs font-medium mb-1.5 text-zinc-700 dark:text-zinc-300 flex items-center justify-between">
+              <label className="block text-xs font-medium mb-1 text-zinc-600 dark:text-zinc-400 flex items-center justify-between">
                 <span>Additional Instructions (Optional)</span>
-                <span className={`text-[11px] ${customPrompt.length > 500 ? 'text-red-500' : 'text-zinc-400 dark:text-zinc-500'}`}>
+                <span className={`text-[11px] ${customPrompt.length > 500 ? 'text-red-500' : 'text-zinc-500'}`}>
                   {customPrompt.length}/500
                 </span>
               </label>
@@ -512,15 +511,15 @@ export default function CreativesPage() {
                 maxLength={500}
                 placeholder="Any specific requirements..."
                 rows={3}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-1.5 bg-white dark:bg-zinc-900 text-sm focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
               />
-              <p className="text-[11px] text-zinc-500 dark:text-zinc-400 mt-1">
+              <p className="text-[11px] text-zinc-500 mt-1">
                 Specific visual requirements (500 char max)
               </p>
             </div>
 
             {/* Generate Button with Variations */}
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex items-center gap-2">
               <button
                 onClick={generateCreatives}
                 disabled={generating || !campaignGoal.trim() || !targetCta.trim()}
@@ -542,7 +541,7 @@ export default function CreativesPage() {
                 value={numVariations}
                 onChange={(e) => setNumVariations(Number(e.target.value))}
                 disabled={generating}
-                className="border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:ring-1 focus:ring-purple-500 dark:focus:ring-purple-400"
+                className="border border-zinc-300 dark:border-zinc-700 rounded px-2.5 py-2 bg-white dark:bg-zinc-800 text-sm disabled:opacity-50 disabled:cursor-not-allowed focus:outline-none focus:border-zinc-400 dark:focus:border-zinc-600"
                 title="Number of variations"
               >
                 <option value={1}>1</option>
@@ -556,8 +555,8 @@ export default function CreativesPage() {
         </section>
 
         {/* Right: Generated Creatives Gallery */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5 bg-white dark:bg-zinc-950">
-          <h2 className="text-base font-semibold mb-4">Generated Creatives</h2>
+        <section className="border border-zinc-200 dark:border-zinc-700 rounded p-4 bg-white dark:bg-zinc-900">
+          <h2 className="text-base font-semibold mb-3">Generated Creatives</h2>
 
           {loadingCreatives ? (
             <div className="space-y-4">

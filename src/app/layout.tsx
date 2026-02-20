@@ -53,9 +53,9 @@ export default function RootLayout({
           <SignedIn>
             <ThemeProvider>
               <OrgProvider>
-                <div className="flex h-screen">
+                <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
                   <Sidebar />
-                  <main className="flex-1 min-w-0 overflow-auto">{children}</main>
+                  <main className="flex-1 min-w-0 overflow-auto bg-zinc-50 dark:bg-zinc-950">{children}</main>
                 </div>
               </OrgProvider>
             </ThemeProvider>
