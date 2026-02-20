@@ -108,7 +108,6 @@ export default function SubscriptionsPage() {
                       onChange={(e) => setSelectedTier(e.target.value as PlanTier)}
                       className="border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 bg-white dark:bg-zinc-900 text-sm"
                     >
-                      <option value="free">Free (Default)</option>
                       <option value="free_trial">Free Trial (Early Adopters)</option>
                       <option value="starter">Starter</option>
                       <option value="growth">Growth</option>
@@ -164,7 +163,7 @@ export default function SubscriptionsPage() {
                     <button
                       onClick={() => {
                         setEditingOrgId(sub.orgId);
-                        setSelectedTier(sub.tier || "free");
+                        setSelectedTier(sub.tier || "free_trial");
                       }}
                       className="px-3 py-1 bg-amber-100 dark:bg-amber-900/30 text-amber-800 dark:text-amber-300 text-sm rounded-md hover:bg-amber-200 dark:hover:bg-amber-900/50"
                     >
