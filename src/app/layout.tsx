@@ -58,12 +58,9 @@ export default function RootLayout({
                   {/* Top Bar */}
                   <TopBar />
 
-                  {/* Sidebar + Page Content */}
-                  <div className="flex flex-1 min-h-0">
-                    <Sidebar />
-                    <div className="flex-1 min-w-0 flex flex-col">
-                      {children}
-                    </div>
+                  {/* Page Content (includes PageTitle from each page) */}
+                  <div className="flex-1 min-h-0 flex flex-col">
+                    {children}
                   </div>
                 </div>
               </OrgProvider>
