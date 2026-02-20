@@ -4,7 +4,7 @@ import { db } from "@/lib/db";
 import { products, creatives } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
 import { uploadToSpaces, generateImageKey } from "@/lib/storage";
-import { GoogleGenAI } from "@google/genai";
+import { GoogleGenerativeAI } from "@google/generative-ai";
 
 /**
  * POST /api/creatives/generate
@@ -107,7 +107,7 @@ export async function POST(request: Request) {
     prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
 
     // Initialize Google Generative AI
-    const ai = new GoogleGenAI({});
+    const genAI = new GoogleGenerativeAI(apiKey);
 
     // Generate creatives using Google Gemini Image (Nano Banana)
     const generatedCreatives = [];
@@ -122,38 +122,35 @@ export async function POST(request: Request) {
           contents.push(...contextImageParts);
         }
 
-        // Add the text prompt
+        // Add the text prompt last
         contents.push({ text: prompt });
 
-        // Generate image using Gemini 2.5 Flash Image (Nano Banana)
-        const response = await ai.models.generateContent({
+        // Get the model
+        const model = genAI.getGenerativeModel({
           model: "gemini-2.5-flash-image",
-          contents: contents,
-          config: {
-            responseModalities: ['TEXT', 'IMAGE'],
-            imageConfig: {
-              aspectRatio: "16:9", // Good for social media ads
+          safetySettings: [
+            {
+              category: "HARM_CATEGORY_HARASSMENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE",
             },
-            safetySettings: [
-              {
-                category: "HARM_CATEGORY_HARASSMENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_HATE_SPEECH",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-              {
-                category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
-                threshold: "BLOCK_LOW_AND_ABOVE", // Strictest for adult content
-              },
-              {
-                category: "HARM_CATEGORY_DANGEROUS_CONTENT",
-                threshold: "BLOCK_MEDIUM_AND_ABOVE",
-              },
-            ],
-          },
+            {
+              category: "HARM_CATEGORY_HATE_SPEECH",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE",
+            },
+            {
+              category: "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+              threshold: "BLOCK_LOW_AND_ABOVE", // Strictest for adult content
+            },
+            {
+              category: "HARM_CATEGORY_DANGEROUS_CONTENT",
+              threshold: "BLOCK_MEDIUM_AND_ABOVE",
+            },
+          ],
         });
+
+        // Generate image using Gemini 2.5 Flash Image (Nano Banana)
+        const result = await model.generateContent(contents);
+        const response = result.response;
 
         // Extract image from response (following docs pattern)
         let imageData: string | null = null;
