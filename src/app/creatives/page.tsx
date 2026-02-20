@@ -18,7 +18,7 @@ interface GeneratedCreative {
 }
 
 export default function CreativesPage() {
-  const { apiFetch } = useOrg();
+  const { apiFetch, currentOrg, isLoading: orgLoading } = useOrg();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [products, setProducts] = useState<Product[]>([]);
@@ -35,8 +35,11 @@ export default function CreativesPage() {
   const [contextImages, setContextImages] = useState<File[]>([]);
 
   useEffect(() => {
-    loadData();
-  }, []);
+    // Wait for org context to be ready before loading data
+    if (!orgLoading && currentOrg) {
+      loadData();
+    }
+  }, [orgLoading, currentOrg]);
 
   async function loadData() {
     try {
@@ -115,7 +118,7 @@ export default function CreativesPage() {
     }
   }
 
-  if (loading) {
+  if (loading || orgLoading) {
     return (
       <div className="max-w-7xl mx-auto p-6">
         <div className="h-8 w-64 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
