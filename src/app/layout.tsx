@@ -7,7 +7,7 @@ import {
   SignedOut,
 } from "@clerk/nextjs";
 import TopBar from "@/components/TopBar";
-import Sidebar from "@/components/Sidebar";
+import AppShell from "@/components/AppShell";
 import { OrgProvider } from "@/contexts/OrgContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
@@ -58,10 +58,10 @@ export default function RootLayout({
                   {/* Top Bar */}
                   <TopBar />
 
-                  {/* Page Content (includes PageTitle from each page) */}
-                  <div className="flex-1 min-h-0 flex flex-col">
+                  {/* AppShell wraps Sidebar + Page Content (Sidebar stays mounted) */}
+                  <AppShell>
                     {children}
-                  </div>
+                  </AppShell>
                 </div>
               </OrgProvider>
             </ThemeProvider>
