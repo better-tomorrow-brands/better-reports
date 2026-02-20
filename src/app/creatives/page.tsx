@@ -40,19 +40,22 @@ export default function CreativesPage() {
 
   async function loadData() {
     try {
-      const [productsRes, creativesRes] = await Promise.all([
-        apiFetch("/api/products"),
-        apiFetch("/api/creatives").catch(() => ({ ok: false })),
-      ]);
-
+      const productsRes = await apiFetch("/api/products");
       if (productsRes.ok) {
         const data = await productsRes.json();
         setProducts(data.products || []);
       }
 
-      if (creativesRes.ok) {
-        const data = await creativesRes.json();
-        setGeneratedCreatives(data.creatives || []);
+      // Load creatives separately with error handling
+      try {
+        const creativesRes = await apiFetch("/api/creatives");
+        if (creativesRes.ok) {
+          const data = await creativesRes.json();
+          setGeneratedCreatives(data.creatives || []);
+        }
+      } catch (err) {
+        // Creatives endpoint might not exist yet or fail - that's ok
+        console.log("Could not load creatives:", err);
       }
     } catch (err) {
       setMessage({ type: "error", text: "Failed to load data" });
