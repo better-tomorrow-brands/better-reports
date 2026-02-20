@@ -61,7 +61,9 @@ export default function RootLayout({
                   {/* Sidebar + Content */}
                   <div className="flex flex-1 min-h-0">
                     <Sidebar />
-                    <main className="flex-1 min-w-0 overflow-auto bg-white dark:bg-black">{children}</main>
+                    <main className="flex-1 min-w-0 bg-white dark:bg-black flex flex-col">
+                      {children}
+                    </main>
                   </div>
                 </div>
               </OrgProvider>

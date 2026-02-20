@@ -6,6 +6,7 @@ import { DateRangePicker } from "@/components/DateRangePicker";
 import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
+import PageTitle from "@/components/PageTitle";
 
 const UTM_SOURCE_OPTIONS = ["facebook", "instagram", "google", "tiktok", "email", "referral"];
 
@@ -737,187 +738,190 @@ export default function OrdersPage() {
   }
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <div className="flex justify-between items-center mb-4">
-        <h1 className="text-2xl font-bold">Orders</h1>
-        <div className="flex items-center gap-3">
-          <span className="text-sm text-muted">
-            {filteredOrders.length === total ? total : `${filteredOrders.length} of ${total}`} orders
-          </span>
+    <>
+      <PageTitle
+        title="Orders"
+        actions={
+          <>
+            <span className="text-sm text-muted">
+              {filteredOrders.length === total ? total : `${filteredOrders.length} of ${total}`} orders
+            </span>
 
-          {/* Search */}
-          <input
-            type="text"
-            placeholder="Search..."
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-            className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-sm bg-white dark:bg-zinc-900 w-48"
-          />
+            {/* Search */}
+            <input
+              type="text"
+              placeholder="Search..."
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-1.5 text-xs bg-white dark:bg-zinc-900 w-48"
+            />
 
-          {/* Sync */}
-          <div className="relative">
-            <button
-              onClick={handleSync}
-              disabled={syncing}
-              className="btn btn-secondary btn-sm"
-            >
-              {syncing ? (
-                <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                  <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                  <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                </svg>
-              ) : (
-                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
-                </svg>
+            {/* Sync */}
+            <div className="relative">
+              <button
+                onClick={handleSync}
+                disabled={syncing}
+                className="btn btn-secondary btn-sm"
+              >
+                {syncing ? (
+                  <svg className="w-4 h-4 animate-spin" fill="none" viewBox="0 0 24 24">
+                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
+                  </svg>
+                ) : (
+                  <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+                  </svg>
+                )}
+                {syncing ? "Refreshing..." : "Refresh data"}
+              </button>
+              {syncMessage && (
+                <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
+                  {syncMessage}
+                </div>
               )}
-              {syncing ? "Refreshing..." : "Refresh data"}
-            </button>
-            {syncMessage && (
-              <div className="absolute top-full mt-1 right-0 whitespace-nowrap bg-zinc-800 text-white text-xs px-3 py-1.5 rounded shadow-lg z-50">
-                {syncMessage}
-              </div>
-            )}
-          </div>
+            </div>
 
-          {/* Sort */}
-          <div className="relative" ref={sortModalRef}>
-            <button
-              onClick={() => setShowSortModal(!showSortModal)}
-              className="btn btn-secondary btn-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
-              </svg>
-              Sort
-            </button>
-            {showSortModal && (
-              <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
-                <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
-                  <div className="text-sm font-medium mb-2">Sort by</div>
-                  <div className="flex flex-col gap-1">
-                    {([
-                      { value: "createdAt" as SortField, label: "Date" },
-                      { value: "total" as SortField, label: "Total" },
-                      { value: "customerName" as SortField, label: "Customer" },
-                      { value: "fulfillmentStatus" as SortField, label: "Status" },
-                      { value: "quantity" as SortField, label: "Quantity" },
-                    ]).map((opt) => (
-                      <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+            {/* Sort */}
+            <div className="relative" ref={sortModalRef}>
+              <button
+                onClick={() => setShowSortModal(!showSortModal)}
+                className="btn btn-secondary btn-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4h13M3 8h9m-9 4h6m4 0l4-4m0 0l4 4m-4-4v12" />
+                </svg>
+                Sort
+              </button>
+              {showSortModal && (
+                <div className="dropdown right-0 mt-2 w-56" onClick={(e) => e.stopPropagation()}>
+                  <div className="p-3 border-b border-zinc-200 dark:border-zinc-700">
+                    <div className="text-sm font-medium mb-2">Sort by</div>
+                    <div className="flex flex-col gap-1">
+                      {([
+                        { value: "createdAt" as SortField, label: "Date" },
+                        { value: "total" as SortField, label: "Total" },
+                        { value: "customerName" as SortField, label: "Customer" },
+                        { value: "fulfillmentStatus" as SortField, label: "Status" },
+                        { value: "quantity" as SortField, label: "Quantity" },
+                      ]).map((opt) => (
+                        <label key={opt.value} className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer">
+                          <input
+                            type="radio"
+                            name="sortField"
+                            checked={sortField === opt.value}
+                            onChange={() => setSortField(opt.value)}
+                          />
+                          <span className="text-sm">{opt.label}</span>
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div className="p-2">
+                    <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
+                      </svg>
+                      <input type="radio" name="sortDir" checked={sortDirection === "asc"} onChange={() => setSortDirection("asc")} className="sr-only" />
+                      <span className="text-sm">Ascending</span>
+                    </label>
+                    <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                      <input type="radio" name="sortDir" checked={sortDirection === "desc"} onChange={() => setSortDirection("desc")} className="sr-only" />
+                      <span className="text-sm">Descending</span>
+                    </label>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Add Filter */}
+            <div className="relative" ref={filterDropdownRef}>
+              <button
+                onClick={() => setShowFilterDropdown(!showFilterDropdown)}
+                className="btn btn-secondary btn-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
+                </svg>
+                Add filter
+              </button>
+              {showFilterDropdown && (
+                <div className="dropdown right-0 mt-2 w-48 max-h-64 overflow-y-auto">
+                  {filterableColumns.map((col) => (
+                    <button
+                      key={col.key}
+                      className="dropdown-item"
+                      onClick={() => {
+                        setEditingFilter(col.key);
+                        setShowFilterDropdown(false);
+                        setFilterSearch("");
+                      }}
+                    >
+                      {col.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+
+            {/* Columns */}
+            <div className="relative" ref={columnPickerRef}>
+              <button
+                onClick={() => setShowColumnPicker(!showColumnPicker)}
+                className="btn btn-secondary btn-sm"
+              >
+                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+                </svg>
+                Columns ({activeColumns.length})
+              </button>
+              {showColumnPicker && (
+                <div className="dropdown right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto">
+                  <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
+                    <button onClick={showAllColumns} className="btn btn-secondary btn-sm flex-1">
+                      Show All
+                    </button>
+                    <button onClick={resetColumns} className="btn btn-secondary btn-sm flex-1">
+                      Reset
+                    </button>
+                  </div>
+                  <div className="p-2">
+                    {allColumns.map((col) => (
+                      <label
+                        key={col.key}
+                        className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
+                      >
                         <input
-                          type="radio"
-                          name="sortField"
-                          checked={sortField === opt.value}
-                          onChange={() => setSortField(opt.value)}
+                          type="checkbox"
+                          checked={visibleColumns.has(col.key)}
+                          onChange={() => toggleColumn(col.key)}
+                          className="rounded"
                         />
-                        <span className="text-sm">{opt.label}</span>
+                        <span className="text-sm">{col.label}</span>
                       </label>
                     ))}
                   </div>
                 </div>
-                <div className="p-2">
-                  <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "asc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 15l7-7 7 7" />
-                    </svg>
-                    <input type="radio" name="sortDir" checked={sortDirection === "asc"} onChange={() => setSortDirection("asc")} className="sr-only" />
-                    <span className="text-sm">Ascending</span>
-                  </label>
-                  <label className={`flex items-center gap-2 px-2 py-1.5 rounded cursor-pointer ${sortDirection === "desc" ? "bg-zinc-100 dark:bg-zinc-700" : "hover:bg-zinc-50 dark:hover:bg-zinc-700"}`}>
-                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
-                    </svg>
-                    <input type="radio" name="sortDir" checked={sortDirection === "desc"} onChange={() => setSortDirection("desc")} className="sr-only" />
-                    <span className="text-sm">Descending</span>
-                  </label>
-                </div>
-              </div>
-            )}
-          </div>
+              )}
+            </div>
 
-          {/* Add Filter */}
-          <div className="relative" ref={filterDropdownRef}>
-            <button
-              onClick={() => setShowFilterDropdown(!showFilterDropdown)}
-              className="btn btn-secondary btn-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 4a1 1 0 011-1h16a1 1 0 011 1v2.586a1 1 0 01-.293.707l-6.414 6.414a1 1 0 00-.293.707V17l-4 4v-6.586a1 1 0 00-.293-.707L3.293 7.293A1 1 0 013 6.586V4z" />
-              </svg>
-              Add filter
-            </button>
-            {showFilterDropdown && (
-              <div className="dropdown right-0 mt-2 w-48 max-h-64 overflow-y-auto">
-                {filterableColumns.map((col) => (
-                  <button
-                    key={col.key}
-                    className="dropdown-item"
-                    onClick={() => {
-                      setEditingFilter(col.key);
-                      setShowFilterDropdown(false);
-                      setFilterSearch("");
-                    }}
-                  >
-                    {col.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+            {/* Date Range Picker */}
+            <DateRangePicker
+              dateRange={dateRange}
+              onDateRangeChange={setDateRange}
+              placeholder="Select dates"
+            />
+          </>
+        }
+      />
 
-          {/* Columns */}
-          <div className="relative" ref={columnPickerRef}>
-            <button
-              onClick={() => setShowColumnPicker(!showColumnPicker)}
-              className="btn btn-secondary btn-sm"
-            >
-              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
-              </svg>
-              Columns ({activeColumns.length})
-            </button>
-            {showColumnPicker && (
-              <div className="dropdown right-0 mt-2 w-64 max-h-[70vh] overflow-y-auto">
-                <div className="p-2 border-b border-zinc-200 dark:border-zinc-700 flex gap-2">
-                  <button onClick={showAllColumns} className="btn btn-secondary btn-sm flex-1">
-                    Show All
-                  </button>
-                  <button onClick={resetColumns} className="btn btn-secondary btn-sm flex-1">
-                    Reset
-                  </button>
-                </div>
-                <div className="p-2">
-                  {allColumns.map((col) => (
-                    <label
-                      key={col.key}
-                      className="flex items-center gap-2 px-2 py-1.5 hover:bg-zinc-50 dark:hover:bg-zinc-700 rounded cursor-pointer"
-                    >
-                      <input
-                        type="checkbox"
-                        checked={visibleColumns.has(col.key)}
-                        onChange={() => toggleColumn(col.key)}
-                        className="rounded"
-                      />
-                      <span className="text-sm">{col.label}</span>
-                    </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-
-          {/* Date Range Picker */}
-          <DateRangePicker
-            dateRange={dateRange}
-            onDateRangeChange={setDateRange}
-            placeholder="Select dates"
-          />
-        </div>
-      </div>
-
-      {/* Scorecards */}
-      <ScorecardGrid scrollable>
+      <div className="page-container">
+        <div className="page-header">
+          {/* Scorecards */}
+          <ScorecardGrid scrollable>
         <Scorecard
           title="Total Orders"
           value={stats.totalOrders.toLocaleString()}
@@ -1041,9 +1045,9 @@ export default function OrdersPage() {
           </div>
         </div>
       )}
-      </div>
+        </div>
 
-      <div className="page-content">
+        <div className="page-content">
         <Table
           columns={activeColumns}
           data={pagedOrders}
@@ -1077,7 +1081,8 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }
