@@ -8,7 +8,6 @@ interface Product {
   id: number;
   productName: string | null;
   sku: string;
-  featuredImage: string | null;
 }
 
 interface GeneratedCreative {
@@ -186,13 +185,6 @@ export default function CreativesPage() {
                   </option>
                 ))}
               </select>
-              {selectedProductData?.featuredImage && (
-                <img
-                  src={selectedProductData.featuredImage}
-                  alt={selectedProductData.productName || selectedProductData.sku}
-                  className="mt-2 w-32 h-32 object-cover rounded border border-zinc-200 dark:border-zinc-700"
-                />
-              )}
             </div>
 
             {/* Brand Guidelines */}
