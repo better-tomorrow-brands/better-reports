@@ -245,6 +245,10 @@ export async function syncShopifyProducts(
             barcode
             product {
               title
+              vendor
+              image {
+                src
+              }
             }
           }
         }
@@ -289,20 +293,27 @@ export async function syncShopifyProducts(
       }
 
       const trimmedSku = sku.trim();
+      const imageUrl = product.image?.src || null;
+      const brand = product.vendor || null;
+
       await db
         .insert(products)
         .values({
           orgId,
           sku: trimmedSku,
           productName: product.title || null,
+          brand,
           unitBarcode: barcode || null,
+          imageUrl,
           active: true,
         })
         .onConflictDoUpdate({
           target: [products.orgId, products.sku],
           set: {
             productName: product.title || null,
+            brand,
             unitBarcode: barcode || null,
+            imageUrl,
             active: true,
             updatedAt: new Date(),
           },
