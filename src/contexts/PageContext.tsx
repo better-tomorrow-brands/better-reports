@@ -2,20 +2,23 @@
 
 import { createContext, useContext, ReactNode, useState } from "react";
 
-interface PageContextType {
+interface PageInfo {
   title: string;
   subtitle?: string;
   actions?: ReactNode;
-  setPageInfo: (info: { title: string; subtitle?: string; actions?: ReactNode }) => void;
+}
+
+interface PageContextType extends PageInfo {
+  setPageInfo: (info: PageInfo) => void;
 }
 
 const PageContext = createContext<PageContextType | null>(null);
 
 export function PageProvider({ children }: { children: ReactNode }) {
-  const [pageInfo, setPageInfo] = useState({
+  const [pageInfo, setPageInfo] = useState<PageInfo>({
     title: "",
-    subtitle: undefined as string | undefined,
-    actions: undefined as ReactNode | undefined,
+    subtitle: undefined,
+    actions: undefined,
   });
 
   return (
