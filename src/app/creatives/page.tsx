@@ -56,6 +56,7 @@ export default function CreativesPage() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [numVariations, setNumVariations] = useState(1);
   const [contextImages, setContextImages] = useState<File[]>([]);
+  const [fileInputKey, setFileInputKey] = useState(0);
   const [expandedCreatives, setExpandedCreatives] = useState<Set<string>>(new Set());
 
   useEffect(() => {
@@ -419,6 +420,7 @@ export default function CreativesPage() {
                 Reference Images (Optional)
               </label>
               <input
+                key={fileInputKey}
                 type="file"
                 accept="image/*"
                 multiple
@@ -426,7 +428,6 @@ export default function CreativesPage() {
                   const files = Array.from(e.target.files || []);
                   setContextImages(files);
                 }}
-                value=""
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm file:mr-3 file:px-3 file:py-1 file:rounded file:border-0 file:bg-zinc-100 dark:file:bg-zinc-800 file:text-sm file:font-medium"
               />
               <p className="text-xs text-zinc-500 mt-1">
@@ -445,6 +446,10 @@ export default function CreativesPage() {
                         onClick={() => {
                           const newImages = contextImages.filter((_, i) => i !== index);
                           setContextImages(newImages);
+                          // Reset file input if all images removed
+                          if (newImages.length === 0) {
+                            setFileInputKey(prev => prev + 1);
+                          }
                         }}
                         className="absolute -top-2 -right-2 w-5 h-5 bg-red-500 text-white rounded-full text-xs flex items-center justify-center hover:bg-red-600"
                       >
