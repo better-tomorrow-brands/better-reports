@@ -286,9 +286,9 @@ export default function CreativesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Left: Generation Form */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 lg:h-[calc(100vh-12rem)]">
+        {/* Left: Generation Form - Fixed/Sticky */}
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:overflow-y-auto lg:max-h-full">
           <h2 className="text-lg font-semibold mb-4">Campaign Brief</h2>
 
           <div className="space-y-5">
@@ -517,47 +517,44 @@ export default function CreativesPage() {
               </p>
             </div>
 
-            {/* Number of Variations */}
-            <div>
-              <label className="block text-sm font-medium mb-2">
-                Number of Variations
-              </label>
+            {/* Generate Button with Variations */}
+            <div className="flex items-center gap-3">
+              <button
+                onClick={generateCreatives}
+                disabled={generating || !campaignGoal.trim() || !targetCta.trim()}
+                className="flex-1 px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium rounded-md disabled:cursor-not-allowed flex items-center justify-center gap-2"
+              >
+                {generating ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="w-4 h-4" />
+                    Generate Creatives
+                  </>
+                )}
+              </button>
               <select
                 value={numVariations}
                 onChange={(e) => setNumVariations(Number(e.target.value))}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                disabled={generating}
+                className="border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-3 bg-white dark:bg-zinc-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
+                title="Number of variations"
               >
-                <option value={1}>1 variation</option>
-                <option value={2}>2 variations</option>
-                <option value={3}>3 variations</option>
-                <option value={4}>4 variations</option>
-                <option value={5}>5 variations</option>
+                <option value={1}>1</option>
+                <option value={2}>2</option>
+                <option value={3}>3</option>
+                <option value={4}>4</option>
+                <option value={5}>5</option>
               </select>
             </div>
-
-            {/* Generate Button */}
-            <button
-              onClick={generateCreatives}
-              disabled={generating || !campaignGoal.trim() || !targetCta.trim()}
-              className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium rounded-md disabled:cursor-not-allowed flex items-center justify-center gap-2"
-            >
-              {generating ? (
-                <>
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  Generating...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="w-4 h-4" />
-                  Generate Creatives
-                </>
-              )}
-            </button>
           </div>
         </section>
 
-        {/* Right: Generated Creatives Gallery */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6">
+        {/* Right: Generated Creatives Gallery - Scrollable */}
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:overflow-y-auto lg:max-h-full">
           <h2 className="text-lg font-semibold mb-4">Generated Creatives</h2>
 
           {loadingCreatives ? (
