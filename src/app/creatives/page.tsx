@@ -221,18 +221,22 @@ export default function CreativesPage() {
 
             {/* Brand Guidelines */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Brand Guidelines (Optional)
+              <label className="block text-sm font-medium mb-2 flex items-center justify-between">
+                <span>Brand Guidelines (Optional)</span>
+                <span className={`text-xs ${brandGuidelines.length > 100 ? 'text-red-500' : 'text-zinc-400'}`}>
+                  {brandGuidelines.length}/100
+                </span>
               </label>
               <textarea
                 value={brandGuidelines}
                 onChange={(e) => setBrandGuidelines(e.target.value)}
+                maxLength={100}
                 placeholder="Brand colors, tone of voice, key messaging, visual style..."
                 rows={4}
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
               />
               <p className="text-xs text-zinc-500 mt-1">
-                Describe your brand's visual identity, messaging style, and any rules to follow.
+                Visual style keywords (100 char max - will be lowercased)
               </p>
             </div>
 
@@ -293,16 +297,23 @@ export default function CreativesPage() {
 
             {/* Custom Prompt */}
             <div>
-              <label className="block text-sm font-medium mb-2">
-                Additional Instructions (Optional)
+              <label className="block text-sm font-medium mb-2 flex items-center justify-between">
+                <span>Additional Instructions (Optional)</span>
+                <span className={`text-xs ${customPrompt.length > 150 ? 'text-red-500' : 'text-zinc-400'}`}>
+                  {customPrompt.length}/150
+                </span>
               </label>
               <textarea
                 value={customPrompt}
                 onChange={(e) => setCustomPrompt(e.target.value)}
+                maxLength={150}
                 placeholder="Any specific requirements for the creative..."
                 rows={3}
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
               />
+              <p className="text-xs text-zinc-500 mt-1">
+                Specific visual requirements (150 char max)
+              </p>
             </div>
 
             {/* Number of Variations */}
