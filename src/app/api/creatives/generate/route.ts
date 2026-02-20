@@ -153,6 +153,10 @@ export async function POST(request: Request) {
         const response = result.response;
 
         // Extract image from response (following docs pattern)
+        if (!response.candidates || response.candidates.length === 0) {
+          throw new Error("No candidates in Gemini response");
+        }
+
         let imageData: string | null = null;
         for (const part of response.candidates[0].content.parts) {
           if (part.inlineData) {
