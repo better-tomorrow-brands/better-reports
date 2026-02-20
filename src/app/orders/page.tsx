@@ -7,6 +7,7 @@ import { Scorecard, ScorecardGrid } from "@/components/Scorecard";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
 import PageTitle from "@/components/PageTitle";
+import Sidebar from "@/components/Sidebar";
 
 const UTM_SOURCE_OPTIONS = ["facebook", "instagram", "google", "tiktok", "email", "referral"];
 
@@ -739,6 +740,7 @@ export default function OrdersPage() {
 
   return (
     <>
+      {/* Full-width PageTitle */}
       <PageTitle
         title="Orders"
         actions={
@@ -918,8 +920,12 @@ export default function OrdersPage() {
         }
       />
 
-      <div className="page-container">
-        <div className="page-header">
+      {/* Sidebar + Content Area */}
+      <div className="flex flex-1 min-h-0">
+        <Sidebar />
+        <div className="flex-1 min-w-0 flex flex-col bg-white dark:bg-black">
+          <div className="page-container">
+            <div className="page-header">
           {/* Scorecards */}
           <ScorecardGrid scrollable>
         <Scorecard
@@ -1081,6 +1087,8 @@ export default function OrdersPage() {
             </div>
           </div>
         )}
+            </div>
+          </div>
         </div>
       </div>
     </>
