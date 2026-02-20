@@ -63,14 +63,21 @@ export default function SubscriptionsPage() {
 
   if (loading || orgLoading) {
     return (
-      <div className="max-w-6xl mx-auto p-6">
-        <div className="h-8 w-48 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
-          {[...Array(5)].map((_, i) => (
-            <div key={i} className="h-16 bg-zinc-100 dark:bg-zinc-800 rounded mb-2 animate-pulse" />
-          ))}
+      <PageLayout
+        title="Subscriptions Management"
+        subtitle="View and manage subscription plans"
+        actions={<></>}
+      >
+        <div className="page-container">
+          <div className="page-content">
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="h-16 bg-zinc-100 dark:bg-zinc-800 rounded mb-2 animate-pulse" />
+              ))}
+            </div>
+          </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 

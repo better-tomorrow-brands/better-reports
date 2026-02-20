@@ -6,8 +6,8 @@ import {
   SignedIn,
   SignedOut,
 } from "@clerk/nextjs";
-import Sidebar from "@/components/Sidebar";
 import TopBar from "@/components/TopBar";
+import Sidebar from "@/components/Sidebar";
 import { OrgProvider } from "@/contexts/OrgContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
@@ -58,9 +58,12 @@ export default function RootLayout({
                   {/* Top Bar */}
                   <TopBar />
 
-                  {/* Page Content */}
-                  <div className="flex-1 min-h-0 flex flex-col">
-                    {children}
+                  {/* Sidebar + Page Content */}
+                  <div className="flex flex-1 min-h-0">
+                    <Sidebar />
+                    <div className="flex-1 min-w-0 flex flex-col">
+                      {children}
+                    </div>
                   </div>
                 </div>
               </OrgProvider>

@@ -1,6 +1,5 @@
 "use client";
 
-import Sidebar from "@/components/Sidebar";
 import PageTitle from "@/components/PageTitle";
 
 interface PageLayoutProps {
@@ -16,12 +15,9 @@ export default function PageLayout({ title, subtitle, actions, children }: PageL
       {/* Full-width PageTitle */}
       <PageTitle title={title} subtitle={subtitle} actions={actions} />
 
-      {/* Sidebar + Content Area */}
-      <div className="flex flex-1 min-h-0">
-        <Sidebar />
-        <div className="flex-1 min-w-0 bg-white dark:bg-black">
-          {children}
-        </div>
+      {/* Content Area (Sidebar is in root layout) */}
+      <div className="flex-1 min-w-0 bg-white dark:bg-black overflow-auto">
+        {children}
       </div>
     </>
   );

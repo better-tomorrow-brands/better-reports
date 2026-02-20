@@ -1035,37 +1035,43 @@ export default function SettingsPage() {
 
   if (loading) {
     return (
-      <div className="max-w-4xl mx-auto p-6">
-        <div className="h-8 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
+      <PageLayout
+        title="Settings"
+        subtitle="Configure integrations and preferences"
+        actions={<></>}
+      >
+        <div className="page-container">
+          <div className="page-content">
+            {/* Tab bar skeleton */}
+            <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 mb-6">
+              {[...Array(4)].map((_, i) => (
+                <div
+                  key={i}
+                  className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-t animate-pulse mx-1"
+                />
+              ))}
+            </div>
 
-        {/* Tab bar skeleton */}
-        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700 mb-6">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="h-8 w-16 bg-zinc-100 dark:bg-zinc-800 rounded-t animate-pulse mx-1"
-            />
-          ))}
-        </div>
+            {/* Form section skeleton */}
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
+              <div className="h-5 w-24 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-1" />
+              <div className="h-3.5 w-72 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse mb-5" />
 
-        {/* Form section skeleton */}
-        <div className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-5">
-          <div className="h-5 w-24 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-1" />
-          <div className="h-3.5 w-72 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse mb-5" />
-
-          <div className="flex flex-col gap-5">
-            {[...Array(3)].map((_, i) => (
-              <div key={i}>
-                <div className="h-3.5 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-2" />
-                <div className="h-9 w-full bg-zinc-100 dark:bg-zinc-800 rounded-md animate-pulse" />
-                <div className="h-3 w-64 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse mt-1.5" />
+              <div className="flex flex-col gap-5">
+                {[...Array(3)].map((_, i) => (
+                  <div key={i}>
+                    <div className="h-3.5 w-28 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-2" />
+                    <div className="h-9 w-full bg-zinc-100 dark:bg-zinc-800 rounded-md animate-pulse" />
+                    <div className="h-3 w-64 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse mt-1.5" />
+                  </div>
+                ))}
               </div>
-            ))}
-          </div>
 
-          <div className="h-9 w-16 bg-zinc-200 dark:bg-zinc-700 rounded-md animate-pulse mt-6" />
+              <div className="h-9 w-16 bg-zinc-200 dark:bg-zinc-700 rounded-md animate-pulse mt-6" />
+            </div>
+          </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 

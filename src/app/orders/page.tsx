@@ -686,45 +686,48 @@ export default function OrdersPage() {
 
   if (loading) {
     return (
-      <div className="page-container">
-        <div className="page-header">
-          {/* Toolbar */}
-          <div className="flex justify-between items-center mb-4">
-            <div className="h-8 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse" />
-            <div className="flex items-center gap-3">
-              {[48, 64, 64, 64, 80, 80, 144].map((w, i) => (
-                <div key={i} className="h-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" style={{ width: w }} />
-              ))}
-            </div>
-          </div>
-          {/* Scorecards */}
-          <div className="flex gap-3 overflow-x-hidden pb-1">
-            {[...Array(5)].map((_, i) => (
-              <div key={i} className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 w-40">
-                <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-3" />
-                <div className="h-7 w-14 bg-zinc-300 dark:bg-zinc-700 rounded animate-pulse" />
-              </div>
+      <PageLayout
+        title="Orders"
+        subtitle="Track and manage customer orders"
+        actions={
+          <div className="flex items-center gap-3">
+            {[48, 64, 64, 64, 80, 80, 144].map((w, i) => (
+              <div key={i} className="h-8 bg-zinc-100 dark:bg-zinc-800 rounded animate-pulse" style={{ width: w }} />
             ))}
           </div>
-        </div>
-        {/* Table */}
-        <div className="page-content">
-          <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
-            <div className="flex gap-6 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
-              {[48, 72, 96, 56, 72, 40, 72, 80, 96, 48, 52].map((w, i) => (
-                <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
+        }
+      >
+        <div className="page-container">
+          <div className="page-header">
+            {/* Scorecards */}
+            <div className="flex gap-3 overflow-x-hidden pb-1">
+              {[...Array(5)].map((_, i) => (
+                <div key={i} className="shrink-0 rounded-lg border border-zinc-200 dark:border-zinc-800 p-4 w-40">
+                  <div className="h-3 w-20 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-3" />
+                  <div className="h-7 w-14 bg-zinc-300 dark:bg-zinc-700 rounded animate-pulse" />
+                </div>
               ))}
             </div>
-            {[...Array(14)].map((_, row) => (
-              <div key={row} className="flex gap-6 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
-                {[48, 72, 96, 56, 72, 40, 72, 80, 96, 48, 52].map((w, col) => (
-                  <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+          </div>
+          {/* Table */}
+          <div className="page-content">
+            <div className="border border-zinc-200 dark:border-zinc-800 rounded overflow-hidden">
+              <div className="flex gap-6 px-4 py-3 bg-zinc-50 dark:bg-zinc-900 border-b border-zinc-200 dark:border-zinc-800">
+                {[48, 72, 96, 56, 72, 40, 72, 80, 96, 48, 52].map((w, i) => (
+                  <div key={i} className="h-3.5 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse shrink-0" style={{ width: w }} />
                 ))}
               </div>
-            ))}
+              {[...Array(14)].map((_, row) => (
+                <div key={row} className="flex gap-6 px-4 py-3 border-b border-zinc-100 dark:border-zinc-800 last:border-0">
+                  {[48, 72, 96, 56, 72, 40, 72, 80, 96, 48, 52].map((w, col) => (
+                    <div key={col} className="h-3.5 bg-zinc-100 dark:bg-zinc-700 rounded animate-pulse shrink-0" style={{ width: w }} />
+                  ))}
+                </div>
+              ))}
+            </div>
           </div>
         </div>
-      </div>
+      </PageLayout>
     );
   }
 
