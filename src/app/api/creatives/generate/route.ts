@@ -43,6 +43,7 @@ export async function POST(request: Request) {
     const productId = formData.get("productId") ? Number(formData.get("productId")) : null;
     const brandGuidelines = formData.get("brandGuidelines") as string | null;
     const campaignGoal = formData.get("campaignGoal") as string;
+    const targetCta = formData.get("targetCta") as string | null;
     const adAngle = formData.get("adAngle") as string | null;
     const customPrompt = formData.get("customPrompt") as string | null;
     const numVariations = Number(formData.get("numVariations") || "1");
@@ -175,7 +176,7 @@ export async function POST(request: Request) {
 
         // Generate ad copy using Gemini text model
         const textModel = genAI.getGenerativeModel({
-          model: "gemini-2.0-flash-exp",
+          model: "gemini-1.5-flash",
           safetySettings: [
             {
               category: HarmCategory.HARM_CATEGORY_HARASSMENT,
@@ -201,6 +202,10 @@ export async function POST(request: Request) {
 
 Campaign Goal: ${campaignGoal}`;
 
+        if (targetCta) {
+          adCopyPrompt += `\nTarget Action/CTA: ${targetCta}`;
+        }
+
         if (adAngle) {
           adCopyPrompt += `\nAd Angle: ${adAngle}`;
         }
@@ -218,7 +223,7 @@ Campaign Goal: ${campaignGoal}`;
   "headline": "A punchy, attention-grabbing headline (25-40 characters)",
   "primaryText": "The main ad copy that tells the story and creates desire (100-125 characters for optimal Facebook/Instagram performance)",
   "description": "A supporting description that adds context or details (30-90 characters)",
-  "callToAction": "A clear call-to-action (e.g., 'Shop Now', 'Learn More', 'Sign Up', 'Get Started')"
+  "callToAction": "A clear call-to-action button text${targetCta ? ` based on the target action: "${targetCta}"` : ' (e.g., "Shop Now", "Learn More", "Sign Up", "Get Started")'}"
 }
 
 Guidelines:
@@ -226,6 +231,7 @@ Guidelines:
 - Focus on benefits, not features
 - Create urgency or emotional connection
 - Match the brand voice and guidelines
+- The CTA should align with the target action specified above
 - Make it suitable for social media advertising
 - Ensure it complies with advertising standards (no misleading claims, adult content, etc.)
 

@@ -33,6 +33,7 @@ export default function CreativesPage() {
   const [selectedProduct, setSelectedProduct] = useState<number | null>(null);
   const [brandGuidelines, setBrandGuidelines] = useState("");
   const [campaignGoal, setCampaignGoal] = useState("");
+  const [targetCta, setTargetCta] = useState("");
   const [adAngle, setAdAngle] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
   const [numVariations, setNumVariations] = useState(3);
@@ -78,6 +79,11 @@ export default function CreativesPage() {
       return;
     }
 
+    if (!targetCta.trim()) {
+      setMessage({ type: "error", text: "Please enter a target action/CTA" });
+      return;
+    }
+
     setGenerating(true);
     setMessage(null);
 
@@ -85,6 +91,7 @@ export default function CreativesPage() {
       // Use FormData to support image uploads
       const formData = new FormData();
       formData.append("campaignGoal", campaignGoal);
+      formData.append("targetCta", targetCta);
       if (selectedProduct) formData.append("productId", selectedProduct.toString());
       if (brandGuidelines) formData.append("brandGuidelines", brandGuidelines);
       if (adAngle) formData.append("adAngle", adAngle);
@@ -168,9 +175,29 @@ export default function CreativesPage() {
                 type="text"
                 value={campaignGoal}
                 onChange={(e) => setCampaignGoal(e.target.value)}
-                placeholder="e.g., Summer sale, New product launch, Holiday gift guide"
+                placeholder="e.g., Drive sales, Lead generation, Brand awareness, Product launch"
                 className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
               />
+              <p className="text-xs text-zinc-500 mt-1">
+                What's the primary objective? (sales, leads, awareness, engagement, etc.)
+              </p>
+            </div>
+
+            {/* Target CTA */}
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Target Action <span className="text-red-500">*</span>
+              </label>
+              <input
+                type="text"
+                value={targetCta}
+                onChange={(e) => setTargetCta(e.target.value)}
+                placeholder="e.g., Subscribe now, Shop 35% off, Try risk-free, Sign up for updates"
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+              />
+              <p className="text-xs text-zinc-500 mt-1">
+                What action should people take? This guides the call-to-action button text.
+              </p>
             </div>
 
             {/* Product Selection */}
@@ -299,7 +326,7 @@ export default function CreativesPage() {
             {/* Generate Button */}
             <button
               onClick={generateCreatives}
-              disabled={generating || !campaignGoal.trim()}
+              disabled={generating || !campaignGoal.trim() || !targetCta.trim()}
               className="w-full px-4 py-3 bg-purple-600 hover:bg-purple-700 disabled:bg-zinc-300 dark:disabled:bg-zinc-700 text-white font-medium rounded-md disabled:cursor-not-allowed flex items-center justify-center gap-2"
             >
               {generating ? (
