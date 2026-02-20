@@ -220,7 +220,8 @@ export default function CreativesPage() {
     }
   }
 
-  if (loadingProducts || orgLoading) {
+  // Only block on org loading (critical), products can load async
+  if (orgLoading) {
     return (
       <div className="max-w-7xl mx-auto p-6">
         <div className="h-8 w-64 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
@@ -302,9 +303,12 @@ export default function CreativesPage() {
               <select
                 value={selectedProduct || ""}
                 onChange={(e) => handleProductChange(e.target.value ? Number(e.target.value) : null)}
-                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm"
+                disabled={loadingProducts}
+                className="w-full border border-zinc-300 dark:border-zinc-700 rounded-md px-3 py-2 bg-white dark:bg-zinc-900 text-sm disabled:opacity-50 disabled:cursor-not-allowed"
               >
-                <option value="">No specific product</option>
+                <option value="">
+                  {loadingProducts ? "Loading products..." : "No specific product"}
+                </option>
                 {products.map((product) => (
                   <option key={product.id} value={product.id}>
                     {product.productName || product.sku}
@@ -525,7 +529,20 @@ export default function CreativesPage() {
         <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6">
           <h2 className="text-lg font-semibold mb-4">Generated Creatives</h2>
 
-          {generatedCreatives.length === 0 ? (
+          {loadingCreatives ? (
+            <div className="space-y-4">
+              {[1, 2, 3].map((i) => (
+                <div key={i} className="border border-zinc-200 dark:border-zinc-700 rounded-lg overflow-hidden animate-pulse">
+                  <div className="w-full h-64 bg-zinc-200 dark:bg-zinc-800" />
+                  <div className="p-4 space-y-3 bg-zinc-50 dark:bg-zinc-900/50">
+                    <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-3/4" />
+                    <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-1/2" />
+                    <div className="h-4 bg-zinc-200 dark:bg-zinc-800 rounded w-5/6" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : generatedCreatives.length === 0 ? (
             <div className="text-center py-12 text-zinc-400 text-sm">
               <Sparkles className="w-12 h-12 mx-auto mb-3 opacity-50" />
               <p>No creatives generated yet.</p>
