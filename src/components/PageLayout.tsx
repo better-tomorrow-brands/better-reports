@@ -1,6 +1,7 @@
 "use client";
 
-import { PageProvider } from "@/contexts/PageContext";
+import { useEffect } from "react";
+import { usePageContext } from "@/contexts/PageContext";
 
 interface PageLayoutProps {
   title: string;
@@ -10,12 +11,15 @@ interface PageLayoutProps {
 }
 
 export default function PageLayout({ title, subtitle, actions, children }: PageLayoutProps) {
+  const { setPageInfo } = usePageContext();
+
+  useEffect(() => {
+    setPageInfo({ title, subtitle, actions });
+  }, [title, subtitle, actions, setPageInfo]);
+
   return (
-    <PageProvider title={title} subtitle={subtitle} actions={actions}>
-      {/* Content only - PageTitle is rendered by AppShell using context */}
-      <div className="flex-1 min-w-0 overflow-auto">
-        {children}
-      </div>
-    </PageProvider>
+    <div className="flex-1 min-w-0 overflow-auto">
+      {children}
+    </div>
   );
 }

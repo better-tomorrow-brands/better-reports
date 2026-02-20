@@ -10,6 +10,7 @@ import TopBar from "@/components/TopBar";
 import AppShell from "@/components/AppShell";
 import { OrgProvider } from "@/contexts/OrgContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
+import { PageProvider } from "@/contexts/PageContext";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -54,15 +55,17 @@ export default function RootLayout({
           <SignedIn>
             <ThemeProvider>
               <OrgProvider>
-                <div className="flex flex-col h-screen bg-white dark:bg-black">
-                  {/* Top Bar */}
-                  <TopBar />
+                <PageProvider>
+                  <div className="flex flex-col h-screen bg-white dark:bg-black">
+                    {/* Top Bar */}
+                    <TopBar />
 
-                  {/* AppShell wraps Sidebar + Page Content (Sidebar stays mounted) */}
-                  <AppShell>
-                    {children}
-                  </AppShell>
-                </div>
+                    {/* AppShell wraps Sidebar + Page Content (Sidebar stays mounted) */}
+                    <AppShell>
+                      {children}
+                    </AppShell>
+                  </div>
+                </PageProvider>
               </OrgProvider>
             </ThemeProvider>
           </SignedIn>
