@@ -1,5 +1,5 @@
 {
-  "id": "71beac4f-8a8b-424b-9ecf-03d80390e894",
+  "id": "817c1ec4-a2b9-4745-a02e-ecf81d353868",
   "prevId": "a743a5eb-ac72-4e7c-b8a3-fbc0691f3235",
   "version": "7",
   "dialect": "postgresql",
@@ -2479,13 +2479,13 @@
       "columns": {
         "id": {
           "name": "id",
-          "type": "bigserial",
+          "type": "serial",
           "primaryKey": true,
           "notNull": true
         },
         "product_id": {
           "name": "product_id",
-          "type": "bigint",
+          "type": "integer",
           "primaryKey": false,
           "notNull": true
         },

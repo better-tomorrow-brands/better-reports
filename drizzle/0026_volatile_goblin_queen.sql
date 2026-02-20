@@ -1,6 +1,6 @@
 CREATE TABLE "product_images" (
-	"id" bigserial PRIMARY KEY NOT NULL,
-	"product_id" bigint NOT NULL,
+	"id" serial PRIMARY KEY NOT NULL,
+	"product_id" integer NOT NULL,
 	"image_url" text NOT NULL,
 	"display_order" integer DEFAULT 0,
 	"is_primary" boolean DEFAULT false,
