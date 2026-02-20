@@ -12,6 +12,7 @@
     "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.994.0",
     "@clerk/nextjs": "^6.37.3",
     "@neondatabase/serverless": "^1.0.2",
     "@tremor/react": "^3.18.7",

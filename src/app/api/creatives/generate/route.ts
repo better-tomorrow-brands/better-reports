@@ -3,15 +3,28 @@ import { requireOrgFromRequest, OrgAuthError } from "@/lib/org-auth";
 import { db } from "@/lib/db";
 import { products, creatives } from "@/lib/db/schema";
 import { eq } from "drizzle-orm";
+import { downloadAndUploadImage, generateImageKey } from "@/lib/storage";
 
 /**
  * POST /api/creatives/generate
  * Generate AI creatives using Fal.ai Freepik FLUX (Nano Banana)
+ * Images are permanently stored in DigitalOcean Spaces
  *
  * Setup:
- * 1. Sign up at https://fal.ai
- * 2. Get API key from https://fal.ai/dashboard/keys
- * 3. Add to .env.local: FAL_API_KEY=your-key-here
+ * 1. Fal.ai:
+ *    - Sign up at https://fal.ai
+ *    - Get API key from https://fal.ai/dashboard/keys
+ *    - Add to .env.local: FAL_API_KEY=your-key-here
+ *
+ * 2. DigitalOcean Spaces:
+ *    - Create Space at https://cloud.digitalocean.com/spaces
+ *    - Generate keys at https://cloud.digitalocean.com/account/api/spaces
+ *    - Add to .env.local:
+ *      DO_SPACES_REGION=nyc3 (your region)
+ *      DO_SPACES_BUCKET=your-bucket-name
+ *      DO_SPACES_KEY=your-access-key
+ *      DO_SPACES_SECRET=your-secret-key
+ *      DO_SPACES_ENDPOINT=https://nyc3.digitaloceanspaces.com
  */
 export async function POST(request: Request) {
   try {
@@ -119,20 +132,24 @@ export async function POST(request: Request) {
       }
 
       const falData = await falResponse.json();
-      const imageUrl = falData.images?.[0]?.url;
+      const falImageUrl = falData.images?.[0]?.url;
 
-      if (!imageUrl) {
+      if (!falImageUrl) {
         throw new Error("No image URL returned from Fal.ai");
       }
 
-      // Save to database
+      // Download from Fal.ai and upload to DigitalOcean Spaces for permanent storage
+      const imageKey = generateImageKey(orgId, "creatives");
+      const permanentImageUrl = await downloadAndUploadImage(falImageUrl, imageKey);
+
+      // Save to database with permanent URL
       const [creative] = await db
         .insert(creatives)
         .values({
           orgId,
           userId,
           prompt,
-          imageUrl,
+          imageUrl: permanentImageUrl, // Store permanent DO Spaces URL
           campaignGoal,
           adAngle: adAngle || null,
           productId: productId || null,
@@ -142,7 +159,7 @@ export async function POST(request: Request) {
 
       generatedCreatives.push({
         id: creative.id.toString(),
-        imageUrl: creative.imageUrl,
+        imageUrl: permanentImageUrl, // Return permanent URL
         prompt: creative.prompt,
         createdAt: creative.createdAt?.toISOString() || new Date().toISOString(),
       });
