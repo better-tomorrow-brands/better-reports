@@ -42,7 +42,7 @@ export default function CreativesPage() {
   const [targetCta, setTargetCta] = useState("");
   const [adAngle, setAdAngle] = useState("");
   const [customPrompt, setCustomPrompt] = useState("");
-  const [numVariations, setNumVariations] = useState(3);
+  const [numVariations, setNumVariations] = useState(1);
   const [contextImages, setContextImages] = useState<File[]>([]);
   const [expandedCreatives, setExpandedCreatives] = useState<Set<string>>(new Set());
 
