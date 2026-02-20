@@ -88,9 +88,9 @@ export async function POST(request: Request) {
       }
     }
 
-    // Extract only visual/style keywords from brand guidelines (first 100 chars max)
+    // Extract only visual/style keywords from brand guidelines (first 300 chars max)
     if (brandGuidelines?.trim()) {
-      const visualKeywords = brandGuidelines.slice(0, 100).toLowerCase();
+      const visualKeywords = brandGuidelines.slice(0, 300).toLowerCase();
       prompt += `, style: ${visualKeywords}`;
     }
 
@@ -99,9 +99,9 @@ export async function POST(request: Request) {
       prompt += `, ${adAngle.toLowerCase()} approach`;
     }
 
-    // Add custom instructions (limit to 150 chars for focus)
+    // Add custom instructions (limit to 500 chars for focus)
     if (customPrompt?.trim()) {
-      prompt += `, ${customPrompt.slice(0, 150)}`;
+      prompt += `, ${customPrompt.slice(0, 500)}`;
     }
 
     // Add quality modifiers
