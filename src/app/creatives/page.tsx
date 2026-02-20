@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useOrg } from "@/contexts/OrgContext";
-import { Loader2, Download, Sparkles } from "lucide-react";
+import { Loader2, Download, Sparkles, Trash2 } from "lucide-react";
 
 interface Product {
   id: number;
@@ -436,14 +436,25 @@ export default function CreativesPage() {
                       <span className="text-xs text-zinc-500">
                         {new Date(creative.createdAt).toLocaleDateString()}
                       </span>
-                      <a
-                        href={creative.imageUrl}
-                        download
-                        className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded text-xs font-medium"
-                      >
-                        <Download className="w-3 h-3" />
-                        Download
-                      </a>
+                      <div className="flex items-center gap-2">
+                        <button
+                          onClick={() => {
+                            setGeneratedCreatives(generatedCreatives.filter((c) => c.id !== creative.id));
+                          }}
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-red-100 dark:bg-red-900/30 hover:bg-red-200 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 rounded text-xs font-medium"
+                        >
+                          <Trash2 className="w-3 h-3" />
+                          Remove
+                        </button>
+                        <a
+                          href={creative.imageUrl}
+                          download
+                          className="inline-flex items-center gap-1 px-3 py-1 bg-zinc-200 dark:bg-zinc-700 hover:bg-zinc-300 dark:hover:bg-zinc-600 rounded text-xs font-medium"
+                        >
+                          <Download className="w-3 h-3" />
+                          Download
+                        </a>
+                      </div>
                     </div>
                   </div>
                 </div>
