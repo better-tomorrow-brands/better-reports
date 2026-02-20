@@ -268,27 +268,29 @@ export default function CreativesPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-6">
-      <div className="flex items-center gap-3 mb-6">
-        <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
-        <h1 className="text-2xl font-bold">AI Creative Generator</h1>
-        <span className="text-xs text-zinc-500 dark:text-zinc-400 ml-2">Powered by Google Gemini</span>
-      </div>
-
-      {message && (
-        <div
-          className={`mb-6 p-3 rounded-md text-sm ${
-            message.type === "success"
-              ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
-              : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
-          }`}
-        >
-          {message.text}
+      <div className="sticky top-0 bg-white dark:bg-zinc-950 z-10 pb-6 -mt-6 pt-6">
+        <div className="flex items-center gap-3 mb-6">
+          <Sparkles className="w-8 h-8 text-purple-600 dark:text-purple-400" />
+          <h1 className="text-2xl font-bold">AI Creative Generator</h1>
+          <span className="text-xs text-zinc-500 dark:text-zinc-400 ml-2">Powered by Google Gemini</span>
         </div>
-      )}
+
+        {message && (
+          <div
+            className={`mb-6 p-3 rounded-md text-sm ${
+              message.type === "success"
+                ? "bg-green-50 dark:bg-green-950 text-green-800 dark:text-green-200 border border-green-200 dark:border-green-800"
+                : "bg-red-50 dark:bg-red-950 text-red-800 dark:text-red-200 border border-red-200 dark:border-red-800"
+            }`}
+          >
+            {message.text}
+          </div>
+        )}
+      </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Left: Generation Form - Sticky */}
-        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:sticky lg:top-6 lg:self-start">
+        <section className="border border-zinc-200 dark:border-zinc-800 rounded-lg p-6 lg:sticky lg:top-[120px] lg:self-start">
           <h2 className="text-lg font-semibold mb-4">Campaign Brief</h2>
 
           <div className="space-y-5">
