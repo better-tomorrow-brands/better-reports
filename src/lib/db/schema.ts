@@ -563,6 +563,11 @@ export const creatives = pgTable("creatives", {
   adAngle: text("ad_angle"),
   productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
   brandGuidelines: text("brand_guidelines"), // Store brand guidelines directly instead of reference
+  // Ad copy fields
+  headline: text("headline"), // Main ad headline (25-40 chars for most platforms)
+  primaryText: text("primary_text"), // Main body copy (125 chars for Facebook, 280 for Twitter)
+  description: text("description"), // Secondary description text
+  callToAction: text("call_to_action"), // CTA text (e.g., "Shop Now", "Learn More")
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 

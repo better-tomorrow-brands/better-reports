@@ -26,6 +26,10 @@ export async function GET(request: Request) {
         prompt: row.prompt,
         campaignGoal: row.campaignGoal,
         adAngle: row.adAngle,
+        headline: row.headline,
+        primaryText: row.primaryText,
+        description: row.description,
+        callToAction: row.callToAction,
         createdAt: row.createdAt?.toISOString() || new Date().toISOString(),
       })),
     });

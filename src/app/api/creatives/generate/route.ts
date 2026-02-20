@@ -71,8 +71,11 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Campaign goal is required" }, { status: 400 });
     }
 
-    // Build the AI prompt - keep it visual and concise for best results
-    let prompt = `${campaignGoal}`;
+    // Build the AI prompt - detailed scene description for best results with Gemini Image
+    let prompt = `Create a professional advertising image for social media. `;
+
+    // Start with the main concept
+    prompt += `Scene: ${campaignGoal}. `;
 
     // Add product context if selected
     if (productId) {
@@ -83,28 +86,29 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (productRows.length) {
-        prompt += ` featuring ${productRows[0].productName || productRows[0].sku}`;
+        const productName = productRows[0].productName || productRows[0].sku;
+        prompt += `Feature the product "${productName}" prominently in the composition. `;
       }
     }
 
-    // Extract only visual/style keywords from brand guidelines (first 100 chars max)
+    // Add brand visual style from guidelines
     if (brandGuidelines?.trim()) {
-      const visualKeywords = brandGuidelines.slice(0, 100).toLowerCase();
-      prompt += `, style: ${visualKeywords}`;
+      const visualKeywords = brandGuidelines.slice(0, 200);
+      prompt += `Visual style and branding: ${visualKeywords}. `;
     }
 
     // Add ad angle as creative direction
     if (adAngle?.trim()) {
-      prompt += `, ${adAngle.toLowerCase()} approach`;
+      prompt += `Creative approach: ${adAngle}. `;
     }
 
-    // Add custom instructions (limit to 150 chars for focus)
+    // Add custom instructions
     if (customPrompt?.trim()) {
-      prompt += `, ${customPrompt.slice(0, 150)}`;
+      prompt += `Additional requirements: ${customPrompt.slice(0, 250)}. `;
     }
 
-    // Add quality modifiers
-    prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
+    // Add comprehensive quality and technical specifications
+    prompt += `Technical requirements: Professional advertising photography quality, sharp focus, proper lighting (golden hour or studio lighting as appropriate), clean and uncluttered composition, vibrant and engaging colors, high resolution, eye-catching visual hierarchy. The image should be optimized for social media feeds (Instagram, Facebook) with strong visual impact when viewed on mobile devices. Ensure the composition leaves space for text overlay if needed. Style: modern, polished, premium advertising aesthetic.`;
 
     // Initialize Google Generative AI
     const genAI = new GoogleGenerativeAI(apiKey);
@@ -125,8 +129,8 @@ export async function POST(request: Request) {
         // Add the text prompt last
         contents.push({ text: prompt });
 
-        // Get the model (using Nano Banana Pro for higher quality and potentially better quota)
-        const model = genAI.getGenerativeModel({
+        // Get the image model (using Nano Banana Pro for higher quality and potentially better quota)
+        const imageModel = genAI.getGenerativeModel({
           model: "gemini-3-pro-image-preview",
           safetySettings: [
             {
@@ -149,16 +153,16 @@ export async function POST(request: Request) {
         });
 
         // Generate image using Gemini 2.5 Flash Image (Nano Banana)
-        const result = await model.generateContent(contents);
-        const response = result.response;
+        const imageResult = await imageModel.generateContent(contents);
+        const imageResponse = imageResult.response;
 
         // Extract image from response (following docs pattern)
-        if (!response.candidates || response.candidates.length === 0) {
-          throw new Error("No candidates in Gemini response");
+        if (!imageResponse.candidates || imageResponse.candidates.length === 0) {
+          throw new Error("No candidates in Gemini image response");
         }
 
         let imageData: string | null = null;
-        for (const part of response.candidates[0].content.parts) {
+        for (const part of imageResponse.candidates[0].content.parts) {
           if (part.inlineData) {
             imageData = part.inlineData.data;
             break;
@@ -169,6 +173,91 @@ export async function POST(request: Request) {
           throw new Error("No image data in Gemini response");
         }
 
+        // Generate ad copy using Gemini text model
+        const textModel = genAI.getGenerativeModel({
+          model: "gemini-2.0-flash-exp",
+          safetySettings: [
+            {
+              category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+              threshold: HarmBlockThreshold.BLOCK_LOW_AND_ABOVE,
+            },
+            {
+              category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+              threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+            },
+          ],
+        });
+
+        // Build ad copy prompt
+        let adCopyPrompt = `You are an expert advertising copywriter. Generate compelling ad copy for a social media advertisement with the following details:
+
+Campaign Goal: ${campaignGoal}`;
+
+        if (adAngle) {
+          adCopyPrompt += `\nAd Angle: ${adAngle}`;
+        }
+
+        if (brandGuidelines) {
+          adCopyPrompt += `\nBrand Guidelines: ${brandGuidelines}`;
+        }
+
+        if (customPrompt) {
+          adCopyPrompt += `\nAdditional Context: ${customPrompt}`;
+        }
+
+        adCopyPrompt += `\n\nGenerate the following ad copy components in JSON format:
+{
+  "headline": "A punchy, attention-grabbing headline (25-40 characters)",
+  "primaryText": "The main ad copy that tells the story and creates desire (100-125 characters for optimal Facebook/Instagram performance)",
+  "description": "A supporting description that adds context or details (30-90 characters)",
+  "callToAction": "A clear call-to-action (e.g., 'Shop Now', 'Learn More', 'Sign Up', 'Get Started')"
+}
+
+Guidelines:
+- Keep it concise and impactful
+- Focus on benefits, not features
+- Create urgency or emotional connection
+- Match the brand voice and guidelines
+- Make it suitable for social media advertising
+- Ensure it complies with advertising standards (no misleading claims, adult content, etc.)
+
+Return ONLY the JSON object, no other text.`;
+
+        const adCopyResult = await textModel.generateContent(adCopyPrompt);
+        const adCopyResponse = adCopyResult.response;
+
+        // Parse the ad copy JSON response
+        let adCopy = {
+          headline: null,
+          primaryText: null,
+          description: null,
+          callToAction: null,
+        };
+
+        try {
+          const adCopyText = adCopyResponse.text();
+          // Remove markdown code blocks if present
+          const cleanedText = adCopyText.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+          const parsed = JSON.parse(cleanedText);
+          adCopy = {
+            headline: parsed.headline || null,
+            primaryText: parsed.primaryText || null,
+            description: parsed.description || null,
+            callToAction: parsed.callToAction || null,
+          };
+        } catch (parseError) {
+          console.error("Failed to parse ad copy JSON:", parseError);
+          // Continue with null values rather than failing the entire generation
+        }
+
         // Convert base64 to buffer
         const imageBuffer = Buffer.from(imageData, "base64");
 
@@ -176,7 +265,7 @@ export async function POST(request: Request) {
         // For now, return the base64 data URL directly so we can see the generated image
         const dataUrl = `data:image/png;base64,${imageData}`;
 
-        // Save to database with data URL (temporary)
+        // Save to database with data URL (temporary) and ad copy
         const [creative] = await db
           .insert(creatives)
           .values({
@@ -188,6 +277,10 @@ export async function POST(request: Request) {
             adAngle: adAngle || null,
             productId: productId || null,
             brandGuidelines: brandGuidelines || null,
+            headline: adCopy.headline,
+            primaryText: adCopy.primaryText,
+            description: adCopy.description,
+            callToAction: adCopy.callToAction,
           })
           .returning();
 
@@ -195,6 +288,10 @@ export async function POST(request: Request) {
           id: creative.id.toString(),
           imageUrl: dataUrl, // Return data URL so image displays immediately
           prompt: creative.prompt,
+          headline: creative.headline,
+          primaryText: creative.primaryText,
+          description: creative.description,
+          callToAction: creative.callToAction,
           createdAt: creative.createdAt?.toISOString() || new Date().toISOString(),
         });
       } catch (varError: any) {

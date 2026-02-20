@@ -162,6 +162,13 @@
       "when": 1771588795616,
       "tag": "0022_kind_liz_osborn",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771600947493,
+      "tag": "0023_thin_wither",
+      "breakpoints": true
     }
   ]
 }

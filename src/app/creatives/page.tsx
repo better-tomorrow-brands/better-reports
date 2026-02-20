@@ -14,6 +14,10 @@ interface GeneratedCreative {
   id: string;
   imageUrl: string;
   prompt: string;
+  headline: string | null;
+  primaryText: string | null;
+  description: string | null;
+  callToAction: string | null;
   createdAt: string;
 }
 
@@ -107,10 +111,7 @@ export default function CreativesPage() {
       setGeneratedCreatives([...data.creatives, ...generatedCreatives]);
       setMessage({ type: "success", text: `Generated ${data.creatives.length} creative(s)!` });
 
-      // Reset form
-      setCampaignGoal("");
-      setAdAngle("");
-      setCustomPrompt("");
+      // Don't reset form - let user generate more variations with same settings
     } catch (err) {
       setMessage({ type: "error", text: String(err) });
     } finally {
@@ -338,11 +339,60 @@ export default function CreativesPage() {
                     alt="Generated creative"
                     className="w-full h-auto"
                   />
-                  <div className="p-3 bg-zinc-50 dark:bg-zinc-900/50">
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 mb-2 line-clamp-2">
-                      {creative.prompt}
+                  <div className="p-4 bg-zinc-50 dark:bg-zinc-900/50 space-y-3">
+                    {/* Ad Copy Section */}
+                    {(creative.headline || creative.primaryText || creative.description || creative.callToAction) && (
+                      <div className="space-y-2 pb-3 border-b border-zinc-200 dark:border-zinc-700">
+                        {creative.headline && (
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
+                              HEADLINE
+                            </div>
+                            <div className="text-sm font-bold text-zinc-900 dark:text-zinc-100">
+                              {creative.headline}
+                            </div>
+                          </div>
+                        )}
+                        {creative.primaryText && (
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
+                              PRIMARY TEXT
+                            </div>
+                            <div className="text-sm text-zinc-800 dark:text-zinc-200">
+                              {creative.primaryText}
+                            </div>
+                          </div>
+                        )}
+                        {creative.description && (
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
+                              DESCRIPTION
+                            </div>
+                            <div className="text-sm text-zinc-700 dark:text-zinc-300">
+                              {creative.description}
+                            </div>
+                          </div>
+                        )}
+                        {creative.callToAction && (
+                          <div>
+                            <div className="text-xs font-semibold text-zinc-500 dark:text-zinc-400 mb-1">
+                              CALL TO ACTION
+                            </div>
+                            <div className="inline-block px-3 py-1 bg-purple-600 text-white text-sm font-medium rounded">
+                              {creative.callToAction}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+
+                    {/* Image Prompt */}
+                    <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2">
+                      <span className="font-semibold">Image prompt:</span> {creative.prompt}
                     </p>
-                    <div className="flex items-center justify-between">
+
+                    {/* Footer */}
+                    <div className="flex items-center justify-between pt-2">
                       <span className="text-xs text-zinc-500">
                         {new Date(creative.createdAt).toLocaleDateString()}
                       </span>
