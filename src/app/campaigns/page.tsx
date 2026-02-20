@@ -6,6 +6,7 @@ import { Table, Column } from "@/components/Table";
 import { DateRangePicker } from "@/components/DateRangePicker";
 import { DateRange } from "react-day-picker";
 import { useOrg } from "@/contexts/OrgContext";
+import PageLayout from "@/components/PageLayout";
 
 // ── Types ──────────────────────────────────────────────
 
@@ -1677,10 +1678,10 @@ export default function CampaignsPage() {
   // ── Render ─────────────────────────────────────────
 
   return (
-    <div className="page-container">
-      <div className="page-header">
-        <div className="flex items-center justify-between mb-6">
-          <h1 className="text-2xl font-bold">Campaigns</h1>
+    <PageLayout
+      title="Campaigns"
+      actions={
+        <>
           {activeTab === "facebook" && (
             <button
               onClick={() => openFbModal()}
@@ -1697,10 +1698,13 @@ export default function CampaignsPage() {
               Create Campaign
             </button>
           )}
-        </div>
-
-        {/* Tabs */}
-        <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
+        </>
+      }
+    >
+      <div className="page-container">
+        <div className="page-header">
+          {/* Tabs */}
+          <div className="flex gap-1 border-b border-zinc-200 dark:border-zinc-700">
           <button
             onClick={() => setActiveTab("facebook")}
             className={`px-4 py-2 text-sm font-medium border-b-2 -mb-px ${
@@ -3409,6 +3413,7 @@ export default function CampaignsPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </PageLayout>
   );
 }

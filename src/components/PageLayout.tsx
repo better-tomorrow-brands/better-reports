@@ -1,0 +1,27 @@
+"use client";
+
+import Sidebar from "@/components/Sidebar";
+import PageTitle from "@/components/PageTitle";
+
+interface PageLayoutProps {
+  title: string;
+  actions?: React.ReactNode;
+  children: React.ReactNode;
+}
+
+export default function PageLayout({ title, actions, children }: PageLayoutProps) {
+  return (
+    <>
+      {/* Full-width PageTitle */}
+      <PageTitle title={title} actions={actions} />
+
+      {/* Sidebar + Content Area */}
+      <div className="flex flex-1 min-h-0">
+        <Sidebar />
+        <div className="flex-1 min-w-0 bg-white dark:bg-black">
+          {children}
+        </div>
+      </div>
+    </>
+  );
+}
