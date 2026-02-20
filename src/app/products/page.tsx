@@ -2245,7 +2245,7 @@ export default function InventoryPage() {
           {activeTab === "products" && (
             <button
               onClick={addProduct}
-              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-sm"
+              className="px-3 py-1.5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-xs"
             >
               Add Product
             </button>

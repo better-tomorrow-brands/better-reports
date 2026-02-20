@@ -97,7 +97,7 @@ body {
 
 .page-header {
   flex-shrink: 0;
-  padding: 0.75rem 1.5rem 0;
+  padding: 1rem 1.5rem 0;
   position: relative;
   z-index: 50;
 }
@@ -105,7 +105,7 @@ body {
 .page-content {
   flex: 1;
   overflow: auto;
-  padding: 0 1.5rem 0.75rem;
+  padding: 0 1.5rem 1rem;
   display: flex;
   flex-direction: column;
 }
@@ -113,10 +113,10 @@ body {
 /* Mobile padding */
 @media (max-width: 768px) {
   .page-header {
-    padding: 0.75rem 1rem 0;
+    padding: 1rem 1rem 0;
   }
   .page-content {
-    padding: 0 1rem 0.75rem;
+    padding: 0 1rem 1rem;
   }
 }
 

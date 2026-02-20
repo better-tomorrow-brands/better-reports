@@ -1686,7 +1686,7 @@ export default function CampaignsPage() {
           {activeTab === "facebook" && (
             <button
               onClick={() => openFbModal()}
-              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80"
+              className="px-3 py-1.5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-xs"
             >
               Add Campaign
             </button>
@@ -1694,7 +1694,7 @@ export default function CampaignsPage() {
           {activeTab === "whatsapp" && (
             <button
               onClick={() => openWaModal()}
-              className="px-4 py-2 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80"
+              className="px-3 py-1.5 bg-zinc-900 text-white dark:bg-white dark:text-zinc-900 rounded-md font-medium hover:opacity-80 text-xs"
             >
               Create Campaign
             </button>
