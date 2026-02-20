@@ -141,6 +141,37 @@ export default function CreativesPage() {
     setCustomPrompt(creative.customPrompt || "");
     setBrandGuidelines(creative.brandGuidelines || "");
     setSelectedProduct(creative.productId);
+
+    // Restore product image selection
+    if (creative.productImageUrls) {
+      try {
+        const imageUrls: string[] = JSON.parse(creative.productImageUrls);
+        const selectedProduct = products.find(p => p.id === creative.productId);
+
+        if (selectedProduct) {
+          const selectedIds = new Set<number>();
+
+          // Check if main image was used
+          if (selectedProduct.imageUrl && imageUrls.includes(selectedProduct.imageUrl)) {
+            selectedIds.add(-1);
+          }
+
+          // Check which gallery images were used
+          selectedProduct.images.forEach(img => {
+            if (imageUrls.includes(img.imageUrl)) {
+              selectedIds.add(img.id);
+            }
+          });
+
+          setSelectedProductImageIds(selectedIds);
+        }
+      } catch (err) {
+        console.error("Failed to parse product image URLs:", err);
+      }
+    } else {
+      setSelectedProductImageIds(new Set());
+    }
+
     // Scroll to top of form
     window.scrollTo({ top: 0, behavior: "smooth" });
   }
