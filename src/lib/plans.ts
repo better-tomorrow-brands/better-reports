@@ -182,7 +182,7 @@ export function getLimitDisplay(
 export function getTierDisplayName(tier: PlanTier): string {
   const map: Record<PlanTier, string> = {
     free: "Free",
-    free_trial: "Free Trial",
+    free_trial: "Free Trial (Early Adopters)",
     starter: "Starter",
     growth: "Growth",
     pro: "Pro",
