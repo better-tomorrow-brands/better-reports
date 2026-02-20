@@ -7,6 +7,7 @@ import {
   SignedOut,
 } from "@clerk/nextjs";
 import Sidebar from "@/components/Sidebar";
+import TopBar from "@/components/TopBar";
 import { OrgProvider } from "@/contexts/OrgContext";
 import { ThemeProvider } from "@/contexts/ThemeContext";
 import "./globals.css";
@@ -53,9 +54,15 @@ export default function RootLayout({
           <SignedIn>
             <ThemeProvider>
               <OrgProvider>
-                <div className="flex h-screen bg-zinc-50 dark:bg-zinc-950">
-                  <Sidebar />
-                  <main className="flex-1 min-w-0 overflow-auto bg-zinc-50 dark:bg-zinc-950">{children}</main>
+                <div className="flex flex-col h-screen bg-zinc-50 dark:bg-zinc-950">
+                  {/* Top Bar */}
+                  <TopBar />
+
+                  {/* Sidebar + Content */}
+                  <div className="flex flex-1 min-h-0">
+                    <Sidebar />
+                    <main className="flex-1 min-w-0 overflow-auto bg-zinc-50 dark:bg-zinc-950">{children}</main>
+                  </div>
                 </div>
               </OrgProvider>
             </ThemeProvider>
