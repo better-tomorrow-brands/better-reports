@@ -212,6 +212,10 @@ interface ShopifyVariantNode {
   barcode: string | null;
   product: {
     title: string;
+    vendor: string | null;
+    image: {
+      src: string;
+    } | null;
   };
 }
 
