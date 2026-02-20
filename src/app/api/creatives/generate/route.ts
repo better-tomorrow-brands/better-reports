@@ -72,14 +72,10 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Campaign goal is required" }, { status: 400 });
     }
 
-    // Build the AI prompt - detailed scene description for best results with Gemini Image
-    let prompt = `Create a professional advertising image for social media. `;
-
-    // Start with the main concept
-    prompt += `Scene: ${campaignGoal}. `;
+    // Build the AI prompt - keep it visual and concise for best results
+    let prompt = `${campaignGoal}`;
 
     // Add product context if selected
-    let brandName: string | null = null;
     if (productId) {
       const productRows = await db
         .select()
@@ -88,37 +84,28 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (productRows.length) {
-        const productName = productRows[0].productName || productRows[0].sku;
-        brandName = productRows[0].brand;
-        prompt += `Feature the product "${productName}" prominently in the composition. `;
+        prompt += ` featuring ${productRows[0].productName || productRows[0].sku}`;
       }
     }
 
-    // Add brand visual style from guidelines
+    // Extract only visual/style keywords from brand guidelines (first 100 chars max)
     if (brandGuidelines?.trim()) {
-      const visualKeywords = brandGuidelines.slice(0, 200);
-      prompt += `Visual style and branding: ${visualKeywords}. `;
-    }
-
-    // Important: Control text/branding in the image
-    if (brandName) {
-      prompt += `IMPORTANT: If any text or brand name appears in the image, it must be "${brandName}" only. Do not create fictional brand names. `;
-    } else {
-      prompt += `IMPORTANT: Do not add any text, brand names, or fictional company names to the image. Keep it clean and text-free for text overlay. `;
+      const visualKeywords = brandGuidelines.slice(0, 100).toLowerCase();
+      prompt += `, style: ${visualKeywords}`;
     }
 
     // Add ad angle as creative direction
     if (adAngle?.trim()) {
-      prompt += `Creative approach: ${adAngle}. `;
+      prompt += `, ${adAngle.toLowerCase()} approach`;
     }
 
-    // Add custom instructions
+    // Add custom instructions (limit to 150 chars for focus)
     if (customPrompt?.trim()) {
-      prompt += `Additional requirements: ${customPrompt.slice(0, 250)}. `;
+      prompt += `, ${customPrompt.slice(0, 150)}`;
     }
 
-    // Add comprehensive quality and technical specifications
-    prompt += `Technical requirements: Professional advertising photography quality, sharp focus, proper lighting (golden hour or studio lighting as appropriate), clean and uncluttered composition, vibrant and engaging colors, high resolution, eye-catching visual hierarchy. The image should be optimized for social media feeds (Instagram, Facebook) with strong visual impact when viewed on mobile devices. Ensure the composition leaves space for text overlay if needed. Style: modern, polished, premium advertising aesthetic.`;
+    // Add quality modifiers
+    prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
 
     // Initialize Google Generative AI
     const genAI = new GoogleGenerativeAI(apiKey);
