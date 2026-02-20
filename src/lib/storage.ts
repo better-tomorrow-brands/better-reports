@@ -80,9 +80,13 @@ export async function uploadToSpaces(
     throw new Error(`Failed to upload to DO Spaces: ${error.message}`);
   }
 
-  // Return the public URL
-  const endpoint = process.env.DO_SPACES_ENDPOINT!;
-  const publicUrl = `${endpoint}/${bucket}/${key}`;
+  // Return the public CDN URL (publicly accessible by default)
+  // Use CDN endpoint if available, otherwise fall back to direct endpoint
+  const cdnEndpoint = process.env.DO_SPACES_CDN_ENDPOINT;
+  const endpoint = cdnEndpoint || process.env.DO_SPACES_ENDPOINT!;
+  const publicUrl = cdnEndpoint
+    ? `${cdnEndpoint}/${key}`  // CDN URL doesn't include bucket name
+    : `${endpoint}/${bucket}/${key}`;
 
   return publicUrl;
 }
