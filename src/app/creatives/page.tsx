@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useOrg } from "@/contexts/OrgContext";
-import { Loader2, Download, Sparkles, Trash2 } from "lucide-react";
+import { Loader2, Download, Sparkles, Trash2, ChevronDown, ChevronUp, RotateCcw } from "lucide-react";
 
 interface Product {
   id: number;
@@ -14,6 +14,12 @@ interface GeneratedCreative {
   id: string;
   imageUrl: string;
   prompt: string;
+  campaignGoal: string;
+  targetCta: string | null;
+  adAngle: string | null;
+  customPrompt: string | null;
+  brandGuidelines: string | null;
+  productId: number | null;
   headline: string | null;
   primaryText: string | null;
   description: string | null;
@@ -38,6 +44,7 @@ export default function CreativesPage() {
   const [customPrompt, setCustomPrompt] = useState("");
   const [numVariations, setNumVariations] = useState(3);
   const [contextImages, setContextImages] = useState<File[]>([]);
+  const [expandedCreatives, setExpandedCreatives] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     // Wait for org context to be ready before loading data
@@ -71,6 +78,27 @@ export default function CreativesPage() {
     } finally {
       setLoading(false);
     }
+  }
+
+  function toggleCreativeExpanded(id: string) {
+    const newExpanded = new Set(expandedCreatives);
+    if (newExpanded.has(id)) {
+      newExpanded.delete(id);
+    } else {
+      newExpanded.add(id);
+    }
+    setExpandedCreatives(newExpanded);
+  }
+
+  function reusePrompt(creative: GeneratedCreative) {
+    setCampaignGoal(creative.campaignGoal);
+    setTargetCta(creative.targetCta || "");
+    setAdAngle(creative.adAngle || "");
+    setCustomPrompt(creative.customPrompt || "");
+    setBrandGuidelines(creative.brandGuidelines || "");
+    setSelectedProduct(creative.productId);
+    // Scroll to top of form
+    window.scrollTo({ top: 0, behavior: "smooth" });
   }
 
   async function generateCreatives() {
@@ -426,13 +454,67 @@ export default function CreativesPage() {
                       </div>
                     )}
 
-                    {/* Image Prompt */}
-                    <p className="text-xs text-zinc-600 dark:text-zinc-400 line-clamp-2">
-                      <span className="font-semibold">Image prompt:</span> {creative.prompt}
-                    </p>
+                    {/* Prompt Details Accordion */}
+                    <div className="border-t border-zinc-200 dark:border-zinc-700 pt-3">
+                      <button
+                        onClick={() => toggleCreativeExpanded(creative.id)}
+                        className="w-full flex items-center justify-between text-xs font-semibold text-zinc-700 dark:text-zinc-300 hover:text-zinc-900 dark:hover:text-zinc-100"
+                      >
+                        <span>Prompt Details</span>
+                        {expandedCreatives.has(creative.id) ? (
+                          <ChevronUp className="w-4 h-4" />
+                        ) : (
+                          <ChevronDown className="w-4 h-4" />
+                        )}
+                      </button>
+
+                      {expandedCreatives.has(creative.id) && (
+                        <div className="mt-3 space-y-2 text-xs">
+                          <div>
+                            <span className="font-semibold text-zinc-600 dark:text-zinc-400">Campaign Goal:</span>
+                            <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.campaignGoal}</p>
+                          </div>
+                          {creative.targetCta && (
+                            <div>
+                              <span className="font-semibold text-zinc-600 dark:text-zinc-400">Target Action:</span>
+                              <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.targetCta}</p>
+                            </div>
+                          )}
+                          {creative.brandGuidelines && (
+                            <div>
+                              <span className="font-semibold text-zinc-600 dark:text-zinc-400">Brand Guidelines:</span>
+                              <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.brandGuidelines}</p>
+                            </div>
+                          )}
+                          {creative.adAngle && (
+                            <div>
+                              <span className="font-semibold text-zinc-600 dark:text-zinc-400">Ad Angle:</span>
+                              <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.adAngle}</p>
+                            </div>
+                          )}
+                          {creative.customPrompt && (
+                            <div>
+                              <span className="font-semibold text-zinc-600 dark:text-zinc-400">Additional Instructions:</span>
+                              <p className="text-zinc-800 dark:text-zinc-200 mt-1">{creative.customPrompt}</p>
+                            </div>
+                          )}
+                          <div>
+                            <span className="font-semibold text-zinc-600 dark:text-zinc-400">Final Prompt:</span>
+                            <p className="text-zinc-800 dark:text-zinc-200 mt-1 font-mono text-[10px]">{creative.prompt}</p>
+                          </div>
+                          <button
+                            onClick={() => reusePrompt(creative)}
+                            className="w-full mt-3 inline-flex items-center justify-center gap-1 px-3 py-2 bg-purple-600 hover:bg-purple-700 text-white rounded text-xs font-medium"
+                          >
+                            <RotateCcw className="w-3 h-3" />
+                            Use This Prompt
+                          </button>
+                        </div>
+                      )}
+                    </div>
 
                     {/* Footer */}
-                    <div className="flex items-center justify-between pt-2">
+                    <div className="flex items-center justify-between pt-3 border-t border-zinc-200 dark:border-zinc-700">
                       <span className="text-xs text-zinc-500">
                         {new Date(creative.createdAt).toLocaleDateString()}
                       </span>

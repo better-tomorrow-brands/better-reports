@@ -281,7 +281,9 @@ Return ONLY the JSON object, no other text.`;
             prompt,
             imageUrl: dataUrl, // Store base64 data URL temporarily
             campaignGoal,
+            targetCta: targetCta || null,
             adAngle: adAngle || null,
+            customPrompt: customPrompt || null,
             productId: productId || null,
             brandGuidelines: brandGuidelines || null,
             headline: adCopy.headline,
@@ -295,6 +297,12 @@ Return ONLY the JSON object, no other text.`;
           id: creative.id.toString(),
           imageUrl: dataUrl, // Return data URL so image displays immediately
           prompt: creative.prompt,
+          campaignGoal: creative.campaignGoal,
+          targetCta: creative.targetCta,
+          adAngle: creative.adAngle,
+          customPrompt: creative.customPrompt,
+          brandGuidelines: creative.brandGuidelines,
+          productId: creative.productId,
           headline: creative.headline,
           primaryText: creative.primaryText,
           description: creative.description,

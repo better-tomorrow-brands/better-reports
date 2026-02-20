@@ -557,12 +557,15 @@ export const creatives = pgTable("creatives", {
   id: serial("id").primaryKey(),
   orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }),
   userId: text("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  prompt: text("prompt").notNull(),
+  prompt: text("prompt").notNull(), // Final combined prompt sent to AI
   imageUrl: text("image_url").notNull(),
+  // Prompt input fields (for repopulation)
   campaignGoal: text("campaign_goal").notNull(),
+  targetCta: text("target_cta"),
   adAngle: text("ad_angle"),
+  customPrompt: text("custom_prompt"),
   productId: integer("product_id").references(() => products.id, { onDelete: "set null" }),
-  brandGuidelines: text("brand_guidelines"), // Store brand guidelines directly instead of reference
+  brandGuidelines: text("brand_guidelines"),
   // Ad copy fields
   headline: text("headline"), // Main ad headline (25-40 chars for most platforms)
   primaryText: text("primary_text"), // Main body copy (125 chars for Facebook, 280 for Twitter)

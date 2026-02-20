@@ -169,6 +169,13 @@
       "when": 1771600947493,
       "tag": "0023_thin_wither",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771603617930,
+      "tag": "0024_blushing_grim_reaper",
+      "breakpoints": true
     }
   ]
 }
