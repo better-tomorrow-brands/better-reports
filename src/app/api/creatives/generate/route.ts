@@ -65,8 +65,8 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Campaign goal is required" }, { status: 400 });
     }
 
-    // Build the AI prompt
-    let prompt = `Professional advertising creative for: ${campaignGoal}.`;
+    // Build the AI prompt - keep it visual and concise for best results
+    let prompt = `${campaignGoal}`;
 
     // Add product context if selected
     if (productId) {
@@ -77,26 +77,28 @@ export async function POST(request: Request) {
         .limit(1);
 
       if (productRows.length) {
-        prompt += ` Featuring product: ${productRows[0].productName || productRows[0].sku}.`;
+        prompt += ` featuring ${productRows[0].productName || productRows[0].sku}`;
       }
     }
 
-    // Add brand guidelines if provided
+    // Extract only visual/style keywords from brand guidelines (first 100 chars max)
     if (brandGuidelines?.trim()) {
-      prompt += ` Brand guidelines: ${brandGuidelines.slice(0, 500)}.`;
+      const visualKeywords = brandGuidelines.slice(0, 100).toLowerCase();
+      prompt += `, style: ${visualKeywords}`;
     }
 
-    // Add ad angle
+    // Add ad angle as creative direction
     if (adAngle?.trim()) {
-      prompt += ` Ad angle: ${adAngle}.`;
+      prompt += `, ${adAngle.toLowerCase()} approach`;
     }
 
-    // Add custom instructions
+    // Add custom instructions (limit to 150 chars for focus)
     if (customPrompt?.trim()) {
-      prompt += ` ${customPrompt}`;
+      prompt += `, ${customPrompt.slice(0, 150)}`;
     }
 
-    prompt += " High-quality, professional, eye-catching, suitable for social media advertising.";
+    // Add quality modifiers
+    prompt += ". Professional advertising photography, high-quality product shot, clean composition, suitable for social media ads";
 
     // Generate creatives using Fal.ai
     const generatedCreatives = [];
