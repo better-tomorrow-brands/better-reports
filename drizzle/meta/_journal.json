@@ -148,6 +148,13 @@
       "when": 1771418123807,
       "tag": "0020_lame_paibok",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1771583559304,
+      "tag": "0021_fat_wong",
+      "breakpoints": true
     }
   ]
 }

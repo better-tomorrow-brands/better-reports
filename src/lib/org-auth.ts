@@ -1,7 +1,8 @@
 import { auth } from "@clerk/nextjs/server";
 import { db } from "./db";
-import { users, userOrganizations } from "./db/schema";
+import { users, userOrganizations, subscriptions } from "./db/schema";
 import { and, eq } from "drizzle-orm";
+import type { Subscription } from "./plans";
 
 export class OrgAuthError extends Error {
   constructor(
@@ -67,6 +68,35 @@ export async function requireOrgFromRequest(request: Request): Promise<{ userId:
 
   const userId = await requireOrgAccess(orgId);
   return { userId, orgId };
+}
+
+/**
+ * Fetch the subscription for a given org
+ */
+export async function getOrgSubscription(orgId: number): Promise<Subscription | null> {
+  const rows = await db
+    .select({
+      tier: subscriptions.tier,
+      status: subscriptions.status,
+      maxUsers: subscriptions.maxUsers,
+      maxDataSources: subscriptions.maxDataSources,
+      maxAccounts: subscriptions.maxAccounts,
+      dataRefreshInterval: subscriptions.dataRefreshInterval,
+    })
+    .from(subscriptions)
+    .where(eq(subscriptions.orgId, orgId))
+    .limit(1);
+
+  if (!rows.length) return null;
+
+  return {
+    tier: rows[0].tier as Subscription["tier"],
+    status: rows[0].status as Subscription["status"],
+    maxUsers: rows[0].maxUsers,
+    maxDataSources: rows[0].maxDataSources,
+    maxAccounts: rows[0].maxAccounts,
+    dataRefreshInterval: rows[0].dataRefreshInterval || "weekly",
+  };
 }
 
 /**

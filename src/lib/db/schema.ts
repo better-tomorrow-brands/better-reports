@@ -21,6 +21,27 @@ export const organizations = pgTable("organizations", {
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
+// ── Subscriptions ──────────────────────────────────────
+export const subscriptions = pgTable("subscriptions", {
+  id: serial("id").primaryKey(),
+  orgId: integer("org_id").notNull().references(() => organizations.id, { onDelete: "cascade" }).unique(),
+  tier: text("tier").notNull().default("free"), // free | starter | growth | pro | enterprise
+  status: text("status").notNull().default("active"), // active | canceled | past_due | trialing
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeSubscriptionId: text("stripe_subscription_id"),
+  stripePriceId: text("stripe_price_id"),
+  currentPeriodStart: timestamp("current_period_start", { withTimezone: true }),
+  currentPeriodEnd: timestamp("current_period_end", { withTimezone: true }),
+  cancelAtPeriodEnd: boolean("cancel_at_period_end").default(false),
+  // Limits (null = unlimited for enterprise)
+  maxUsers: integer("max_users"),
+  maxDataSources: integer("max_data_sources"),
+  maxAccounts: integer("max_accounts"),
+  dataRefreshInterval: text("data_refresh_interval"), // weekly | daily | hourly | on-demand
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
 // ── Users ──────────────────────────────────────────────
 export const users = pgTable("users", {
   id: text("id").primaryKey(), // Clerk user ID
@@ -462,8 +483,19 @@ export const amazonOrders = pgTable("amazon_orders", {
 
 // ── Relations ─────────────────────────────────────────
 
-export const organizationsRelations = relations(organizations, ({ many }) => ({
+export const organizationsRelations = relations(organizations, ({ many, one }) => ({
   userOrganizations: many(userOrganizations),
+  subscription: one(subscriptions, {
+    fields: [organizations.id],
+    references: [subscriptions.orgId],
+  }),
+}));
+
+export const subscriptionsRelations = relations(subscriptions, ({ one }) => ({
+  organization: one(organizations, {
+    fields: [subscriptions.orgId],
+    references: [organizations.id],
+  }),
 }));
 
 export const usersRelations = relations(users, ({ many }) => ({
