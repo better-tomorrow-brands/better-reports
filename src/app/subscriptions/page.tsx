@@ -108,8 +108,8 @@ export default function SubscriptionsPage() {
                       onChange={(e) => setSelectedTier(e.target.value as PlanTier)}
                       className="border border-zinc-300 dark:border-zinc-700 rounded-md px-2 py-1 bg-white dark:bg-zinc-900 text-sm"
                     >
-                      <option value="free">Free</option>
-                      <option value="free_trial">Free Trial</option>
+                      <option value="free">Free (Default)</option>
+                      <option value="free_trial">Free Trial (Early Adopters)</option>
                       <option value="starter">Starter</option>
                       <option value="growth">Growth</option>
                       <option value="pro">Pro</option>
