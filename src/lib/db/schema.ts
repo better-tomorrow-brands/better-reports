@@ -109,6 +109,8 @@ export const products = pgTable("products", {
   cartonHeightCm: decimal("carton_height_cm", { precision: 10, scale: 2 }),
   cartonCbm: decimal("carton_cbm", { precision: 10, scale: 6 }),
 
+  // Product metadata
+  imageUrl: text("image_url"), // Primary product image from Shopify
   active: boolean("active").default(true),
   createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),

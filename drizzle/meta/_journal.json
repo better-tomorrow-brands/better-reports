@@ -176,6 +176,13 @@
       "when": 1771603617930,
       "tag": "0024_blushing_grim_reaper",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771604039517,
+      "tag": "0025_bouncy_banshee",
+      "breakpoints": true
     }
   ]
 }
