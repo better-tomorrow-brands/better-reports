@@ -160,7 +160,7 @@ export default function CreativesPage() {
     }
   }
 
-  if (loading || orgLoading) {
+  if (loadingProducts || orgLoading) {
     return (
       <div className="max-w-7xl mx-auto p-6">
         <div className="h-8 w-64 bg-zinc-200 dark:bg-zinc-800 rounded animate-pulse mb-6" />
