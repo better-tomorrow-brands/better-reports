@@ -183,6 +183,20 @@
       "when": 1771604039517,
       "tag": "0025_bouncy_banshee",
       "breakpoints": true
+    },
+    {
+      "idx": 26,
+      "version": "7",
+      "when": 1771605309627,
+      "tag": "0026_wonderful_turbo",
+      "breakpoints": true
+    },
+    {
+      "idx": 27,
+      "version": "7",
+      "when": 1771605398759,
+      "tag": "0027_slippery_stature",
+      "breakpoints": true
     }
   ]
 }

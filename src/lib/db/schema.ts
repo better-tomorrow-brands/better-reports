@@ -10,6 +10,7 @@ import {
   real,
   uniqueIndex,
   primaryKey,
+  index,
 } from "drizzle-orm/pg-core";
 import { relations } from "drizzle-orm";
 
@@ -116,6 +117,18 @@ export const products = pgTable("products", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow(),
 }, (table) => [
   uniqueIndex("products_org_sku_idx").on(table.orgId, table.sku),
+]);
+
+// ── Product Images ────────────────────────────────────────
+export const productImages = pgTable("product_images", {
+  id: serial("id").primaryKey(),
+  productId: integer("product_id").notNull().references(() => products.id, { onDelete: "cascade" }),
+  imageUrl: text("image_url").notNull(),
+  displayOrder: integer("display_order").default(0),
+  isPrimary: boolean("is_primary").default(false),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
+}, (table) => [
+  index("product_images_product_id_idx").on(table.productId),
 ]);
 
 // ── Amazon Sales & Traffic (Daily by-ASIN) ───────────────

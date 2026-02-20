@@ -84,7 +84,7 @@ export function getTodayDateLondon(): string {
 
 import { db } from "@/lib/db";
 import { eq, and, notInArray } from "drizzle-orm";
-import { inventorySnapshots, products } from "@/lib/db/schema";
+import { inventorySnapshots, products, productImages } from "@/lib/db/schema";
 
 interface ShopifyInventoryItem {
   sku: string;
@@ -211,11 +211,21 @@ interface ShopifyVariantNode {
   sku: string | null;
   barcode: string | null;
   product: {
+    id: string;
     title: string;
     vendor: string | null;
     featuredImage: {
       url: string;
     } | null;
+    media: {
+      edges: Array<{
+        node: {
+          image?: {
+            url: string;
+          };
+        };
+      }>;
+    };
   };
 }
 
@@ -248,10 +258,22 @@ export async function syncShopifyProducts(
             sku
             barcode
             product {
+              id
               title
               vendor
               featuredImage {
                 url
+              }
+              media(first: 10) {
+                edges {
+                  node {
+                    ... on MediaImage {
+                      image {
+                        url
+                      }
+                    }
+                  }
+                }
               }
             }
           }
@@ -300,7 +322,8 @@ export async function syncShopifyProducts(
       const imageUrl = product.featuredImage?.url || null;
       const brand = product.vendor || null;
 
-      await db
+      // Upsert product
+      const [upsertedProduct] = await db
         .insert(products)
         .values({
           orgId,
@@ -321,7 +344,30 @@ export async function syncShopifyProducts(
             active: true,
             updatedAt: new Date(),
           },
-        });
+        })
+        .returning();
+
+      // Extract media URLs from the GraphQL response
+      const mediaUrls = product.media.edges
+        .map((edge) => edge.node.image?.url)
+        .filter((url): url is string => !!url);
+
+      // Delete existing product images and insert new ones
+      if (mediaUrls.length > 0) {
+        await db
+          .delete(productImages)
+          .where(eq(productImages.productId, upsertedProduct.id));
+
+        for (let i = 0; i < mediaUrls.length; i++) {
+          await db.insert(productImages).values({
+            productId: upsertedProduct.id,
+            imageUrl: mediaUrls[i],
+            displayOrder: i,
+            isPrimary: i === 0,
+          });
+        }
+      }
+
       syncedSkus.push(trimmedSku);
       synced++;
     }
