@@ -213,8 +213,8 @@ interface ShopifyVariantNode {
   product: {
     title: string;
     vendor: string | null;
-    image: {
-      src: string;
+    featuredImage: {
+      url: string;
     } | null;
   };
 }
@@ -250,8 +250,8 @@ export async function syncShopifyProducts(
             product {
               title
               vendor
-              image {
-                src
+              featuredImage {
+                url
               }
             }
           }
@@ -297,7 +297,7 @@ export async function syncShopifyProducts(
       }
 
       const trimmedSku = sku.trim();
-      const imageUrl = product.image?.src || null;
+      const imageUrl = product.featuredImage?.url || null;
       const brand = product.vendor || null;
 
       await db
