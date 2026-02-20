@@ -6,11 +6,12 @@ import { eq, and } from "drizzle-orm";
 
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const { orgId } = await requireOrgFromRequest(request);
-    const creativeId = parseInt(params.id);
+    const { id } = await params;
+    const creativeId = parseInt(id);
 
     if (isNaN(creativeId)) {
       return NextResponse.json({ error: "Invalid creative ID" }, { status: 400 });
